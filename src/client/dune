@@ -2,7 +2,8 @@
   (name main)
   (modes js)
   (preprocess (pps js_of_ocaml-ppx))
-  (libraries fmt base js_of_ocaml-tyxml js_of_ocaml-lwt re.posix)
+  (libraries zarith_stubs_js fmt base js_of_ocaml-tyxml js_of_ocaml-lwt re.posix
+             tezos-contract-metadata)
   )
 
 (rule

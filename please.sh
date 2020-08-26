@@ -40,8 +40,11 @@ ensure_setup () {
         opam switch create . ocaml-base-compiler.4.09.1
     fi
     eval $(opam env)
+    opam install --deps-only \
+         local-vendor/tezos/src/lib_contract_metadata/core/tezos-contract-metadata.opam
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
+         zarith_stubs_js \
          js_of_ocaml-compiler js_of_ocaml-tyxml js_of_ocaml-lwt
 }
 

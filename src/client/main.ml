@@ -2,7 +2,13 @@ open Base
 
 let dbg fmt = Fmt.pf Fmt.stdout "@[comevitz-debug: %a@]%!" fmt ()
 let dbgf fmt = Fmt.(kstr (fun s -> dbg (const string s))) fmt
-let gui () = Js_of_ocaml_tyxml.Tyxml_js.Html.txt "Hello World"
+
+let gui () =
+  let ex =
+    let open Tezos_contract_metadata.Metadata_contents in
+    Fmt.str "Example 5:\n%a" pp (Example.build 5) in
+  Js_of_ocaml_tyxml.Tyxml_js.Html.(
+    div [h3 [txt "Examples from the library:"]; pre [code [txt ex]]])
 
 let attach_to_page gui =
   let open Js_of_ocaml in
@@ -27,7 +33,5 @@ let go _ =
 let _ =
   dbgf "Hello Main!" ;
   let open Js_of_ocaml in
-  (Lwt.async_exception_hook :=
-     fun e ->
-       dbgf "Async Exn: %s" (Exn.to_string e)) ;
+  (Lwt.async_exception_hook := fun e -> dbgf "Async Exn: %s" (Exn.to_string e)) ;
   Dom_html.window##.onload := Dom_html.handler go
