@@ -1,0 +1,15 @@
+(executable
+  (name main)
+  (modes js)
+  (preprocess (pps js_of_ocaml-ppx))
+  (libraries fmt base js_of_ocaml-tyxml js_of_ocaml-lwt re.posix)
+  )
+
+(rule
+  (targets index.html)
+  (deps main.bc.js)
+  (action
+    (with-stdout-to index.html
+      (progn
+       (echo "<html><body><div id=\"attach-ui\"></div><script src=\"main.bc.js\"></script></body></html>")
+       ))))
