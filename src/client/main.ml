@@ -817,31 +817,40 @@ let gui state =
                         String.filter bytes ~f:(function
                           | ' ' | '\n' | '\t' -> false
                           | _ -> true) in
-                      ( if with_zero_x then
-                        [p [txt "0x just means “this is hexadecimal”"]]
-                      else [] )
-                      @ ( if with_zero_five then
-                          [ p
-                              [ txt
-                                  "05 is the michelson expression \
-                                   prefix/watermark" ] ]
+                      let items =
+                        ( if with_zero_x then
+                          [ li
+                              [ code [txt "0x"]
+                              ; txt " just means “this is hexadecimal”." ]
+                          ]
                         else [] )
-                      @
+                        @
+                        if with_zero_five then
+                          [ li
+                              [ code [txt "05"]
+                              ; txt
+                                  " is the standard prefix/watermark Michelson \
+                                   expressions." ] ]
+                        else [] in
                       match Michelson_bytes.parse_bytes bytes with
                       | Ok (json, concrete) ->
-                          [ div
+                          [ big_answer `Ok
+                              [ txt
+                                  "This hexa-blob was successfully parsed 🏆"
+                              ]; ul items; h4 [txt "As Concrete Michelson:"]
+                          ; div [pre [code [txt concrete]]]; h4 [txt "As JSON:"]
+                          ; div
                               [ pre
                                   [ code
                                       [ txt
                                           (Ezjsonm.value_to_string ~minify:false
-                                             json) ] ] ]
-                          ; div [pre [code [txt concrete]]] ]
+                                             json) ] ] ] ]
                       | Error s ->
-                          [div [strong [txt "Error: "]]; pre [code [txt s]]])
-                in
+                          [ big_answer `Error
+                              [txt "There were parsing/validation errors:"]
+                          ; pre [code [txt s]] ]) in
                 [ editor_with_preview michbytes_editor ~examples
-                    michbytes_editor_area result_div ]))
-        (*  ; Text_editor.text_area test_editor *) ])
+                    michbytes_editor_area result_div ])) ])
 
 let attach_to_page gui =
   let open Js_of_ocaml in
