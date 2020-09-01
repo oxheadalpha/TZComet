@@ -264,6 +264,41 @@ module Menu = struct
 end
 
 module Contract_metadata = struct
+  module Uri = struct
+    let rec to_html uri =
+      let open RD in
+      let open Tezos_contract_metadata.Metadata_uri in
+      let li_field name content = li (em [txt name; txt ": "] :: content) in
+      match uri with
+      | Web u -> [txt "Web URL: "; a ~a:[a_href u] [code [txt u]]]
+      | Ipfs {cid; path} ->
+          let gatewayed = Fmt.str "https://gateway.ipfs.io/ipfs/%s%s" cid path in
+          [ txt "IPFS URI: "
+          ; ul
+              [ li_field "CID" [code [txt cid]]
+              ; li_field "Path" [code [txt path]]
+              ; li
+                  [txt "(Try "; a ~a:[a_href gatewayed] [txt gatewayed]; txt ")"]
+              ] ]
+      | Storage {network; address; key} ->
+          [ txt "In Storage:"
+          ; ul
+              [ li_field "Network"
+                  [ Option.value_map network ~default:(txt "“Current”.")
+                      ~f:(fun s -> code [txt s]) ]
+              ; li_field "Address"
+                  [ Option.value_map address
+                      ~default:(txt "“Same contract”.") ~f:(fun s ->
+                        code [txt s]) ]
+              ; li_field "Key in the big-map" [code [txt key]] ] ]
+      | Hash {kind= `Sha256; value; target} ->
+          [ txt "Hash checked URI:"
+          ; ul
+              [ li_field "Target" (to_html target)
+              ; li_field "… should SHA256-hash to"
+                  [code [Fmt.kstr txt "%a" Hex.pp (Hex.of_string value)]] ] ]
+  end
+
   module Content = struct
     let to_html metadata =
       let open RD in
@@ -641,6 +676,32 @@ let gui state =
               [ a_class ["col-md-6"]
               ; a_style "border-left: solid 2px grey; height: 90%" ]
             [result_div] ] in
+    let big_answer level content =
+      let bgclass =
+        match level with `Ok -> "bg-success" | `Error -> "bg-danger" in
+      p ~a:[a_class ["lead"; bgclass]] content in
+    let rec show_tezos_error = function
+      | [] -> []
+      | Tezos_error_monad.Error_monad.Exn
+          (Ezjsonm.Parse_error (json_value, msg))
+        :: more ->
+          [ Fmt.kstr txt "JSON Parsing Error: %s, JSON:" msg
+          ; pre [code [txt (Ezjsonm.value_to_string ~minify:false json_value)]]
+          ]
+          @ show_tezos_error more
+      | Tezos_error_monad.Error_monad.Exn (Failure text) :: more ->
+          [Fmt.kstr txt "Error: %a" Fmt.text text] @ show_tezos_error more
+      | Tezos_error_monad.Error_monad.Exn other_exn :: more ->
+          [ Fmt.kstr txt "Error: %a"
+              (Json_encoding.print_error ~print_unknown:Exn.pp)
+              other_exn ]
+          @ show_tezos_error more
+      | other ->
+          [ pre
+              [ code
+                  [ Fmt.kstr txt "%a"
+                      Tezos_error_monad.Error_monad.pp_print_error other ] ] ]
+    in
     div
       ~a:[a_class ["container-fluid"]]
       [ div ~a:[a_class ["col-md-12"]] [menu `Top]; hr ()
@@ -678,19 +739,20 @@ let gui state =
                          "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json")
                   ; ex "SHA256-checked HTTPS"
                       (Uri.of_string
-                         "sha256://0xeaa42ea06b95d7917d22135a630e65352cfd0a721ae88155a1512468a95cb750/https:%2F%2Fexample.com%2F/metadata.json")
+                         "sha256://0xeaa42ea06b95d7917d22135a630e65352cfd0a721ae88155a1512468a95cb750/https:%2F%2Fexample.com%2Fmetadata.json")
                   ] in
                 let result_div =
                   Reactive.div_of_var metadata_uri_code ~f:(fun uri_code ->
                       let open Tezos_contract_metadata.Metadata_uri in
                       match Uri.of_string uri_code |> of_uri with
                       | Ok o ->
-                          [Fmt.kstr (fun s -> pre [code [txt s]]) "%a" pp o]
+                          [ big_answer `Ok
+                              [txt "This metadata URI is VALID 👍"]
+                          ; div (Contract_metadata.Uri.to_html o) ]
                       | Error el ->
-                          [ Fmt.kstr
-                              (fun s -> pre [code [txt s]])
-                              "%a" Tezos_error_monad.Error_monad.pp_print_error
-                              el ]) in
+                          [ big_answer `Error
+                              [txt "There were parsing/validation errors:"]
+                          ; div (show_tezos_error el) ]) in
                 [ editor_with_preview metadata_uri_editor ~examples
                     metadata_uri_editor_area result_div ]
             | Metadata_json_editor ->
@@ -699,12 +761,6 @@ let gui state =
                       ( Fmt.str "Meaningless Example #%d" ith
                       , Tezos_contract_metadata.Metadata_contents.to_json v ))
                 in
-                let big_answer level content =
-                  let bgclass =
-                    match level with
-                    | `Ok -> "bg-success"
-                    | `Error -> "bg-danger" in
-                  p ~a:[a_class ["lead"; bgclass]] content in
                 let result_div =
                   Reactive.div_of_var metadata_json_code ~f:(fun json_code ->
                       let open Tezos_contract_metadata.Metadata_contents in
@@ -729,35 +785,9 @@ let gui state =
                             (* ; Fmt.kstr (fun s -> pre [code [txt s]]) "%a" pp ex *)
                           ]
                       | Error el ->
-                          let rec show_error = function
-                            | [] -> []
-                            | Tezos_error_monad.Error_monad.Exn
-                                (Ezjsonm.Parse_error (json_value, msg))
-                              :: more ->
-                                [ Fmt.kstr txt "JSON Parsing Error: %s, JSON:"
-                                    msg
-                                ; pre
-                                    [ code
-                                        [ txt
-                                            (Ezjsonm.value_to_string
-                                               ~minify:false json_value) ] ] ]
-                                @ show_error more
-                            | Tezos_error_monad.Error_monad.Exn other_exn
-                              :: more ->
-                                [ Fmt.kstr txt "Parsing Error: %a"
-                                    (Json_encoding.print_error
-                                       ~print_unknown:Exn.pp)
-                                    other_exn ]
-                                @ show_error more
-                            | other ->
-                                [ pre
-                                    [ code
-                                        [ Fmt.kstr txt "%a"
-                                            Tezos_error_monad.Error_monad
-                                            .pp_print_error other ] ] ] in
                           [ big_answer `Error
                               [txt "There were parsing/validation errors:"]
-                          ; div (show_error el) ]) in
+                          ; div (show_tezos_error el) ]) in
                 [ editor_with_preview metadata_json_editor ~examples
                     metadata_json_editor_area result_div ]
             | Michelson_bytes_parser ->
