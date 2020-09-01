@@ -261,6 +261,7 @@ module Contract_metadata = struct
         match field with
         | None -> []
         | Some s -> [li [b [Fmt.kstr txt "%s: " name]; f s]] in
+      let normal_field name x = option_field name (Some ()) (fun () -> x) in
       let code_string t = code [txt t] in
       let paragraphs t =
         let rec go l acc =
@@ -306,13 +307,83 @@ module Contract_metadata = struct
           Re.split_full (Re.compile r) s |> List.map ~f:tok |> span in
         List.map l ~f:interface |> List.intersperse ~sep:(txt ", ") |> span
       in
+      let _todo l = Fmt.kstr txt "todo: %d items" (List.length l) in
+      let views (views : View.t list) =
+        let view v =
+          let open View in
+          let purity =
+            if v.is_pure then span ~a:[a_class ["bg-success"]] [txt "pure"]
+            else span ~a:[a_class ["bg-warning"]] [txt "inpure"] in
+          let implementations impls =
+            let open Implementation in
+            ul
+              (List.map impls ~f:(function
+                | Michelson_storage ms ->
+                    let open Michelson_storage in
+                    let mich (Micheline m) =
+                      let open Tezos_micheline in
+                      Fmt.str "%a" Micheline_printer.print_expr
+                        (Micheline_printer.printable Base.Fn.id m) in
+                    li
+                      [ b [txt "Michelson-storage-view:"]
+                      ; ul
+                          ( option_field "Michelson-Version" ms.version
+                              (fun s ->
+                                Fmt.kstr code_string "%s" (String.prefix s 12))
+                          @ normal_field "Type"
+                              (code
+                                 [ Fmt.kstr txt "%s<contract-storage> → %s"
+                                     ( match ms.parameter with
+                                     | None -> ""
+                                     | Some p -> mich p ^ " × " )
+                                     (mich ms.return_type) ])
+                          @ normal_field "Code"
+                              (details
+                                 (summary [txt "Expand"])
+                                 [pre [code [txt (mich ms.code)]]])
+                          @ list_field "Annotations" ms.human_annotations
+                              (fun anns ->
+                                ul
+                                  (List.map anns ~f:(fun (k, v) ->
+                                       li
+                                         [ code_string k; txt " → "
+                                         ; em [txt v] ]))) ) ]
+                | Rest_api_query raq ->
+                    li
+                      [ b [txt "REST-API Query:"]
+                      ; ul
+                          ( normal_field "OpenAPI Spec"
+                              (code_string raq.specification_uri)
+                          @ option_field "Base-URI Override" raq.base_uri
+                              code_string
+                          @ normal_field "Path" (code_string raq.path)
+                          @ normal_field "Method"
+                              (Fmt.kstr code_string "%s"
+                                 (Cohttp.Code.string_of_method raq.meth)) ) ]))
+          in
+          div
+            [ b [txt v.name]; txt " ("; purity; txt "):"
+            ; ul
+                ( option_field "Description" v.description paragraphs
+                @ list_field "Implementation(s)" v.implementations
+                    implementations ) ] in
+        ul (List.map views ~f:(fun v -> li [view v])) in
+      let unknown_extras kv =
+        ul
+          (List.map kv ~f:(fun (k, v) ->
+               li
+                 [ code_string k; txt " "
+                 ; pre [code [txt (Ezjsonm.value_to_string ~minify:false v)]] ]))
+      in
       ul
         ( option_field "Name" metadata.name code_string
         @ option_field "Version" metadata.version code_string
         @ option_field "Description" metadata.description paragraphs
         @ option_field "License" metadata.license license
         @ list_field "Authors" metadata.authors authors
-        @ list_field "Interfaces" metadata.interfaces interfaces )
+        @ list_field "Interfaces" metadata.interfaces interfaces
+        @ list_field "Views" metadata.views views
+        @ list_field "Extra/Unknown" metadata.unknown unknown_extras )
   end
 end
 
