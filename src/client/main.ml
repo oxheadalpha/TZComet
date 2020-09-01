@@ -198,12 +198,12 @@ lang_script.onload = function () {
 
   let set_code te ~code =
     Var.set te.code code ;
-    let (_ : unit) =
-      Fmt.kstr Js_of_ocaml.Js.Unsafe.eval_string
-        {js|
-        window.%s.setValue(%S);
-        |js}
-        te.id code in
+    let _ =
+      let open Js_of_ocaml in
+      Js.Unsafe.meth_call
+        (Js.Unsafe.get Dom_html.window (Js.string te.id))
+        "setValue"
+        [|Js.string code |> Js.Unsafe.inject|] in
     ()
 end
 
