@@ -252,6 +252,70 @@ module Menu = struct
              li [txt "error"]))
 end
 
+module Contract_metadata = struct
+  module Content = struct
+    let to_html metadata =
+      let open RD in
+      let open Tezos_contract_metadata.Metadata_contents in
+      let option_field name field f =
+        match field with
+        | None -> []
+        | Some s -> [li [b [Fmt.kstr txt "%s: " name]; f s]] in
+      let code_string t = code [txt t] in
+      let paragraphs t =
+        let rec go l acc =
+          match List.split_while l ~f:(function "" -> false | _ -> true) with
+          | ll, [] -> String.concat ~sep:" " ll :: acc
+          | ll, _ :: lr -> go lr (String.concat ~sep:" " ll :: acc) in
+        go (String.split t ~on:'\n') []
+        |> List.rev_map ~f:(fun x -> span [br (); txt x])
+        |> span in
+      let license l =
+        let open License in
+        span
+          [ i [txt l.name]
+          ; span
+              (Option.value_map ~default:[] l.details ~f:(fun d ->
+                   [Fmt.kstr txt " → %s" d])) ] in
+      let list_field name field f =
+        option_field name (match field with [] -> None | more -> Some more) f
+      in
+      let authors l =
+        List.map l ~f:code_string |> List.intersperse ~sep:(txt ", ") |> span
+      in
+      let interfaces l =
+        let interface s =
+          let r = Re.Posix.re "TZIP-([0-9]+)" in
+          let normal s = i [txt s] in
+          let tok = function
+            | `Text s -> normal s
+            | `Delim g -> (
+                let the_text = normal (Re.Group.get g 0) in
+                try
+                  let tzip_nb = Re.Group.get g 1 |> Int.of_string in
+                  a
+                    ~a:
+                      [ Fmt.kstr a_href
+                          "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-%d/tzip-%d.md"
+                          tzip_nb tzip_nb ]
+                    [the_text]
+                  (* Fmt.kstr txt "{%a --- %d}" Re.Group.pp g (Re.Group.nb_groups g)] *)
+                with e ->
+                  dbgf "Error in interface html: %a" Exn.pp e ;
+                  the_text ) in
+          Re.split_full (Re.compile r) s |> List.map ~f:tok |> span in
+        List.map l ~f:interface |> List.intersperse ~sep:(txt ", ") |> span
+      in
+      ul
+        ( option_field "Name" metadata.name code_string
+        @ option_field "Version" metadata.version code_string
+        @ option_field "Description" metadata.description paragraphs
+        @ option_field "License" metadata.license license
+        @ list_field "Authors" metadata.authors authors
+        @ list_field "Interfaces" metadata.interfaces interfaces )
+  end
+end
+
 let gui state =
   let all_examples =
     let open Tezos_contract_metadata.Metadata_contents in
@@ -368,7 +432,8 @@ let gui state =
                       let open Tezos_contract_metadata.Metadata_contents in
                       match of_json json_code with
                       | Ok ex ->
-                          [Fmt.kstr (fun s -> pre [code [txt s]]) "%a" pp ex]
+                          [ div [Contract_metadata.Content.to_html ex]
+                          ; Fmt.kstr (fun s -> pre [code [txt s]]) "%a" pp ex ]
                       | Error el ->
                           [ Fmt.kstr
                               (fun s -> pre [code [txt s]])
