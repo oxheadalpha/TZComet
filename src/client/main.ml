@@ -611,7 +611,6 @@ let gui state =
             ; ( match examples with
               | [] -> span []
               | _more ->
-                  (* let dropdow_id = "dropdown-id-idleijdlieijde" in *)
                   let expanded = Var.create "examples-menu-expanded" false in
                   div
                     [ button
@@ -620,15 +619,9 @@ let gui state =
                           ; a_onclick (fun _ ->
                                 dbgf "examples menu" ;
                                 Var.set expanded (not (Var.value expanded)) ;
-                                (*
-let open Js_of_ocaml in
-  let li = Dom_html.getElementById dropdow_id in
-   li##.style##.display:= Js.string "block" ;
- *)
                                 true) ]
                         [txt "Load Examples "; span [] ~a:[a_class ["caret"]]]
-                    ; Reactive.ul
-                        ~a:[a_class [] (* a_style "display: block" *)]
+                    ; Reactive.ul ~a:[a_class []]
                         (Var.map_to_list expanded ~f:(function
                           | true ->
                               List.map examples ~f:(fun (k, code) ->
@@ -643,7 +636,11 @@ let open Js_of_ocaml in
                                                 true) ]
                                         [txt k] ])
                           | false -> [])) ] ); div [editor_area] ]
-        ; div ~a:[a_class ["col-md-6"]] [result_div] ] in
+        ; div
+            ~a:
+              [ a_class ["col-md-6"]
+              ; a_style "border-left: solid 2px grey; height: 90%" ]
+            [result_div] ] in
     div
       ~a:[a_class ["container-fluid"]]
       [ div ~a:[a_class ["col-md-12"]] [menu `Top]; hr ()
@@ -672,12 +669,13 @@ let open Js_of_ocaml in
                 let examples =
                   let ex name u = (name, Uri.to_string u) in
                   [ ex "Simple in storage"
-                    @@ Uri.make ~scheme:"tezos-storage" ~path:"foo" ()
+                      (Uri.make ~scheme:"tezos-storage" ~path:"foo" ())
                   ; ex "HTTPS"
-                    @@ Uri.of_string "https://example.com/path/to/metadata.json"
+                      (Uri.of_string
+                         "https://example.com/path/to/metadata.json")
                   ; ex "IPFS"
-                    @@ Uri.of_string
-                         "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json"
+                      (Uri.of_string
+                         "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json")
                   ; ex "SHA256-checked HTTPS"
                       (Uri.of_string
                          "sha256://0xeaa42ea06b95d7917d22135a630e65352cfd0a721ae88155a1512468a95cb750/https:%2F%2Fexample.com%2F/metadata.json")
@@ -701,18 +699,65 @@ let open Js_of_ocaml in
                       ( Fmt.str "Meaningless Example #%d" ith
                       , Tezos_contract_metadata.Metadata_contents.to_json v ))
                 in
+                let big_answer level content =
+                  let bgclass =
+                    match level with
+                    | `Ok -> "bg-success"
+                    | `Error -> "bg-danger" in
+                  p ~a:[a_class ["lead"; bgclass]] content in
                 let result_div =
                   Reactive.div_of_var metadata_json_code ~f:(fun json_code ->
                       let open Tezos_contract_metadata.Metadata_contents in
                       match of_json json_code with
+                      | Ok
+                          { name= None
+                          ; description= None
+                          ; version= None
+                          ; license= None
+                          ; authors= []
+                          ; interfaces= []
+                          ; views= []
+                          ; unknown= [] } ->
+                          [ big_answer `Ok
+                              [ txt
+                                  "This piece of metadata, while valid, is \
+                                   completely empty!" ] ]
                       | Ok ex ->
-                          [ div [Contract_metadata.Content.to_html ex]
-                          ; Fmt.kstr (fun s -> pre [code [txt s]]) "%a" pp ex ]
+                          [ big_answer `Ok
+                              [txt "This metadata blob is VALID 👍"]
+                          ; div [Contract_metadata.Content.to_html ex]
+                            (* ; Fmt.kstr (fun s -> pre [code [txt s]]) "%a" pp ex *)
+                          ]
                       | Error el ->
-                          [ Fmt.kstr
-                              (fun s -> pre [code [txt s]])
-                              "%a" Tezos_error_monad.Error_monad.pp_print_error
-                              el ]) in
+                          let rec show_error = function
+                            | [] -> []
+                            | Tezos_error_monad.Error_monad.Exn
+                                (Ezjsonm.Parse_error (json_value, msg))
+                              :: more ->
+                                [ Fmt.kstr txt "JSON Parsing Error: %s, JSON:"
+                                    msg
+                                ; pre
+                                    [ code
+                                        [ txt
+                                            (Ezjsonm.value_to_string
+                                               ~minify:false json_value) ] ] ]
+                                @ show_error more
+                            | Tezos_error_monad.Error_monad.Exn other_exn
+                              :: more ->
+                                [ Fmt.kstr txt "Parsing Error: %a"
+                                    (Json_encoding.print_error
+                                       ~print_unknown:Exn.pp)
+                                    other_exn ]
+                                @ show_error more
+                            | other ->
+                                [ pre
+                                    [ code
+                                        [ Fmt.kstr txt "%a"
+                                            Tezos_error_monad.Error_monad
+                                            .pp_print_error other ] ] ] in
+                          [ big_answer `Error
+                              [txt "There were parsing/validation errors:"]
+                          ; div (show_error el) ]) in
                 [ editor_with_preview metadata_json_editor ~examples
                     metadata_json_editor_area result_div ]
             | Michelson_bytes_parser ->
