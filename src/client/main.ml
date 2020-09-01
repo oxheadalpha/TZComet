@@ -45,6 +45,7 @@ module State = struct
       | Metadata_examples of {current: int option Var.t}
       | Metadata_json_editor
       | Metadata_uri_editor
+      | Michelson_bytes_parser
   end
 
   type t = {current_view: View.t Var.t}
@@ -387,6 +388,120 @@ module Contract_metadata = struct
   end
 end
 
+module Michelson_bytes = struct
+  (** See src/proto_alpha/lib_protocol/michelson_v1_primitives.ml *)
+  let prim_encoding =
+    let open Data_encoding in
+    def "michelson.v1.primitives"
+    @@ string_enum
+         [ (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("parameter", "K_parameter"); ("storage", "K_storage")
+         ; ("code", "K_code"); ("False", "False"); ("Elt", "Elt")
+         ; ("Left", "Left"); ("None", "None"); ("Pair", "Pair")
+         ; ("Right", "Right"); ("Some", "Some")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("True", "True"); ("Unit", "Unit"); ("PACK", "PACK")
+         ; ("UNPACK", "UNPACK"); ("BLAKE2B", "BLAKE2B"); ("SHA256", "SHA256")
+         ; ("SHA512", "SHA512"); ("ABS", "ABS"); ("ADD", "ADD")
+         ; ("AMOUNT", "AMOUNT")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("AND", "AND"); ("BALANCE", "BALANCE"); ("CAR", "CAR"); ("CDR", "CDR")
+         ; ("CHECK_SIGNATURE", "CHECK_SIGNATURE"); ("COMPARE", "COMPARE")
+         ; ("CONCAT", "CONCAT"); ("CONS", "CONS")
+         ; ("CREATE_ACCOUNT", "CREATE_ACCOUNT")
+         ; ("CREATE_CONTRACT", "CREATE_CONTRACT")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("IMPLICIT_ACCOUNT", "IMPLICIT_ACCOUNT"); ("DIP", "DIP")
+         ; ("DROP", "DROP"); ("DUP", "DUP"); ("EDIV", "EDIV")
+         ; ("EMPTY_MAP", "EMPTY_MAP"); ("EMPTY_SET", "EMPTY_SET"); ("EQ", "EQ")
+         ; ("EXEC", "EXEC"); ("FAILWITH", "FAILWITH")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("GE", "GE"); ("GET", "GET"); ("GT", "GT"); ("HASH_KEY", "HASH_KEY")
+         ; ("IF", "IF"); ("IF_CONS", "IF_CONS"); ("IF_LEFT", "IF_LEFT")
+         ; ("IF_NONE", "IF_NONE"); ("INT", "INT"); ("LAMBDA", "LAMBDA")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("LE", "LE"); ("LEFT", "LEFT"); ("LOOP", "LOOP"); ("LSL", "LSL")
+         ; ("LSR", "LSR"); ("LT", "LT"); ("MAP", "MAP"); ("MEM", "MEM")
+         ; ("MUL", "MUL"); ("NEG", "NEG")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("NEQ", "NEQ"); ("NIL", "NIL"); ("NONE", "NONE"); ("NOT", "NOT")
+         ; ("NOW", "NOW"); ("OR", "OR"); ("PAIR", "PAIR"); ("PUSH", "PUSH")
+         ; ("RIGHT", "RIGHT"); ("SIZE", "SIZE")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("SOME", "SOME"); ("SOURCE", "SOURCE"); ("SENDER", "SENDER")
+         ; ("SELF", "SELF"); ("STEPS_TO_QUOTA", "STEPS_TO_QUOTA"); ("SUB", "SUB")
+         ; ("SWAP", "SWAP"); ("TRANSFER_TOKENS", "TRANSFER_TOKENS")
+         ; ("SET_DELEGATE", "SET_DELEGATE"); ("UNIT", "UNIT")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("UPDATE", "UPDATE"); ("XOR", "XOR"); ("ITER", "ITER")
+         ; ("LOOP_LEFT", "LOOP_LEFT"); ("ADDRESS", "ADDRESS")
+         ; ("CONTRACT", "CONTRACT"); ("ISNAT", "ISNAT"); ("CAST", "CAST")
+         ; ("RENAME", "RENAME"); ("bool", "bool")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("contract", "contract"); ("int", "int"); ("key", "key")
+         ; ("key_hash", "key_hash"); ("lambda", "lambda"); ("list", "list")
+         ; ("map", "map"); ("big_map", "big_map"); ("nat", "nat")
+         ; ("option", "option")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("or", "or"); ("pair", "pair"); ("set", "set")
+         ; ("signature", "signature"); ("string", "string"); ("bytes", "bytes")
+         ; ("mutez", "mutez"); ("timestamp", "timestamp"); ("unit", "unit")
+         ; ("operation", "operation")
+         ; (* /!\ NEW INSTRUCTIONS MUST BE ADDED AT THE END OF THE STRING_ENUM, "FOR" BACKWARD COMPATIBILITY OF THE ENCODING. *)
+           ("address", "address"); (* Alpha_002 addition *) ("SLICE", "SLICE")
+         ; (* Alpha_005 addition *) ("DIG", "DIG"); ("DUG", "DUG")
+         ; ("EMPTY_BIG_MAP", "EMPTY_BIG_MAP"); ("APPLY", "APPLY")
+         ; ("chain_id", "chain_id"); ("CHAIN_ID", "CHAIN_ID")
+           (* New instructions must be added here, "for" backward compatibility of the encoding. *)
+         ]
+
+  let expr_encoding =
+    Tezos_micheline.Micheline.canonical_encoding_v1 ~variant:"michelson_v1"
+      (* Data_encoding.Encoding.string *)
+      prim_encoding
+
+  let parse_bytes bytes =
+    try
+      let mich =
+        Data_encoding.Binary.of_bytes_exn
+          (* Tezos_micheline.Micheline.canonical_location_encoding *)
+          expr_encoding
+          (Hex.to_bytes (`Hex bytes)) in
+      let json =
+        Data_encoding.Json.construct expr_encoding
+          (* Tezos_micheline.Micheline.canonical_location_encoding *)
+          mich in
+      Ok
+        ( json
+        , let open Tezos_micheline in
+          Fmt.str "%a" Micheline_printer.print_expr
+            (Micheline_printer.printable Base.Fn.id mich) )
+    with
+    | Data_encoding.Binary.Read_error e ->
+        Error (Fmt.str "readerror: %a" Data_encoding.Binary.pp_read_error e)
+    | e -> Error (Fmt.str "exn: %a" Exn.pp e)
+
+  let example =
+    let bytes = "0707002a002a" in
+    let to_display =
+      try
+        let mich =
+          Data_encoding.Binary.of_bytes_exn
+            (* Tezos_micheline.Micheline.canonical_location_encoding *)
+            expr_encoding
+            (Hex.to_bytes (`Hex bytes)) in
+        let json =
+          Data_encoding.Json.construct expr_encoding
+            (* Tezos_micheline.Micheline.canonical_location_encoding *)
+            mich in
+        Ezjsonm.value_to_string ~minify:false json
+      with
+      | Data_encoding.Binary.Read_error e ->
+          Fmt.str "readerror: %a" Data_encoding.Binary.pp_read_error e
+      | e -> Fmt.str "exn: %a" Exn.pp e in
+    to_display
+end
+
 let gui state =
   let all_examples =
     let open Tezos_contract_metadata.Metadata_contents in
@@ -418,8 +533,21 @@ let gui state =
               (Var.map state.State.current_view ~f:(function
                 | Metadata_uri_editor -> false
                 | _ -> true))
-            (fun () -> Var.set state.State.current_view Metadata_uri_editor) ]
-      in
+            (fun () -> Var.set state.State.current_view Metadata_uri_editor)
+        ; Menu.item
+            (txt "Michelson PACK Parser")
+            ~long_message:(txt "Start the Michelson-bytes editor.")
+            ~description:
+              (p
+                 [ txt
+                     "It parses hexadecimal encodings of byte-sequences \
+                      representing Michelson expression." ])
+            ~active:
+              (Var.map state.State.current_view ~f:(function
+                | Michelson_bytes_parser -> false
+                | _ -> true))
+            (fun () -> Var.set state.State.current_view Michelson_bytes_parser)
+        ] in
       let home =
         Menu.item (txt "Home")
           ~active:
@@ -453,6 +581,13 @@ let gui state =
       Text_editor.create "metadataurieditor" ~code:metadata_uri_code
         ~language:"css" in
     let metadata_uri_editor_area = Text_editor.text_area metadata_uri_editor in
+    let michbytes_code =
+      Var.create "michbytes-code"
+        "0x050707010000000c48656c6c6f2057\n6f726c6421002a" in
+    let michbytes_editor =
+      Text_editor.create "michbytesditor" ~code:michbytes_code ~language:"css"
+    in
+    let michbytes_editor_area = Text_editor.text_area michbytes_editor in
     let editor_with_preview editor editor_area result_div =
       Text_editor.ensure editor ;
       div
@@ -511,8 +646,48 @@ let gui state =
                               "%a" Tezos_error_monad.Error_monad.pp_print_error
                               el ]) in
                 [ editor_with_preview metadata_json_editor
-                    metadata_json_editor_area result_div ]))
-        (*  ; Text_editor.text_area test_editor *) ])
+                    metadata_json_editor_area result_div ]
+            | Michelson_bytes_parser ->
+                let result_div =
+                  Reactive.div_of_var michbytes_code ~f:(fun bytes_code ->
+                      let with_zero_x, bytes =
+                        let prefix = "0x" in
+                        if String.is_prefix bytes_code ~prefix then
+                          (true, String.chop_prefix_exn bytes_code ~prefix)
+                        else (false, bytes_code) in
+                      let with_zero_five, bytes =
+                        let prefix = "05" in
+                        if String.is_prefix bytes ~prefix then
+                          (true, String.chop_prefix_exn bytes ~prefix)
+                        else (false, bytes) in
+                      let bytes =
+                        String.filter bytes ~f:(function
+                          | ' ' | '\n' | '\t' -> false
+                          | _ -> true) in
+                      ( if with_zero_x then
+                        [p [txt "0x just means “this is hexadecimal”"]]
+                      else [] )
+                      @ ( if with_zero_five then
+                          [ p
+                              [ txt
+                                  "05 is the michelson expression \
+                                   prefix/watermark" ] ]
+                        else [] )
+                      @
+                      match Michelson_bytes.parse_bytes bytes with
+                      | Ok (json, concrete) ->
+                          [ div
+                              [ pre
+                                  [ code
+                                      [ txt
+                                          (Ezjsonm.value_to_string ~minify:false
+                                             json) ] ] ]
+                          ; div [pre [code [txt concrete]]] ]
+                      | Error s ->
+                          [div [strong [txt "Error: "]]; pre [code [txt s]]])
+                in
+                [ editor_with_preview michbytes_editor michbytes_editor_area
+                    result_div ])) (*  ; Text_editor.text_area test_editor *) ])
 
 let attach_to_page gui =
   let open Js_of_ocaml in
