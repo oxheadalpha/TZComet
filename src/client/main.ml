@@ -195,6 +195,16 @@ lang_script.onload = function () {
                     (Js.Unsafe.get Dom_html.window (Js.string te.id))
                     "focus" [||] in
                 true) ]
+
+  let set_code te ~code =
+    Var.set te.code code ;
+    let (_ : unit) =
+      Fmt.kstr Js_of_ocaml.Js.Unsafe.eval_string
+        {js|
+        window.%s.setValue(%S);
+        |js}
+        te.id code in
+    ()
 end
 
 module Menu = struct
@@ -588,11 +598,51 @@ let gui state =
       Text_editor.create "michbytesditor" ~code:michbytes_code ~language:"css"
     in
     let michbytes_editor_area = Text_editor.text_area michbytes_editor in
-    let editor_with_preview editor editor_area result_div =
+    let editor_with_preview ?(examples = []) editor editor_area result_div =
       Text_editor.ensure editor ;
       div
         ~a:[a_class ["col-md-12"]]
-        [ div ~a:[a_class ["col-md-6"]] [editor_area]
+        [ div
+            ~a:[a_class ["col-md-6"]]
+            [ Text_editor.editor_command_button editor ~text:"Undo" "undo"
+            ; Text_editor.editor_command_button editor ~text:"Redo" "redo"
+            ; Text_editor.editor_command_button editor ~text:"Select All"
+                "selectAll"
+            ; ( match examples with
+              | [] -> span []
+              | _more ->
+                  (* let dropdow_id = "dropdown-id-idleijdlieijde" in *)
+                  let expanded = Var.create "examples-menu-expanded" false in
+                  div
+                    [ button
+                        ~a:
+                          [ a_class ["btn"; "btn-secondary"; "dropdown-toggle"]
+                          ; a_onclick (fun _ ->
+                                dbgf "examples menu" ;
+                                Var.set expanded (not (Var.value expanded)) ;
+                                (*
+let open Js_of_ocaml in
+  let li = Dom_html.getElementById dropdow_id in
+   li##.style##.display:= Js.string "block" ;
+ *)
+                                true) ]
+                        [txt "Load Examples "; span [] ~a:[a_class ["caret"]]]
+                    ; Reactive.ul
+                        ~a:[a_class [] (* a_style "display: block" *)]
+                        (Var.map_to_list expanded ~f:(function
+                          | true ->
+                              List.map examples ~f:(fun (k, code) ->
+                                  li
+                                    [ a
+                                        ~a:
+                                          [ a_href "#"
+                                          ; a_onclick (fun _ ->
+                                                Text_editor.set_code editor
+                                                  ~code ;
+                                                Var.set expanded false ;
+                                                true) ]
+                                        [txt k] ])
+                          | false -> [])) ] ); div [editor_area] ]
         ; div ~a:[a_class ["col-md-6"]] [result_div] ] in
     div
       ~a:[a_class ["container-fluid"]]
@@ -633,6 +683,11 @@ let gui state =
                 [ editor_with_preview metadata_uri_editor
                     metadata_uri_editor_area result_div ]
             | Metadata_json_editor ->
+                let examples =
+                  List.map all_examples ~f:(fun (ith, v) ->
+                      ( Fmt.str "Meaningless Example #%d" ith
+                      , Tezos_contract_metadata.Metadata_contents.to_json v ))
+                in
                 let result_div =
                   Reactive.div_of_var metadata_json_code ~f:(fun json_code ->
                       let open Tezos_contract_metadata.Metadata_contents in
@@ -645,7 +700,7 @@ let gui state =
                               (fun s -> pre [code [txt s]])
                               "%a" Tezos_error_monad.Error_monad.pp_print_error
                               el ]) in
-                [ editor_with_preview metadata_json_editor
+                [ editor_with_preview metadata_json_editor ~examples
                     metadata_json_editor_area result_div ]
             | Michelson_bytes_parser ->
                 let result_div =
