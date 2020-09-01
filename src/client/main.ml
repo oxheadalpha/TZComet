@@ -669,6 +669,19 @@ let open Js_of_ocaml in
                                        [Fmt.kstr txt "Example #%d" ith] ])) ]
                     | Some ith -> [Fmt.kstr txt "Current: %d" ith]) ]
             | Metadata_uri_editor ->
+                let examples =
+                  let ex name u = (name, Uri.to_string u) in
+                  [ ex "Simple in storage"
+                    @@ Uri.make ~scheme:"tezos-storage" ~path:"foo" ()
+                  ; ex "HTTPS"
+                    @@ Uri.of_string "https://example.com/path/to/metadata.json"
+                  ; ex "IPFS"
+                    @@ Uri.of_string
+                         "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json"
+                  ; ex "SHA256-checked HTTPS"
+                      (Uri.of_string
+                         "sha256://0xeaa42ea06b95d7917d22135a630e65352cfd0a721ae88155a1512468a95cb750/https:%2F%2Fexample.com%2F/metadata.json")
+                  ] in
                 let result_div =
                   Reactive.div_of_var metadata_uri_code ~f:(fun uri_code ->
                       let open Tezos_contract_metadata.Metadata_uri in
@@ -680,7 +693,7 @@ let open Js_of_ocaml in
                               (fun s -> pre [code [txt s]])
                               "%a" Tezos_error_monad.Error_monad.pp_print_error
                               el ]) in
-                [ editor_with_preview metadata_uri_editor
+                [ editor_with_preview metadata_uri_editor ~examples
                     metadata_uri_editor_area result_div ]
             | Metadata_json_editor ->
                 let examples =
@@ -703,6 +716,16 @@ let open Js_of_ocaml in
                 [ editor_with_preview metadata_json_editor ~examples
                     metadata_json_editor_area result_div ]
             | Michelson_bytes_parser ->
+                let examples =
+                  [ ("The Unit value", "0x05030b")
+                  ; ( "With a (map string string)"
+                    , "050707010000000c486\n\
+                       56c6c6f20576f726c64\n\
+                       2102000000260704010\n\
+                       0000003666f6f010000\n\
+                       0003626172070401000\n\
+                       0000474686973010000\n\
+                       000474686174" ) ] in
                 let result_div =
                   Reactive.div_of_var michbytes_code ~f:(fun bytes_code ->
                       let with_zero_x, bytes =
@@ -741,8 +764,9 @@ let open Js_of_ocaml in
                       | Error s ->
                           [div [strong [txt "Error: "]]; pre [code [txt s]]])
                 in
-                [ editor_with_preview michbytes_editor michbytes_editor_area
-                    result_div ])) (*  ; Text_editor.text_area test_editor *) ])
+                [ editor_with_preview michbytes_editor ~examples
+                    michbytes_editor_area result_div ]))
+        (*  ; Text_editor.text_area test_editor *) ])
 
 let attach_to_page gui =
   let open Js_of_ocaml in
