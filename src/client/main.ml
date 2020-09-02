@@ -17,9 +17,7 @@ module Var = struct
 
   let map ?name v ~f =
     let sgn = signal v in
-    let new_signal =
-      React.S.map f sgn
-      |> React.S.trace (fun b -> dbgf "%s.mapped -> %b" v.name b) in
+    let new_signal = React.S.map f sgn in
     let name = Option.value name ~default:(v.name ^ "-m") in
     {name; signal= new_signal; set= (fun ?step:_ _ -> failwith "not setable")}
 
@@ -655,8 +653,19 @@ let gui state =
                                 dbgf "examples menu" ;
                                 Var.set expanded (not (Var.value expanded)) ;
                                 true) ]
-                        [txt "Load Examples "; span [] ~a:[a_class ["caret"]]]
-                    ; Reactive.ul ~a:[a_class []]
+                        [txt "Load Examples "; span [] ~a:[a_class ["caret"]]]
+                    ; Reactive.ul
+                        ~a:
+                          [ a_class []
+                          ; Reactive.a_style
+                              ( Var.map expanded ~f:(function
+                                  | false -> "display: none"
+                                  | true ->
+                                      "position: absolute; z-index: 10; \
+                                       background-color: white;padding: 10px; \
+                                       list-style-type: none; border: solid \
+                                       1px black;")
+                              |> Var.signal ) ]
                         (Var.map_to_list expanded ~f:(function
                           | true ->
                               List.map examples ~f:(fun (k, code) ->
