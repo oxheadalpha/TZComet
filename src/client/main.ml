@@ -718,7 +718,26 @@ let gui state =
           (Var.map_to_list state.State.current_view ~f:(function
             | Welcome ->
                 dbgf "Showing welc-home" ;
-                [div [h3 [txt "Welcome, what do you want to do?"]; menu_welcome]]
+                [ div
+                    [ h3 [txt "Welcome, what do you want to do?"]; menu_welcome
+                    ; h3 [txt "Further Reading"]
+                    ; p
+                        [ txt
+                            "The source for this webpage is available on \
+                             Github: "
+                        ; a
+                            ~a:[a_href "https://github.com/smondet/comevitz"]
+                            [code [txt "smondet/comevitz"]]; txt "." ]
+                    ; p
+                        [ txt
+                            "The Contract Metadata standard, a.k.a. TZIP-16, \
+                             is currently being drafted in the merge-request: "
+                        ; a
+                            ~a:
+                              [ a_href
+                                  "https://gitlab.com/tzip/tzip/-/merge_requests/76"
+                              ]
+                            [txt "tzip/tzip!76"]; txt "." ] ] ]
             | Metadata_examples {current} ->
                 [ div
                     [h3 [txt "Examples from the library:"]; pre [code [txt ex]]]
