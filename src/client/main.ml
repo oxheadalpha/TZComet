@@ -570,7 +570,7 @@ let sizing_table sizes =
                ; td [Fmt.kstr txt "%a μꜩ" ppbig (bytes * 1000)]
                ; td [Fmt.kstr txt "%a μꜩ" ppbig (bytes * 250)] ])) ]
 
-let gui state =
+let gui ?version_string state =
   let all_examples =
     let open Tezos_contract_metadata.Metadata_contents in
     let rec go n = try (n, Example.build n) :: go (n + 1) with _ -> [] in
@@ -744,8 +744,25 @@ let gui state =
             | Welcome ->
                 dbgf "Showing welc-home" ;
                 [ div
-                    [ h3 [txt "Welcome, what do you want to do?"]; menu_welcome
-                    ; h3 [txt "Further Reading"]
+                    [ h3 [txt "Welcome"]
+                    ; p
+                        [ txt "This is "
+                        ; a
+                            ~a:[a_href "https://github.com/smondet/comevitz"]
+                            [txt "Comevitz "]
+                        ; ( match version_string with
+                          | None -> i [txt "unknown version"]
+                          | Some vs ->
+                              span
+                                [ txt "version "
+                                ; a
+                                    ~a:
+                                      [ Fmt.kstr a_href
+                                          "https://github.com/smondet/comevitz/commit/%s"
+                                          vs ]
+                                    [i [txt vs]] ] ); txt "." ]
+                    ; h3 [Fmt.kstr txt "What would you like to do?"]
+                    ; menu_welcome; h3 [txt "Further Reading"]
                     ; p
                         [ txt
                             "The source for this webpage is available on \
@@ -927,7 +944,15 @@ let go _ =
     Lwt.(
       let state = State.init () in
       catch
-        (fun () -> attach_to_page (gui state) >>= fun () -> return ())
+        (fun () ->
+          Js_of_ocaml_lwt.XmlHttpRequest.(
+            get "./VERSION"
+            >>= fun frame ->
+            dbgf "version: %d" frame.code ;
+            if frame.code = 200 then return (Some frame.content)
+            else return None)
+          >>= fun version_string ->
+          attach_to_page (gui ?version_string state) >>= fun () -> return ())
         (fun exn ->
           Printf.ksprintf
             (fun s -> Fmt.epr "ERROR: %s" s ; failwith s)

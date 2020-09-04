@@ -66,6 +66,7 @@ deploy_website () {
     cp _build/default/src/client/index.html "$dst/"
     cp _build/default/src/client/main.bc.js "$dst/"
     cp _build/default/src/client/loading.gif "$dst/"
+    chmod a+w "$dst/"*
     git describe --always HEAD > "$dst/VERSION"
     echo "Done → $dst"
 }
