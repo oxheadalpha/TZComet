@@ -545,6 +545,31 @@ module Michelson_bytes = struct
     to_display
 end
 
+let sizing_table sizes =
+  let open RD in
+  (* carthage: 1 militez / byte
+     http://mainnet.smartpy.io/chains/main/blocks/head/context/constants
+     "cost_per_byte":"1000"
+     http://delphinet.smartpy.io/chains/main/blocks/head/context/constants
+     "cost_per_byte":"250"
+  *)
+  tablex
+    ~a:[a_class ["table"; "table-bordered"; "table-hover"]]
+    ~thead:
+      (thead
+         [ tr
+             [ th []; th [txt "Size"]; th [txt "Carthage Burn"]
+             ; th [txt "Delphi Burn"] ] ])
+    [ tbody
+        (List.map sizes ~f:(fun (label, bytes) ->
+             let ppbig ppf i =
+               let open Fmt in
+               pf ppf "%s" (Int.to_string_hum i ~delimiter:' ') in
+             tr
+               [ th [txt label]; td [Fmt.kstr txt "%a B" ppbig bytes]
+               ; td [Fmt.kstr txt "%a μꜩ" ppbig (bytes * 1000)]
+               ; td [Fmt.kstr txt "%a μꜩ" ppbig (bytes * 250)] ])) ]
+
 let gui state =
   let all_examples =
     let open Tezos_contract_metadata.Metadata_contents in
@@ -776,7 +801,9 @@ let gui state =
                       | Ok o ->
                           [ big_answer `Ok
                               [txt "This metadata URI is VALID 👍"]
-                          ; div (Contract_metadata.Uri.to_html o) ]
+                          ; div (Contract_metadata.Uri.to_html o)
+                          ; div [sizing_table [("URI", String.length uri_code)]]
+                          ]
                       | Error el ->
                           [ big_answer `Error
                               [txt "There were parsing/validation errors:"]
@@ -810,8 +837,13 @@ let gui state =
                           [ big_answer `Ok
                               [txt "This metadata blob is VALID 👍"]
                           ; div [Contract_metadata.Content.to_html ex]
-                            (* ; Fmt.kstr (fun s -> pre [code [txt s]]) "%a" pp ex *)
-                          ]
+                          ; div
+                              [ sizing_table
+                                  [ ("Current JSON", String.length json_code)
+                                  ; ( "Minimized JSON"
+                                    , Ezjsonm.value_from_string json_code
+                                      |> Ezjsonm.value_to_string ~minify:true
+                                      |> String.length ) ] ] ]
                       | Error el ->
                           [ big_answer `Error
                               [txt "There were parsing/validation errors:"]
