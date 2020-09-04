@@ -48,6 +48,7 @@ ensure_setup () {
          js_of_ocaml-compiler js_of_ocaml-tyxml js_of_ocaml-lwt
 }
 
+
 eval $(opam env)
 
 build_all () {
@@ -58,12 +59,22 @@ build_ () {
     build_all
 }
 
+deploy_website () {
+    build_all
+    dst="$1"
+    mkdir -p "$dst"
+    cp _build/default/src/client/index.html "$dst/"
+    cp _build/default/src/client/main.bc.js "$dst/"
+    cp _build/default/src/client/loading.gif "$dst/"
+    git describe --always HEAD > "$dst/VERSION"
+    echo "Done → $dst"
+}
 
 {
     case "$1" in
         "" | "--help" | "help" | "usage" )
             usage ;;
-        "ensure" | "build" )
+        "ensure" | "build" | "deploy" )
             cmd="$1_$2"
             shift 2
             "$cmd" "$@" ;;
