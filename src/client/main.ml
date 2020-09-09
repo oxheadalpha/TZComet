@@ -40,7 +40,6 @@ module State = struct
   module View = struct
     type t =
       | Welcome
-      | Metadata_examples of {current: int option Var.t}
       | Metadata_json_editor
       | Metadata_uri_editor
       | Michelson_bytes_parser
@@ -575,9 +574,6 @@ let gui ?version_string state =
     let open Tezos_contract_metadata.Metadata_contents in
     let rec go n = try (n, Example.build n) :: go (n + 1) with _ -> [] in
     go 0 in
-  let ex =
-    let open Tezos_contract_metadata.Metadata_contents in
-    Fmt.str "Example 5:\n%a" pp (Example.build 5) in
   RD.(
     let menu which =
       let items =
@@ -780,22 +776,6 @@ let gui ?version_string state =
                                   "https://gitlab.com/tzip/tzip/-/merge_requests/76"
                               ]
                             [txt "tzip/tzip!76"]; txt "." ] ] ]
-            | Metadata_examples {current} ->
-                [ div
-                    [h3 [txt "Examples from the library:"]; pre [code [txt ex]]]
-                ; Reactive.div_of_var current ~f:(function
-                    | None ->
-                        [ txt "Current: none"
-                        ; ul
-                            (List.map all_examples ~f:(fun (ith, _ex) ->
-                                 li
-                                   [ button
-                                       ~a:
-                                         [ a_onclick (fun _ ->
-                                               Var.set current (Some ith) ; true)
-                                         ]
-                                       [Fmt.kstr txt "Example #%d" ith] ])) ]
-                    | Some ith -> [Fmt.kstr txt "Current: %d" ith]) ]
             | Metadata_uri_editor ->
                 let examples =
                   let ex name u = (name, Uri.to_string u) in
