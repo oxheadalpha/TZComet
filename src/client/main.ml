@@ -43,6 +43,7 @@ module State = struct
       | Metadata_json_editor
       | Metadata_uri_editor
       | Michelson_bytes_parser
+      | Metadata_explorer
   end
 
   type t = {current_view: View.t Var.t}
@@ -674,7 +675,15 @@ let gui ?version_string state =
                 | Michelson_bytes_parser -> false
                 | _ -> true))
             (fun () -> Var.set state.State.current_view Michelson_bytes_parser)
-        ] in
+        ; Menu.item (txt "Metadata Explorer")
+            ~long_message:(txt "Explore metadata in existing contracts.")
+            ~description:(p [txt "This is WIP."])
+            ~active:
+              (Var.map state.State.current_view ~f:(function
+                | Metadata_explorer -> false
+                | _ -> true))
+            (fun () -> Var.set state.State.current_view Metadata_explorer) ]
+      in
       let home =
         Menu.item (txt "Home")
           ~active:
@@ -915,8 +924,16 @@ let gui ?version_string state =
                           [ big_answer `Error
                               [txt "There were parsing/validation errors:"]
                           ; pre [code [txt s]] ]) in
-                [ editor_with_preview michbytes_editor ~examples
-                    michbytes_editor_area result_div ])) ])
+                [editor_with_preview michbytes_editor ~examples result_div]
+            | Metadata_explorer ->
+                let nodes =
+                  [ "https://testnet-tezos.giganode.io"
+                  ; "https://carthagenet.smartpy.io" ] in
+                [ div [txt "WIP"]
+                ; div
+                    [ ul
+                        (List.map nodes ~f:(fun s ->
+                             li [txt "Node: "; code [txt s]])) ] ])) ])
 
 let attach_to_page gui =
   let open Js_of_ocaml in
@@ -941,6 +958,19 @@ let go _ =
             if frame.code = 200 then return (Some frame.content)
             else return None)
           >>= fun version_string ->
+          let ping_node node =
+            Js_of_ocaml_lwt.XmlHttpRequest.(
+              Fmt.kstr get "%s/chains/main/blocks/head/metadata" node
+              >>= fun frame ->
+              dbgf "metadata code: %d" frame.code ;
+              if frame.code = 200 then return (Some frame.content)
+              else return None) in
+          ping_node "https://testnet-tezos.giganode.io"
+          >>= fun _extra_string ->
+          dbgf "gigadata : %a" Fmt.(Dump.option string) _extra_string ;
+          ping_node "https://carthagenet.smartpy.io"
+          >>= fun _extra_string ->
+          dbgf "smartdata : %a" Fmt.(Dump.option string) _extra_string ;
           attach_to_page (gui ?version_string state) >>= fun () -> return ())
         (fun exn ->
           Printf.ksprintf
