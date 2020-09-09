@@ -637,6 +637,192 @@ let editor_with_preview ?(examples = []) editor result_div =
           ; a_style "border-left: solid 2px grey; height: 90%" ]
         [result_div] ]
 
+let welcome_page ?version_string _state ~menu_welcome =
+  let open RD in
+  div
+    [ h3 [txt "Welcome"]
+    ; p
+        [ txt "This is "
+        ; a ~a:[a_href "https://github.com/smondet/comevitz"] [txt "Comevitz "]
+        ; ( match version_string with
+          | None -> i [txt "unknown version"]
+          | Some vs ->
+              span
+                [ txt "version "
+                ; a
+                    ~a:
+                      [ Fmt.kstr a_href
+                          "https://github.com/smondet/comevitz/commit/%s" vs ]
+                    [i [txt vs]] ] ); txt "." ]
+    ; h3 [Fmt.kstr txt "What would you like to do?"]; menu_welcome
+    ; h3 [txt "Further Reading"]
+    ; p
+        [ txt "The source for this webpage is available on Github: "
+        ; a
+            ~a:[a_href "https://github.com/smondet/comevitz"]
+            [code [txt "smondet/comevitz"]]; txt "." ]
+    ; p
+        [ txt
+            "The Contract Metadata standard, a.k.a. TZIP-16, is currently \
+             being drafted in the merge-request: "
+        ; a
+            ~a:[a_href "https://gitlab.com/tzip/tzip/-/merge_requests/76"]
+            [txt "tzip/tzip!76"]; txt "." ] ]
+
+let rec show_tezos_error =
+  let open RD in
+  function
+  | [] -> []
+  | Tezos_error_monad.Error_monad.Exn (Ezjsonm.Parse_error (json_value, msg))
+    :: more ->
+      [ Fmt.kstr txt "JSON Parsing Error: %s, JSON:" msg
+      ; pre [code [txt (Ezjsonm.value_to_string ~minify:false json_value)]] ]
+      @ show_tezos_error more
+  | Tezos_error_monad.Error_monad.Exn (Failure text) :: more ->
+      [Fmt.kstr txt "Error: %a" Fmt.text text] @ show_tezos_error more
+  | Tezos_error_monad.Error_monad.Exn other_exn :: more ->
+      [ Fmt.kstr txt "Error: %a"
+          (Json_encoding.print_error ~print_unknown:Exn.pp)
+          other_exn ]
+      @ show_tezos_error more
+  | other ->
+      [ pre
+          [ code
+              [ Fmt.kstr txt "%a" Tezos_error_monad.Error_monad.pp_print_error
+                  other ] ] ]
+
+let big_answer level content =
+  let open RD in
+  let bgclass = match level with `Ok -> "bg-success" | `Error -> "bg-danger" in
+  p ~a:[a_class ["lead"; bgclass]] content
+
+let metadata_uri_editor_page _state ~metadata_uri_editor ~metadata_uri_code =
+  let open RD in
+  let examples =
+    let ex name u = (name, Uri.to_string u) in
+    [ ex "Simple in storage" (Uri.make ~scheme:"tezos-storage" ~path:"foo" ())
+    ; ex "HTTPS" (Uri.of_string "https://example.com/path/to/metadata.json")
+    ; ex "IPFS"
+        (Uri.of_string
+           "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json")
+    ; ex "SHA256-checked HTTPS"
+        (Uri.of_string
+           "sha256://0xeaa42ea06b95d7917d22135a630e65352cfd0a721ae88155a1512468a95cb750/https:%2F%2Fexample.com%2Fmetadata.json")
+    ] in
+  let result_div =
+    Reactive.div_of_var metadata_uri_code ~f:(fun uri_code ->
+        let open Tezos_contract_metadata.Metadata_uri in
+        match Uri.of_string uri_code |> of_uri with
+        | Ok o ->
+            [ big_answer `Ok [txt "This metadata URI is VALID 👍"]
+            ; div (Contract_metadata.Uri.to_html o)
+            ; div [sizing_table [("URI", String.length uri_code)]] ]
+        | Error el ->
+            [ big_answer `Error [txt "There were parsing/validation errors:"]
+            ; div (show_tezos_error el) ]) in
+  [editor_with_preview metadata_uri_editor ~examples result_div]
+
+let metadata_json_editor_page _state ~metadata_json_editor ~metadata_json_code =
+  let open RD in
+  let examples =
+    let all_examples =
+      let open Tezos_contract_metadata.Metadata_contents in
+      let rec go n = try (n, Example.build n) :: go (n + 1) with _ -> [] in
+      go 0 in
+    List.map all_examples ~f:(fun (ith, v) ->
+        ( Fmt.str "Meaningless Example #%d" ith
+        , Tezos_contract_metadata.Metadata_contents.to_json v )) in
+  let result_div =
+    Reactive.div_of_var metadata_json_code ~f:(fun json_code ->
+        let open Tezos_contract_metadata.Metadata_contents in
+        match of_json json_code with
+        | Ok
+            { name= None
+            ; description= None
+            ; version= None
+            ; license= None
+            ; authors= []
+            ; interfaces= []
+            ; views= []
+            ; unknown= [] } ->
+            [ big_answer `Ok
+                [txt "This piece of metadata, while valid, is completely empty!"]
+            ]
+        | Ok ex ->
+            [ big_answer `Ok [txt "This metadata blob is VALID 👍"]
+            ; div [Contract_metadata.Content.to_html ex]
+            ; div
+                [ sizing_table
+                    [ ("Current JSON", String.length json_code)
+                    ; ( "Minimized JSON"
+                      , Ezjsonm.value_from_string json_code
+                        |> Ezjsonm.value_to_string ~minify:true
+                        |> String.length ) ] ] ]
+        | Error el ->
+            [ big_answer `Error [txt "There were parsing/validation errors:"]
+            ; div (show_tezos_error el) ]) in
+  [editor_with_preview metadata_json_editor ~examples result_div]
+
+let michelson_bytes_editor_page _state ~michelson_bytes_editor
+    ~michelson_bytes_code =
+  let open RD in
+  let examples =
+    [ ("The Unit value", "0x05030b")
+    ; ( "With a (map string string)"
+      , "050707010000000c486\n\
+         56c6c6f20576f726c64\n\
+         2102000000260704010\n\
+         0000003666f6f010000\n\
+         0003626172070401000\n\
+         0000474686973010000\n\
+         000474686174" ) ] in
+  let result_div =
+    Reactive.div_of_var michelson_bytes_code ~f:(fun bytes_code ->
+        let with_zero_x, bytes =
+          let prefix = "0x" in
+          if String.is_prefix bytes_code ~prefix then
+            (true, String.chop_prefix_exn bytes_code ~prefix)
+          else (false, bytes_code) in
+        let with_zero_five, bytes =
+          let prefix = "05" in
+          if String.is_prefix bytes ~prefix then
+            (true, String.chop_prefix_exn bytes ~prefix)
+          else (false, bytes) in
+        let bytes =
+          String.filter bytes ~f:(function
+            | ' ' | '\n' | '\t' -> false
+            | _ -> true) in
+        let items =
+          ( if with_zero_x then
+            [li [code [txt "0x"]; txt " just means “this is hexadecimal”."]]
+          else [] )
+          @
+          if with_zero_five then
+            [ li
+                [ code [txt "05"]
+                ; txt " is the standard prefix/watermark Michelson expressions."
+                ] ]
+          else [] in
+        match Michelson_bytes.parse_bytes bytes with
+        | Ok (json, concrete) ->
+            [ big_answer `Ok [txt "This hexa-blob was successfully parsed 🏆"]
+            ; ul items; h4 [txt "As Concrete Michelson:"]
+            ; div [pre [code [txt concrete]]]; h4 [txt "As JSON:"]
+            ; div [pre [code [txt (Ezjsonm.value_to_string ~minify:false json)]]]
+            ]
+        | Error s ->
+            [ big_answer `Error [txt "There were parsing/validation errors:"]
+            ; pre [code [txt s]] ]) in
+  [editor_with_preview michelson_bytes_editor ~examples result_div]
+
+let metadata_explorer _state =
+  let open RD in
+  let nodes =
+    ["https://testnet-tezos.giganode.io"; "https://carthagenet.smartpy.io"]
+  in
+  [ div [txt "WIP"]
+  ; div [ul (List.map nodes ~f:(fun s -> li [txt "Node: "; code [txt s]]))] ]
+
 let gui ?version_string state =
   RD.(
     let menu which =
@@ -715,38 +901,12 @@ let gui ?version_string state =
     let metadata_uri_editor =
       Text_editor.create "metadataurieditor" ~code:metadata_uri_code
         ~language:"css" in
-    let michbytes_code =
+    let michelson_bytes_code =
       Var.create "michbytes-code"
         "0x050707010000000c48656c6c6f2057\n6f726c6421002a" in
-    let michbytes_editor =
-      Text_editor.create "michbytesditor" ~code:michbytes_code ~language:"css"
-    in
-    let big_answer level content =
-      let bgclass =
-        match level with `Ok -> "bg-success" | `Error -> "bg-danger" in
-      p ~a:[a_class ["lead"; bgclass]] content in
-    let rec show_tezos_error = function
-      | [] -> []
-      | Tezos_error_monad.Error_monad.Exn
-          (Ezjsonm.Parse_error (json_value, msg))
-        :: more ->
-          [ Fmt.kstr txt "JSON Parsing Error: %s, JSON:" msg
-          ; pre [code [txt (Ezjsonm.value_to_string ~minify:false json_value)]]
-          ]
-          @ show_tezos_error more
-      | Tezos_error_monad.Error_monad.Exn (Failure text) :: more ->
-          [Fmt.kstr txt "Error: %a" Fmt.text text] @ show_tezos_error more
-      | Tezos_error_monad.Error_monad.Exn other_exn :: more ->
-          [ Fmt.kstr txt "Error: %a"
-              (Json_encoding.print_error ~print_unknown:Exn.pp)
-              other_exn ]
-          @ show_tezos_error more
-      | other ->
-          [ pre
-              [ code
-                  [ Fmt.kstr txt "%a"
-                      Tezos_error_monad.Error_monad.pp_print_error other ] ] ]
-    in
+    let michelson_bytes_editor =
+      Text_editor.create "michbytesditor" ~code:michelson_bytes_code
+        ~language:"css" in
     div
       ~a:[a_class ["container-fluid"]]
       [ div ~a:[a_class ["col-md-12"]] [menu `Top]; hr ()
@@ -754,186 +914,17 @@ let gui ?version_string state =
           (Var.map_to_list state.State.current_view ~f:(function
             | Welcome ->
                 dbgf "Showing welc-home" ;
-                [ div
-                    [ h3 [txt "Welcome"]
-                    ; p
-                        [ txt "This is "
-                        ; a
-                            ~a:[a_href "https://github.com/smondet/comevitz"]
-                            [txt "Comevitz "]
-                        ; ( match version_string with
-                          | None -> i [txt "unknown version"]
-                          | Some vs ->
-                              span
-                                [ txt "version "
-                                ; a
-                                    ~a:
-                                      [ Fmt.kstr a_href
-                                          "https://github.com/smondet/comevitz/commit/%s"
-                                          vs ]
-                                    [i [txt vs]] ] ); txt "." ]
-                    ; h3 [Fmt.kstr txt "What would you like to do?"]
-                    ; menu_welcome; h3 [txt "Further Reading"]
-                    ; p
-                        [ txt
-                            "The source for this webpage is available on \
-                             Github: "
-                        ; a
-                            ~a:[a_href "https://github.com/smondet/comevitz"]
-                            [code [txt "smondet/comevitz"]]; txt "." ]
-                    ; p
-                        [ txt
-                            "The Contract Metadata standard, a.k.a. TZIP-16, \
-                             is currently being drafted in the merge-request: "
-                        ; a
-                            ~a:
-                              [ a_href
-                                  "https://gitlab.com/tzip/tzip/-/merge_requests/76"
-                              ]
-                            [txt "tzip/tzip!76"]; txt "." ] ] ]
+                [welcome_page ?version_string state ~menu_welcome]
             | Metadata_uri_editor ->
-                let examples =
-                  let ex name u = (name, Uri.to_string u) in
-                  [ ex "Simple in storage"
-                      (Uri.make ~scheme:"tezos-storage" ~path:"foo" ())
-                  ; ex "HTTPS"
-                      (Uri.of_string
-                         "https://example.com/path/to/metadata.json")
-                  ; ex "IPFS"
-                      (Uri.of_string
-                         "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json")
-                  ; ex "SHA256-checked HTTPS"
-                      (Uri.of_string
-                         "sha256://0xeaa42ea06b95d7917d22135a630e65352cfd0a721ae88155a1512468a95cb750/https:%2F%2Fexample.com%2Fmetadata.json")
-                  ] in
-                let result_div =
-                  Reactive.div_of_var metadata_uri_code ~f:(fun uri_code ->
-                      let open Tezos_contract_metadata.Metadata_uri in
-                      match Uri.of_string uri_code |> of_uri with
-                      | Ok o ->
-                          [ big_answer `Ok
-                              [txt "This metadata URI is VALID 👍"]
-                          ; div (Contract_metadata.Uri.to_html o)
-                          ; div [sizing_table [("URI", String.length uri_code)]]
-                          ]
-                      | Error el ->
-                          [ big_answer `Error
-                              [txt "There were parsing/validation errors:"]
-                          ; div (show_tezos_error el) ]) in
-                [editor_with_preview metadata_uri_editor ~examples result_div]
+                metadata_uri_editor_page state ~metadata_uri_editor
+                  ~metadata_uri_code
             | Metadata_json_editor ->
-                let examples =
-                  let all_examples =
-                    let open Tezos_contract_metadata.Metadata_contents in
-                    let rec go n =
-                      try (n, Example.build n) :: go (n + 1) with _ -> [] in
-                    go 0 in
-                  List.map all_examples ~f:(fun (ith, v) ->
-                      ( Fmt.str "Meaningless Example #%d" ith
-                      , Tezos_contract_metadata.Metadata_contents.to_json v ))
-                in
-                let result_div =
-                  Reactive.div_of_var metadata_json_code ~f:(fun json_code ->
-                      let open Tezos_contract_metadata.Metadata_contents in
-                      match of_json json_code with
-                      | Ok
-                          { name= None
-                          ; description= None
-                          ; version= None
-                          ; license= None
-                          ; authors= []
-                          ; interfaces= []
-                          ; views= []
-                          ; unknown= [] } ->
-                          [ big_answer `Ok
-                              [ txt
-                                  "This piece of metadata, while valid, is \
-                                   completely empty!" ] ]
-                      | Ok ex ->
-                          [ big_answer `Ok
-                              [txt "This metadata blob is VALID 👍"]
-                          ; div [Contract_metadata.Content.to_html ex]
-                          ; div
-                              [ sizing_table
-                                  [ ("Current JSON", String.length json_code)
-                                  ; ( "Minimized JSON"
-                                    , Ezjsonm.value_from_string json_code
-                                      |> Ezjsonm.value_to_string ~minify:true
-                                      |> String.length ) ] ] ]
-                      | Error el ->
-                          [ big_answer `Error
-                              [txt "There were parsing/validation errors:"]
-                          ; div (show_tezos_error el) ]) in
-                [editor_with_preview metadata_json_editor ~examples result_div]
+                metadata_json_editor_page state ~metadata_json_editor
+                  ~metadata_json_code
             | Michelson_bytes_parser ->
-                let examples =
-                  [ ("The Unit value", "0x05030b")
-                  ; ( "With a (map string string)"
-                    , "050707010000000c486\n\
-                       56c6c6f20576f726c64\n\
-                       2102000000260704010\n\
-                       0000003666f6f010000\n\
-                       0003626172070401000\n\
-                       0000474686973010000\n\
-                       000474686174" ) ] in
-                let result_div =
-                  Reactive.div_of_var michbytes_code ~f:(fun bytes_code ->
-                      let with_zero_x, bytes =
-                        let prefix = "0x" in
-                        if String.is_prefix bytes_code ~prefix then
-                          (true, String.chop_prefix_exn bytes_code ~prefix)
-                        else (false, bytes_code) in
-                      let with_zero_five, bytes =
-                        let prefix = "05" in
-                        if String.is_prefix bytes ~prefix then
-                          (true, String.chop_prefix_exn bytes ~prefix)
-                        else (false, bytes) in
-                      let bytes =
-                        String.filter bytes ~f:(function
-                          | ' ' | '\n' | '\t' -> false
-                          | _ -> true) in
-                      let items =
-                        ( if with_zero_x then
-                          [ li
-                              [ code [txt "0x"]
-                              ; txt " just means “this is hexadecimal”." ]
-                          ]
-                        else [] )
-                        @
-                        if with_zero_five then
-                          [ li
-                              [ code [txt "05"]
-                              ; txt
-                                  " is the standard prefix/watermark Michelson \
-                                   expressions." ] ]
-                        else [] in
-                      match Michelson_bytes.parse_bytes bytes with
-                      | Ok (json, concrete) ->
-                          [ big_answer `Ok
-                              [ txt
-                                  "This hexa-blob was successfully parsed 🏆"
-                              ]; ul items; h4 [txt "As Concrete Michelson:"]
-                          ; div [pre [code [txt concrete]]]; h4 [txt "As JSON:"]
-                          ; div
-                              [ pre
-                                  [ code
-                                      [ txt
-                                          (Ezjsonm.value_to_string ~minify:false
-                                             json) ] ] ] ]
-                      | Error s ->
-                          [ big_answer `Error
-                              [txt "There were parsing/validation errors:"]
-                          ; pre [code [txt s]] ]) in
-                [editor_with_preview michbytes_editor ~examples result_div]
-            | Metadata_explorer ->
-                let nodes =
-                  [ "https://testnet-tezos.giganode.io"
-                  ; "https://carthagenet.smartpy.io" ] in
-                [ div [txt "WIP"]
-                ; div
-                    [ ul
-                        (List.map nodes ~f:(fun s ->
-                             li [txt "Node: "; code [txt s]])) ] ])) ])
+                michelson_bytes_editor_page state ~michelson_bytes_editor
+                  ~michelson_bytes_code
+            | Metadata_explorer -> metadata_explorer state)) ])
 
 let attach_to_page gui =
   let open Js_of_ocaml in
