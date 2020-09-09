@@ -77,12 +77,17 @@ module Text_editor = struct
   type status = Non_initialized | Initialized
 
   type t =
-    {id: string; language: string; code: string Var.t; status: status Var.t}
+    { id: string
+    ; language: string
+    ; code: string Var.t
+    ; status: status Var.t
+    ; mutable text_area: Html_types.div RD.elt option }
 
   let create ?(language = "mllike") id ~code =
     { id
     ; language
     ; code
+    ; text_area= None
     ; status= Var.create (Fmt.str "text-editor-%s-status" id) Non_initialized }
 
   let ensure te =
@@ -144,35 +149,42 @@ lang_script.onload = function () {
         Var.set te.status Initialized
 
   let text_area te =
-    let open RD in
-    let css =
-      {css|
+    match te.text_area with
+    | Some s -> s
+    | None ->
+        let open RD in
+        let css =
+          {css|
 .editorcontainer { height: 50% }
 @media (min-width: 992px) {
     .editorcontainer { height: 90% }
 }
 .CodeMirror { height: auto }
 |css}
-    in
-    div
-      [ style [txt css]
-      ; div
-          ~a:[a_class ["editorcontainer"]]
-          [ textarea
-              ~a:
-                [ a_id te.id; a_class ["form-control"]
-                ; a_style "font-family: monospace"; a_rows 80
-                ; a_onchange
-                    Js_of_ocaml.(
-                      fun ev ->
-                        Js.Opt.iter ev##.target (fun input ->
-                            Js.Opt.iter (Dom_html.CoerceTo.textarea input)
-                              (fun input ->
-                                let v = input##.value |> Js.to_string in
-                                dbgf "TA inputs: %d bytes" (String.length v) ;
-                                Var.set te.code v)) ;
-                        false) ]
-              (txt (Var.value te.code)) ] ]
+        in
+        let area =
+          div
+            [ style [txt css]
+            ; div
+                ~a:[a_class ["editorcontainer"]]
+                [ textarea
+                    ~a:
+                      [ a_id te.id; a_class ["form-control"]
+                      ; a_style "font-family: monospace"; a_rows 80
+                      ; a_onchange
+                          Js_of_ocaml.(
+                            fun ev ->
+                              Js.Opt.iter ev##.target (fun input ->
+                                  Js.Opt.iter (Dom_html.CoerceTo.textarea input)
+                                    (fun input ->
+                                      let v = input##.value |> Js.to_string in
+                                      dbgf "TA inputs: %d bytes"
+                                        (String.length v) ;
+                                      Var.set te.code v)) ;
+                              false) ]
+                    (txt (Var.value te.code)) ] ] in
+        te.text_area <- Some area ;
+        area
 
   let editor_command_button te ~text command_name =
     let open RD in
@@ -569,11 +581,62 @@ let sizing_table sizes =
                ; td [Fmt.kstr txt "%a μꜩ" ppbig (bytes * 1000)]
                ; td [Fmt.kstr txt "%a μꜩ" ppbig (bytes * 250)] ])) ]
 
+let editor_with_preview ?(examples = []) editor result_div =
+  let open RD in
+  Text_editor.ensure editor ;
+  div
+    ~a:[a_class ["col-md-12"]]
+    [ div
+        ~a:[a_class ["col-md-6"]]
+        [ Text_editor.editor_command_button editor ~text:"Undo" "undo"
+        ; Text_editor.editor_command_button editor ~text:"Redo" "redo"
+        ; Text_editor.editor_command_button editor ~text:"Select All"
+            "selectAll"
+        ; ( match examples with
+          | [] -> span []
+          | _more ->
+              let expanded = Var.create "examples-menu-expanded" false in
+              div
+                [ button
+                    ~a:
+                      [ a_class ["btn"; "btn-secondary"; "dropdown-toggle"]
+                      ; a_onclick (fun _ ->
+                            dbgf "examples menu" ;
+                            Var.set expanded (not (Var.value expanded)) ;
+                            true) ]
+                    [txt "Load Examples "; span [] ~a:[a_class ["caret"]]]
+                ; Reactive.ul
+                    ~a:
+                      [ a_class []
+                      ; Reactive.a_style
+                          ( Var.map expanded ~f:(function
+                              | false -> "display: none"
+                              | true ->
+                                  "position: absolute; z-index: 10; \
+                                   background-color: white;padding: 10px; \
+                                   list-style-type: none; border: solid 1px \
+                                   black;")
+                          |> Var.signal ) ]
+                    (Var.map_to_list expanded ~f:(function
+                      | true ->
+                          List.map examples ~f:(fun (k, code) ->
+                              li
+                                [ a
+                                    ~a:
+                                      [ a_href "#"
+                                      ; a_onclick (fun _ ->
+                                            Text_editor.set_code editor ~code ;
+                                            Var.set expanded false ;
+                                            true) ]
+                                    [txt k] ])
+                      | false -> [])) ] ); div [Text_editor.text_area editor] ]
+    ; div
+        ~a:
+          [ a_class ["col-md-6"]
+          ; a_style "border-left: solid 2px grey; height: 90%" ]
+        [result_div] ]
+
 let gui ?version_string state =
-  let all_examples =
-    let open Tezos_contract_metadata.Metadata_contents in
-    let rec go n = try (n, Example.build n) :: go (n + 1) with _ -> [] in
-    go 0 in
   RD.(
     let menu which =
       let items =
@@ -639,73 +702,16 @@ let gui ?version_string state =
     let metadata_json_editor =
       Text_editor.create "metadatajsoneditor" ~code:metadata_json_code
         ~language:"yaml" in
-    let metadata_json_editor_area = Text_editor.text_area metadata_json_editor in
     let metadata_uri_code = Var.create "metadata-uri-code" "tezos-storage:foo" in
     let metadata_uri_editor =
       Text_editor.create "metadataurieditor" ~code:metadata_uri_code
         ~language:"css" in
-    let metadata_uri_editor_area = Text_editor.text_area metadata_uri_editor in
     let michbytes_code =
       Var.create "michbytes-code"
         "0x050707010000000c48656c6c6f2057\n6f726c6421002a" in
     let michbytes_editor =
       Text_editor.create "michbytesditor" ~code:michbytes_code ~language:"css"
     in
-    let michbytes_editor_area = Text_editor.text_area michbytes_editor in
-    let editor_with_preview ?(examples = []) editor editor_area result_div =
-      Text_editor.ensure editor ;
-      div
-        ~a:[a_class ["col-md-12"]]
-        [ div
-            ~a:[a_class ["col-md-6"]]
-            [ Text_editor.editor_command_button editor ~text:"Undo" "undo"
-            ; Text_editor.editor_command_button editor ~text:"Redo" "redo"
-            ; Text_editor.editor_command_button editor ~text:"Select All"
-                "selectAll"
-            ; ( match examples with
-              | [] -> span []
-              | _more ->
-                  let expanded = Var.create "examples-menu-expanded" false in
-                  div
-                    [ button
-                        ~a:
-                          [ a_class ["btn"; "btn-secondary"; "dropdown-toggle"]
-                          ; a_onclick (fun _ ->
-                                dbgf "examples menu" ;
-                                Var.set expanded (not (Var.value expanded)) ;
-                                true) ]
-                        [txt "Load Examples "; span [] ~a:[a_class ["caret"]]]
-                    ; Reactive.ul
-                        ~a:
-                          [ a_class []
-                          ; Reactive.a_style
-                              ( Var.map expanded ~f:(function
-                                  | false -> "display: none"
-                                  | true ->
-                                      "position: absolute; z-index: 10; \
-                                       background-color: white;padding: 10px; \
-                                       list-style-type: none; border: solid \
-                                       1px black;")
-                              |> Var.signal ) ]
-                        (Var.map_to_list expanded ~f:(function
-                          | true ->
-                              List.map examples ~f:(fun (k, code) ->
-                                  li
-                                    [ a
-                                        ~a:
-                                          [ a_href "#"
-                                          ; a_onclick (fun _ ->
-                                                Text_editor.set_code editor
-                                                  ~code ;
-                                                Var.set expanded false ;
-                                                true) ]
-                                        [txt k] ])
-                          | false -> [])) ] ); div [editor_area] ]
-        ; div
-            ~a:
-              [ a_class ["col-md-6"]
-              ; a_style "border-left: solid 2px grey; height: 90%" ]
-            [result_div] ] in
     let big_answer level content =
       let bgclass =
         match level with `Ok -> "bg-success" | `Error -> "bg-danger" in
@@ -805,10 +811,14 @@ let gui ?version_string state =
                           [ big_answer `Error
                               [txt "There were parsing/validation errors:"]
                           ; div (show_tezos_error el) ]) in
-                [ editor_with_preview metadata_uri_editor ~examples
-                    metadata_uri_editor_area result_div ]
+                [editor_with_preview metadata_uri_editor ~examples result_div]
             | Metadata_json_editor ->
                 let examples =
+                  let all_examples =
+                    let open Tezos_contract_metadata.Metadata_contents in
+                    let rec go n =
+                      try (n, Example.build n) :: go (n + 1) with _ -> [] in
+                    go 0 in
                   List.map all_examples ~f:(fun (ith, v) ->
                       ( Fmt.str "Meaningless Example #%d" ith
                       , Tezos_contract_metadata.Metadata_contents.to_json v ))
@@ -845,8 +855,7 @@ let gui ?version_string state =
                           [ big_answer `Error
                               [txt "There were parsing/validation errors:"]
                           ; div (show_tezos_error el) ]) in
-                [ editor_with_preview metadata_json_editor ~examples
-                    metadata_json_editor_area result_div ]
+                [editor_with_preview metadata_json_editor ~examples result_div]
             | Michelson_bytes_parser ->
                 let examples =
                   [ ("The Unit value", "0x05030b")
