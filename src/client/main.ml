@@ -3,6 +3,13 @@ open Base
 let dbg fmt = Fmt.pf Fmt.stdout "@[comevitz-debug: %a@]%!" fmt ()
 let dbgf fmt = Fmt.(kstr (fun s -> dbg (const string s))) fmt
 
+let rec oxfordize_list l ~map ~sep ~last_sep =
+  match l with
+  | [] -> []
+  | [one] -> [map one]
+  | [one; two] -> [map one; last_sep (); map two]
+  | one :: more -> map one :: sep () :: oxfordize_list more ~map ~sep ~last_sep
+
 module Var = struct
   type 'a t =
     {name: string; signal: 'a React.S.t; set: ?step:React.step -> 'a -> unit}
@@ -685,6 +692,71 @@ let rec show_tezos_error =
           (Json_encoding.print_error ~print_unknown:Exn.pp)
           other_exn ]
       @ show_tezos_error more
+  | Tezos_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
+      parsing_error
+    :: more ->
+      let open Tezos_contract_metadata.Metadata_uri.Parsing_error in
+      let details =
+        let sha256_host_advice =
+          span
+            [ txt "The host should look like: "
+            ; code
+                [ txt
+                    "0x5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+                ]; txt "." ] in
+        let scheme_advice =
+          span
+            [ txt "The URI should start with one of: "
+            ; span
+                (oxfordize_list
+                   ["tezos-storage"; "http"; "https"; "sha256"; "ipfs"]
+                   ~map:(fun sch -> code [Fmt.kstr txt "%s:" sch])
+                   ~sep:(fun () -> txt ",")
+                   ~last_sep:(fun () -> txt ", or ")); txt "." ] in
+        match parsing_error.error_kind with
+        | Wrong_scheme None -> [txt "Missing URI scheme. "; scheme_advice]
+        | Wrong_scheme (Some scheme) ->
+            [ txt "Unknown URI scheme: "; code [txt scheme]; txt ". "
+            ; scheme_advice ]
+        | Missing_cid_for_ipfs ->
+            [ txt
+                "Missing content identifier in IPFS URI, it should be the host."
+            ]
+        | Wrong_tezos_storage_host str ->
+            [ txt "Cannot parse the “host” part of the URI: "; code [txt str]
+            ; txt ", should look like "; code [txt "<network>.<address>"]
+            ; txt " or just "; code [txt "<address>"] ]
+        | Forbidden_slash_in_tezos_storage_path path ->
+            [ txt "For "; code [txt "tezos-storage"]
+            ; txt " URIs, the “path” cannot contain any "; code [txt "/"]
+            ; txt " (“slash”) character: "; code [txt path] ]
+        | Missing_host_for_hash_uri `Sha256 ->
+            [ txt "Missing “host” in "; code [txt "sha256://"]; txt " URI. "
+            ; sha256_host_advice ]
+        | Wrong_hex_format_for_hash {hash= `Sha256; host; message} ->
+            [ txt "Failed to parse the “host” "; code [txt host]
+            ; txt " in this "; code [txt "sha256://"]; txt " URI: "; txt message
+            ; txt " → "; sha256_host_advice ] in
+      let exploded_uri =
+        let u = Uri.of_string parsing_error.input in
+        let item name opt =
+          [ li
+              [ em [txt name; txt ": "]
+              ; (match opt with None -> txt "<empty>" | Some s -> code [txt s])
+              ] ] in
+        let item_some name s = item name (Some s) in
+        [ txt "The URI is understood this way: "
+        ; ul
+            ( item "Scheme" (Uri.scheme u)
+            @ item "Host" (Uri.host u)
+            @ item "User-info" (Uri.userinfo u)
+            @ item "Port" (Uri.port u |> Option.map ~f:Int.to_string)
+            @ item_some "Path" (Uri.path u)
+            @ item "Query" (Uri.verbatim_query u)
+            @ item "Fragment" (Uri.fragment u) ) ] in
+      [ txt "Failed to parse URI: "; code [txt parsing_error.input]; txt ":"
+      ; br () ]
+      @ details @ [br ()] @ exploded_uri @ show_tezos_error more
   | other ->
       [ pre
           [ code
