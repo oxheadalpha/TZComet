@@ -53,7 +53,7 @@ eval $(opam env)
 
 build_all () {
     dune build src/client/index.html
-    echo "Done: file://$PWD/_build/default/src/client/index.html"
+    echo "Done: file://$PWD/_build/default/src/client/index.html#dev"
 }
 build_ () {
     build_all

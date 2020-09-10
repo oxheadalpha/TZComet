@@ -53,9 +53,10 @@ module State = struct
       | Metadata_explorer
   end
 
-  type t = {current_view: View.t Var.t}
+  type t = {dev_mode: bool; current_view: View.t Var.t}
 
-  let init () = {current_view= Var.create "current-view" View.Welcome}
+  let init ?(dev_mode = false) () =
+    {current_view= Var.create "current-view" View.Welcome; dev_mode}
 end
 
 module Bootstrap_css = struct
@@ -644,7 +645,7 @@ let editor_with_preview ?(examples = []) editor result_div =
           ; a_style "border-left: solid 2px grey; height: 90%" ]
         [result_div] ]
 
-let welcome_page ?version_string _state ~menu_welcome =
+let welcome_page ?version_string state ~menu_welcome =
   let open RD in
   div
     [ h3 [txt "Welcome"]
@@ -660,7 +661,9 @@ let welcome_page ?version_string _state ~menu_welcome =
                     ~a:
                       [ Fmt.kstr a_href
                           "https://github.com/smondet/comevitz/commit/%s" vs ]
-                    [i [txt vs]] ] ); txt "." ]
+                    [i [txt vs]] ] )
+        ; Fmt.kstr txt "%s."
+            (if state.State.dev_mode then " (in “dev” mode)" else "") ]
     ; h3 [Fmt.kstr txt "What would you like to do?"]; menu_welcome
     ; h3 [txt "Further Reading"]
     ; p
@@ -1044,15 +1047,18 @@ let gui ?version_string state =
                 | Michelson_bytes_parser -> false
                 | _ -> true))
             (fun () -> Var.set state.State.current_view Michelson_bytes_parser)
-        ; Menu.item (txt "Metadata Explorer")
-            ~long_message:(txt "Explore metadata in existing contracts.")
-            ~description:(p [txt "This is WIP."])
-            ~active:
-              (Var.map state.State.current_view ~f:(function
-                | Metadata_explorer -> false
-                | _ -> true))
-            (fun () -> Var.set state.State.current_view Metadata_explorer) ]
-      in
+        ]
+        @
+        if state.dev_mode then
+          [ Menu.item (txt "Metadata Explorer")
+              ~long_message:(txt "Explore metadata in existing contracts.")
+              ~description:(p [txt "This is WIP."])
+              ~active:
+                (Var.map state.State.current_view ~f:(function
+                  | Metadata_explorer -> false
+                  | _ -> true))
+              (fun () -> Var.set state.State.current_view Metadata_explorer) ]
+        else [] in
       let home =
         Menu.item (txt "Home")
           ~active:
@@ -1117,12 +1123,19 @@ let attach_to_page gui =
   |> ignore ;
   Lwt.return ()
 
+let get_fragment () =
+  let open Js_of_ocaml in
+  let frag = Dom_html.window##.location##.hash |> Js.to_string in
+  dbgf "fragment  → %s" frag ;
+  String.chop_prefix_if_exists frag ~prefix:"#"
+
 let go _ =
   dbg Fmt.(const string "Hello Go!") ;
   Bootstrap_css.ensure () ;
   ignore
     Lwt.(
-      let state = State.init () in
+      let frag = get_fragment () in
+      let state = State.init ~dev_mode:(String.equal frag "dev") () in
       catch
         (fun () ->
           Js_of_ocaml_lwt.XmlHttpRequest.(
