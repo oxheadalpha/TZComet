@@ -815,13 +815,124 @@ let michelson_bytes_editor_page _state ~michelson_bytes_editor
             ; pre [code [txt s]] ]) in
   [editor_with_preview michelson_bytes_editor ~examples result_div]
 
+module Tezos_nodes = struct
+  module Node_status = struct
+    type t = Uninitialized | Non_responsive of string | Ready of string
+  end
+
+  open Node_status
+
+  module Node = struct
+    type t = {prefix: string; status: (float * Node_status.t) Var.t}
+
+    let create prefix =
+      {prefix; status= Var.create "node-status" (0., Uninitialized)}
+
+    let ping node =
+      let open Lwt in
+      Js_of_ocaml_lwt.XmlHttpRequest.(
+        Fmt.kstr get "%s/chains/main/blocks/head/metadata" node.prefix
+        >>= fun frame ->
+        dbgf "%s metadata code: %d" node.prefix frame.code ;
+        let new_status =
+          match frame.code with
+          | 200 -> Ready frame.content
+          | other -> Non_responsive (Fmt.str "Return-code: %d" other) in
+        return new_status)
+  end
+
+  type t =
+    { nodes: Node.t list Var.t
+    ; loop_started: bool Var.t
+    ; loop_interval: float Var.t }
+
+  let create nodes =
+    { nodes= Var.create "list-of-nodes" nodes
+    ; loop_started= Var.create "loop-started" false
+    ; loop_interval= Var.create "loop-interval" 10. }
+
+  let nodes t = t.nodes
+
+  let _global =
+    create
+      [ Node.create "https://testnet-tezos.giganode.io"
+      ; Node.create "https://carthagenet.smartpy.io" ]
+
+  let start_update_loop t =
+    let open Lwt in
+    ignore_result
+      (let rec loop count =
+         let sleep_time = Var.value t.loop_interval in
+         dbgf "update-loop %d (%f s)" count sleep_time ;
+         Var.value t.nodes
+         |> List.fold ~init:return_unit ~f:(fun prevm nod ->
+                prevm
+                >>= fun () ->
+                pick
+                  [ ( Js_of_ocaml_lwt.Lwt_js.sleep 5.
+                    >>= fun () ->
+                    return (Non_responsive "Time-out while getting status") )
+                  ; (Node.ping nod >>= fun res -> return res) ]
+                >>= fun new_status ->
+                let now = (new%js Js_of_ocaml.Js.date_now)##valueOf in
+                Var.set nod.status (now, new_status) ;
+                return ())
+         >>= fun () ->
+         Js_of_ocaml_lwt.Lwt_js.sleep sleep_time
+         >>= fun () ->
+         Var.set t.loop_interval (Float.min (sleep_time *. 1.4) 90.) ;
+         loop (count + 1) in
+       loop 0)
+
+  let ensure_update_loop t =
+    match Var.value t.loop_started with
+    | true -> ()
+    | false ->
+        start_update_loop t ;
+        Var.set t.loop_started true
+end
+
 let metadata_explorer _state =
   let open RD in
-  let nodes =
-    ["https://testnet-tezos.giganode.io"; "https://carthagenet.smartpy.io"]
-  in
+  let nodes = Tezos_nodes._global in
+  Tezos_nodes.ensure_update_loop nodes ;
+  let node_status node =
+    let node_metadata json =
+      let open Ezjsonm in
+      try
+        let j = value_from_string json in
+        let field f j =
+          try List.Assoc.find_exn ~equal:String.equal (get_dict j) f
+          with _ ->
+            Fmt.failwith "Cannot find %S in %s" f
+              (value_to_string ~minify:true j) in
+        div
+          [ Fmt.kstr txt "Level: %d"
+              (field "level" j |> field "level" |> get_int) ]
+      with e ->
+        div
+          [ Fmt.kstr txt "Failed to parse the JSON: %a" Exn.pp e
+          ; pre [code [txt json]] ] in
+    Reactive.div
+      (Var.map_to_list node.Tezos_nodes.Node.status
+         ~f:
+           Tezos_nodes.Node_status.(
+             fun (date, status) ->
+               let show s = [code [Fmt.kstr txt "%.2f: " date]; s] in
+               match status with
+               | Uninitialized -> show (txt "Uninitialized")
+               | Non_responsive reason ->
+                   show (Fmt.kstr txt "Non-responsive: %s" reason)
+               | Ready metadata ->
+                   show (div [txt "All OK"; node_metadata metadata]))) in
   [ div [txt "WIP"]
-  ; div [ul (List.map nodes ~f:(fun s -> li [txt "Node: "; code [txt s]]))] ]
+  ; div
+      [ Reactive.ul
+          (Var.map_to_list (Tezos_nodes.nodes nodes) ~f:(fun nodes ->
+               List.map nodes ~f:(fun s ->
+                   li
+                     [ txt "Node: "; code [txt s.prefix]; txt " → "
+                     ; node_status s ]))) ] ]
 
 let gui ?version_string state =
   RD.(
