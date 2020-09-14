@@ -1358,6 +1358,10 @@ let metadata_explorer _state =
               | false ->
                   [img ~src:"loading.gif" ~a:[a_width 30] ~alt:"LOAADDDINGGG" ()]))
         ] ] in
+  let fetch_uri_activable =
+    Var.map metadata_result ~f:(function
+      | `Not_started | `Failed _ | `Done_metadata _ -> true
+      | _ -> false) in
   [ div [h2 [txt "This is Work-In-Progress"]]
   ; div [Tezos_nodes.table_of_statuses nodes]
   ; div
@@ -1394,8 +1398,20 @@ let metadata_explorer _state =
                         ~a:[a_style "color: #999; font-size: 140%"]
                         [span [txt (String.concat ~sep:"\n" log)]] ]
                 ; button
-                    ~a:[a_onclick (fun _ -> Var.set uri_input uri_code ; true)]
-                    [strong [txt "Set It as Input To Fetch It ↴"]] ]
+                    ~a:
+                      [ a_onclick (fun _ ->
+                            Var.set uri_input uri_code ;
+                            Var.set metadata_result
+                              (`Fetching "Fetching now …") ;
+                            Lwt.async fetch_uri ;
+                            true)
+                      ; Reactive.a_class
+                          ( Var.signal fetch_uri_activable
+                          |> React.S.map (function
+                               | true -> ["btn"; "btn-primary"]
+                               | false -> ["btn"; "btn-default"; "disabled"]) )
+                      ]
+                    [span [txt "Set It as Input And Fetch It ↴"]] ]
             | `Fetching msg ->
                 [ pre
                     ~a:[a_style "color: #999; font-size: 140%"]
@@ -1409,11 +1425,7 @@ let metadata_explorer _state =
   ; div
       [ h3 [txt "Resolve/fetch metadata URI "]
       ; div
-          (input_and_button uri_input
-             ~active:
-               (Var.map metadata_result ~f:(function
-                 | `Not_started | `Failed _ | `Done_metadata _ -> true
-                 | _ -> false))
+          (input_and_button uri_input ~active:fetch_uri_activable
              ~action:(fun () ->
                Var.set metadata_result
                  (`Fetching "Start fetching metadatadata …") ;
