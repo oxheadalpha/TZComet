@@ -33,6 +33,21 @@ ensure_vendors () {
         git log --oneline -n 5
         #echo "(data_only_dirs flextesa-lib) ;; Unvendored flextesa" > vendors/dune
     )
+    say "Vendoring Vbmithr's base58 library"
+    if [ -f "local-vendor/ocaml-base58/base58.opam" ] ; then
+        say "Already cloned"
+    else
+        git clone --depth 10 https://github.com/vbmithr/ocaml-base58.git \
+            local-vendor/ocaml-base58
+    fi
+    (
+        cd local-vendor/ocaml-base58
+        git pull
+        git checkout src/base58.mli
+        # We need to expose this for the Ledger-like hash:
+        echo 'val raw_encode : ?alphabet:Alphabet.t -> string -> string' >> src/base58.mli
+    )
+
 }
 
 ensure_setup () {
@@ -45,6 +60,7 @@ ensure_setup () {
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          zarith_stubs_js \
+         digestif \
          js_of_ocaml-compiler js_of_ocaml-tyxml js_of_ocaml-lwt
 }
 

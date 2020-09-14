@@ -545,6 +545,11 @@ module Michelson_bytes = struct
         Error (Fmt.str "readerror: %a" Data_encoding.Binary.pp_read_error e)
     | e -> Error (Fmt.str "exn: %a" Exn.pp e)
 
+  let encode_michelson_string s =
+    Data_encoding.Binary.to_bytes_exn expr_encoding
+      Tezos_micheline.Micheline.(String (0, s) |> strip_locations)
+    |> Bytes.to_string
+
   let example =
     let bytes = "0707002a002a" in
     let to_display =
@@ -564,6 +569,64 @@ module Michelson_bytes = struct
           Fmt.str "readerror: %a" Data_encoding.Binary.pp_read_error e
       | e -> Fmt.str "exn: %a" Exn.pp e in
     to_display
+end
+
+module B58_hashes = struct
+  module B58_crypto = struct
+    let sha256 s = Digestif.SHA256.(to_raw_string (digest_string s))
+  end
+
+  let script_expr_hash =
+    (* Taken from src/proto_006_PsCARTHA/lib_protocol/script_expr_hash.ml *)
+    (* expr(54) *)
+    "\013\044\064\027"
+
+  let blake2b x =
+    Digestif.digest_string (Digestif.blake2b 32) x
+    |> Digestif.to_raw_string (Digestif.blake2b 32)
+
+  let b58 s = Base58.of_bytes (module B58_crypto) s |> Base58.to_string
+  let b58_script_id_hash s = b58 (script_expr_hash ^ blake2b s)
+
+  let crypto_test () =
+    dbgf "TRYING BLAKE2B: %s"
+      (let dgst = Digestif.digest_string (Digestif.blake2b 32) "" in
+       Digestif.to_hex (Digestif.blake2b 32) dgst) ;
+    dbgf "TRYING base58: %a %S"
+      Fmt.(Dump.option Base58.pp)
+      (Base58.of_string
+         (module B58_crypto)
+         "expru5X1yxJG6ezR2uHMotwMLNmSzQyh5t1vUnhjx4cS6Pv9qE1Sdo")
+      ( Base58.of_string_exn
+          (module B58_crypto)
+          "expru5X1yxJG6ezR2uHMotwMLNmSzQyh5t1vUnhjx4cS6Pv9qE1Sdo"
+      |> Base58.to_bytes (module B58_crypto)
+      |> Option.value_map ~default:"EEEERRRROR" ~f:(fun x ->
+             let (`Hex h) = Hex.of_string x in
+             h) ) ;
+    let michelson_string_expr_hash s =
+      dbgf "mseh: %S" s ;
+      let bytes = Michelson_bytes.encode_michelson_string s in
+      let ppb ppf b =
+        let (`Hex hx) = Hex.of_string b in
+        Fmt.pf ppf "0x%s" hx in
+      dbgf "bytes: %a" ppb bytes ;
+      let dgst x =
+        Digestif.digest_string (Digestif.blake2b 32) x
+        |> Digestif.to_raw_string (Digestif.blake2b 32) in
+      let b58 s = Base58.of_bytes (module B58_crypto) s |> Base58.to_string in
+      dbgf "digest raw: %a -> %s (%s)" ppb (dgst bytes)
+        (b58 (dgst bytes))
+        (Base58.raw_encode (dgst bytes)) ;
+      let with05 = "\x05" ^ bytes in
+      dbgf "digest-05: %a → %s [%s]" ppb (dgst with05)
+        (b58 (dgst with05))
+        (Base58.raw_encode (dgst with05)) ;
+      dbgf "digest-pfx: %a → %s" ppb (dgst with05)
+        (b58 (script_expr_hash ^ dgst with05)) in
+    michelson_string_expr_hash "" ;
+    michelson_string_expr_hash "foo" ;
+    ()
 end
 
 let sizing_table sizes =
@@ -877,8 +940,9 @@ let michelson_bytes_editor_page _state ~michelson_bytes_editor
           if with_zero_five then
             [ li
                 [ code [txt "05"]
-                ; txt " is the standard prefix/watermark Michelson expressions."
-                ] ]
+                ; txt
+                    " is the standard prefix/watermark for Michelson \
+                     expressions." ] ]
           else [] in
         match Michelson_bytes.parse_bytes bytes with
         | Ok (json, concrete) ->
@@ -886,7 +950,17 @@ let michelson_bytes_editor_page _state ~michelson_bytes_editor
             ; ul items; h4 [txt "As Concrete Michelson:"]
             ; div [pre [code [txt concrete]]]; h4 [txt "As JSON:"]
             ; div [pre [code [txt (Ezjsonm.value_to_string ~minify:false json)]]]
-            ]
+            ; h4 [txt "Useful Hashes"]
+            ; div
+                [ ul
+                    (let hash title v =
+                       li [em [Fmt.kstr txt "%s: " title]; code [txt v]] in
+                     let actual = Hex.to_string (`Hex bytes) in
+                     let actual05 = "\x05" ^ actual in
+                     [ hash "Ledger-hash"
+                         (Base58.raw_encode (B58_hashes.blake2b actual05))
+                     ; hash "Script-ID-hash (big-map access)"
+                         (B58_hashes.b58_script_id_hash actual05) ]) ] ]
         | Error s ->
             [ big_answer `Error [txt "There were parsing/validation errors:"]
             ; pre [code [txt s]] ]) in
@@ -1315,24 +1389,12 @@ let go _ =
             if frame.code = 200 then return (Some frame.content)
             else return None)
           >>= fun version_string ->
-          let ping_node node =
-            Js_of_ocaml_lwt.XmlHttpRequest.(
-              Fmt.kstr get "%s/chains/main/blocks/head/metadata" node
-              >>= fun frame ->
-              dbgf "metadata code: %d" frame.code ;
-              if frame.code = 200 then return (Some frame.content)
-              else return None) in
-          ping_node "https://testnet-tezos.giganode.io"
-          >>= fun _extra_string ->
-          dbgf "gigadata : %a" Fmt.(Dump.option string) _extra_string ;
-          ping_node "https://carthagenet.smartpy.io"
-          >>= fun _extra_string ->
-          dbgf "smartdata : %a" Fmt.(Dump.option string) _extra_string ;
           attach_to_page (gui ?version_string state) >>= fun () -> return ())
         (fun exn ->
           Printf.ksprintf
             (fun s -> Fmt.epr "ERROR: %s" s ; failwith s)
             "Uncaught Exception: %s" (Exn.to_string exn))) ;
+  B58_hashes.crypto_test () ;
   Js_of_ocaml.Js._true
 
 let _ =

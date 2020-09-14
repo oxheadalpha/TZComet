@@ -7,7 +7,7 @@
 
 ## Build
 
-    ./please.sh ensure vendors  # Clones a branch of Tezos
+    ./please.sh ensure vendors  # Clones a branch of Tezos and vbmithr/ocaml-base58
     ./please.sh ensure setup    # Creates a local opam switch
     ./please.sh build all
    
