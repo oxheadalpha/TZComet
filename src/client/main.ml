@@ -2,6 +2,7 @@ open Base
 
 let dbg fmt = Fmt.pf Fmt.stdout "@[comevitz-debug: %a@]%!" fmt ()
 let dbgf fmt = Fmt.(kstr (fun s -> dbg (const string s))) fmt
+let slow_step () = Js_of_ocaml_lwt.Lwt_js.sleep 0.5
 
 let rec oxfordize_list l ~map ~sep ~last_sep =
   match l with
@@ -588,6 +589,9 @@ module B58_hashes = struct
   let b58 s = Base58.of_bytes (module B58_crypto) s |> Base58.to_string
   let b58_script_id_hash s = b58 (script_expr_hash ^ blake2b s)
 
+  let b58_script_id_hash_of_michelson_string s =
+    b58_script_id_hash ("\x05" ^ Michelson_bytes.encode_michelson_string s)
+
   let crypto_test () =
     dbgf "TRYING BLAKE2B: %s"
       (let dgst = Digestif.digest_string (Digestif.blake2b 32) "" in
@@ -862,6 +866,35 @@ let metadata_uri_editor_page _state ~metadata_uri_editor ~metadata_uri_code =
             ; div (show_tezos_error el) ]) in
   [editor_with_preview metadata_uri_editor ~examples result_div]
 
+let metadata_json_to_html json_code =
+  let open RD in
+  let open Tezos_contract_metadata.Metadata_contents in
+  match of_json json_code with
+  | Ok
+      { name= None
+      ; description= None
+      ; version= None
+      ; license= None
+      ; authors= []
+      ; interfaces= []
+      ; views= []
+      ; unknown= [] } ->
+      [ big_answer `Ok
+          [txt "This piece of metadata, while valid, is completely empty!"] ]
+  | Ok ex ->
+      [ big_answer `Ok [txt "This metadata blob is VALID 👍"]
+      ; div [Contract_metadata.Content.to_html ex]
+      ; div
+          [ sizing_table
+              [ ("Current JSON", String.length json_code)
+              ; ( "Minimized JSON"
+                , Ezjsonm.value_from_string json_code
+                  |> Ezjsonm.value_to_string ~minify:true
+                  |> String.length ) ] ] ]
+  | Error el ->
+      [ big_answer `Error [txt "There were parsing/validation errors:"]
+      ; div (show_tezos_error el) ]
+
 let metadata_json_editor_page _state ~metadata_json_editor ~metadata_json_code =
   let open RD in
   let examples =
@@ -873,34 +906,7 @@ let metadata_json_editor_page _state ~metadata_json_editor ~metadata_json_code =
         ( Fmt.str "Meaningless Example #%d" ith
         , Tezos_contract_metadata.Metadata_contents.to_json v )) in
   let result_div =
-    Reactive.div_of_var metadata_json_code ~f:(fun json_code ->
-        let open Tezos_contract_metadata.Metadata_contents in
-        match of_json json_code with
-        | Ok
-            { name= None
-            ; description= None
-            ; version= None
-            ; license= None
-            ; authors= []
-            ; interfaces= []
-            ; views= []
-            ; unknown= [] } ->
-            [ big_answer `Ok
-                [txt "This piece of metadata, while valid, is completely empty!"]
-            ]
-        | Ok ex ->
-            [ big_answer `Ok [txt "This metadata blob is VALID 👍"]
-            ; div [Contract_metadata.Content.to_html ex]
-            ; div
-                [ sizing_table
-                    [ ("Current JSON", String.length json_code)
-                    ; ( "Minimized JSON"
-                      , Ezjsonm.value_from_string json_code
-                        |> Ezjsonm.value_to_string ~minify:true
-                        |> String.length ) ] ] ]
-        | Error el ->
-            [ big_answer `Error [txt "There were parsing/validation errors:"]
-            ; div (show_tezos_error el) ]) in
+    Reactive.div_of_var metadata_json_code ~f:metadata_json_to_html in
   [editor_with_preview metadata_json_editor ~examples result_div]
 
 let michelson_bytes_editor_page _state ~michelson_bytes_editor
@@ -974,10 +980,22 @@ module Tezos_nodes = struct
   open Node_status
 
   module Node = struct
-    type t = {prefix: string; status: (float * Node_status.t) Var.t}
+    type t =
+      {name: string; prefix: string; status: (float * Node_status.t) Var.t}
 
-    let create prefix =
-      {prefix; status= Var.create "node-status" (0., Uninitialized)}
+    let create name prefix =
+      {name; prefix; status= Var.create "node-status" (0., Uninitialized)}
+
+    let rpc_get node path =
+      let open Lwt in
+      let uri = Fmt.str "%s/%s" node.prefix path in
+      Js_of_ocaml_lwt.XmlHttpRequest.(
+        get uri
+        >>= fun frame ->
+        dbgf "%s %s code: %d" node.prefix path frame.code ;
+        match frame.code with
+        | 200 -> return frame.content
+        | other -> Fmt.failwith "Getting %S returned code: %d" path other)
 
     let ping node =
       let open Lwt in
@@ -990,6 +1008,70 @@ module Tezos_nodes = struct
           | 200 -> Ready frame.content
           | other -> Non_responsive (Fmt.str "Return-code: %d" other) in
         return new_status)
+
+    let micheline_of_json s =
+      let json =
+        match Ezjsonm.value_from_string s with
+        | `O (("code", code) :: _) -> code
+        | other -> other in
+      let enc =
+        Tezos_micheline.Micheline.canonical_encoding ~variant:"custom"
+          Data_encoding.string in
+      let mich = Data_encoding.Json.destruct enc json in
+      Tezos_micheline.Micheline.root mich
+
+    let metadata_big_map node ~address ~log =
+      let open Lwt in
+      let get = rpc_get node in
+      let log fmt = Fmt.kstr log fmt in
+      Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/storage"
+        address
+      >>= fun storage_string ->
+      log "Got raw storage: %s" storage_string ;
+      let mich_storage = micheline_of_json storage_string in
+      log "As concrete: %a"
+        Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
+        mich_storage ;
+      slow_step ()
+      >>= fun () ->
+      Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/script"
+        address
+      >>= fun script_string ->
+      log "Got raw script: %s…" (String.prefix script_string 30) ;
+      let mich_storage_type =
+        micheline_of_json script_string
+        |> Tezos_micheline.Micheline.strip_locations
+        |> Tezos_contract_metadata.Contract_storage.get_storage_type_exn in
+      log "Storage type: %a"
+        Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
+        mich_storage_type ;
+      slow_step ()
+      >>= fun () ->
+      let bgs =
+        Tezos_contract_metadata.Contract_storage.find_metadata_big_maps
+          ~storage_node:mich_storage ~type_node:mich_storage_type in
+      match bgs with
+      | [] -> Fmt.failwith "Contract has no valid %%metadata big-map!"
+      | _ :: _ :: _ ->
+          Fmt.failwith "Contract has too many %%metadata big-maps: %s"
+            ( oxfordize_list bgs ~map:Z.to_string
+                ~sep:(fun () -> ",")
+                ~last_sep:(fun () -> ", and ")
+            |> String.concat ~sep:"" )
+      | [one] -> return one
+
+    let bytes_value_of_big_map_at_string node ~big_map_id ~key ~log =
+      let open Lwt in
+      let hash_string = B58_hashes.b58_script_id_hash_of_michelson_string key in
+      Fmt.kstr (rpc_get node) "/chains/main/blocks/head/context/big_maps/%s/%s"
+        (Z.to_string big_map_id) hash_string
+      >>= fun bytes_raw_value ->
+      Fmt.kstr log "bytes raw value: %s" bytes_raw_value ;
+      let content =
+        match Ezjsonm.value_from_string bytes_raw_value with
+        | `O [("bytes", `String b)] -> Hex.to_string (`Hex b)
+        | _ -> Fmt.failwith "Cannot find bytes in %s" bytes_raw_value in
+      return content
   end
 
   type t =
@@ -1006,8 +1088,12 @@ module Tezos_nodes = struct
 
   let _global =
     create
-      [ Node.create "https://testnet-tezos.giganode.io"
-      ; Node.create "https://carthagenet.smartpy.io" ]
+      [ Node.create "Carthagenet-GigaNode" "https://testnet-tezos.giganode.io"
+      ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
+      ; Node.create "Dalphanet-GigaNode" "https://dalphanet-tezos.giganode.io"
+      ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
+      ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
+      ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io" ]
 
   let start_update_loop t =
     let open Lwt in
@@ -1041,140 +1127,131 @@ module Tezos_nodes = struct
     | false ->
         start_update_loop t ;
         Var.set t.loop_started true
+
+  let find_node_with_contract node_list addr =
+    let open Lwt in
+    catch
+      (fun () ->
+        Lwt_list.find_s
+          (fun node ->
+            catch
+              (fun () ->
+                Fmt.kstr (Node.rpc_get node)
+                  "/chains/main/blocks/head/context/contracts/%s/storage" addr
+                >>= fun _ -> return_true)
+              (fun _ -> return_false))
+          (nodes node_list |> Var.value))
+      (fun _ -> Fmt.failwith "Cannot find a node that knows about %S" addr)
+
+  let metadata_value nodes ~address ~key ~log =
+    let open Lwt in
+    let logf f = Fmt.kstr log f in
+    find_node_with_contract nodes address
+    >>= fun node ->
+    logf "Found contract with node %S" node.name ;
+    Node.metadata_big_map node ~address ~log
+    >>= fun big_map_id ->
+    logf "Metadata big-map: %s" (Z.to_string big_map_id) ;
+    Node.bytes_value_of_big_map_at_string node ~big_map_id ~key ~log
+
+  let table_of_statuses node_list =
+    let open RD in
+    let node_status node =
+      let node_metadata _date json =
+        let open Ezjsonm in
+        try
+          let j = value_from_string json in
+          let field f j =
+            try List.Assoc.find_exn ~equal:String.equal (get_dict j) f
+            with _ ->
+              Fmt.failwith "Cannot find %S in %s" f
+                (value_to_string ~minify:true j) in
+          code ~a:[ (* Fmt.kstr a_ "%.03f" date *) ]
+            [ Fmt.kstr txt "Level: %d"
+                (field "level" j |> field "level" |> get_int) ]
+        with e ->
+          code [Fmt.kstr txt "Failed to parse the Metadata JSON: %a" Exn.pp e]
+      in
+      Reactive.div
+        (Var.map_to_list node.Node.status
+           ~f:
+             Node_status.(
+               fun (date, status) ->
+                 let show s = [code [s]] in
+                 match status with
+                 | Uninitialized -> show (txt "Uninitialized")
+                 | Non_responsive reason ->
+                     show (Fmt.kstr txt "Non-responsive: %s" reason)
+                 | Ready metadata -> [node_metadata date metadata])) in
+    tablex
+      ~a:[a_class ["table"; "table-bordered"; "table-hover"]]
+      ~thead:
+        (thead
+           [ tr
+               [ th [txt "Name"]; th [txt "URI-prefix"]; th [txt "Status"]
+               ; th [txt "Latest Ping"] ] ])
+      [ Reactive.tbody
+          (Var.map_to_list (nodes node_list) ~f:(fun nodes ->
+               List.map nodes ~f:(fun node ->
+                   let open Node in
+                   let open Node_status in
+                   tr ~a:[a_style "height: 3em"]
+                     [ td
+                         ~a:
+                           [ Reactive.a_class
+                               ( Var.signal node.status
+                               |> React.S.map (function
+                                    | _, Uninitialized -> ["bg-warning"]
+                                    | _, Non_responsive _ -> ["bg-danger"]
+                                    | _, Ready _ -> ["bg-success"]) ) ]
+                         [em [txt node.name]]; td [code [txt node.prefix]]
+                     ; td [node_status node]
+                     ; td
+                         [ Reactive.code
+                             (Var.map_to_list node.status ~f:(fun (date, _) ->
+                                  let date_string =
+                                    (new%js Js_of_ocaml.Js.date_fromTimeValue
+                                       date)##toISOString
+                                    |> Js_of_ocaml__Js.to_string in
+                                  [txt date_string])) ] ]))) ]
 end
 
 let metadata_explorer _state =
   let open RD in
   let nodes = Tezos_nodes._global in
   Tezos_nodes.ensure_update_loop nodes ;
-  let node_status node =
-    let node_metadata json =
-      let open Ezjsonm in
-      try
-        let j = value_from_string json in
-        let field f j =
-          try List.Assoc.find_exn ~equal:String.equal (get_dict j) f
-          with _ ->
-            Fmt.failwith "Cannot find %S in %s" f
-              (value_to_string ~minify:true j) in
-        div
-          [ Fmt.kstr txt "Level: %d"
-              (field "level" j |> field "level" |> get_int) ]
-      with e ->
-        div
-          [ Fmt.kstr txt "Failed to parse the JSON: %a" Exn.pp e
-          ; pre [code [txt json]] ] in
-    Reactive.div
-      (Var.map_to_list node.Tezos_nodes.Node.status
-         ~f:
-           Tezos_nodes.Node_status.(
-             fun (date, status) ->
-               let show s = [code [Fmt.kstr txt "%.2f: " date]; s] in
-               match status with
-               | Uninitialized -> show (txt "Uninitialized")
-               | Non_responsive reason ->
-                   show (Fmt.kstr txt "Non-responsive: %s" reason)
-               | Ready metadata ->
-                   show (div [txt "All OK"; node_metadata metadata]))) in
-  let address =
+  let contract_address =
     Var.create "contract-address" "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9" in
-  let result = Var.create "contract-exploration" `Not_started in
-  let get_metadata () =
+  let uri_result = Var.create "contract-exploration-uri" `Not_started in
+  let get_metadata_uri () =
     let open Lwt in
-    let node = List.hd_exn (Tezos_nodes.nodes nodes |> Var.value) in
-    let addr = Var.value address in
     let log_stack = ref [] in
-    let log fmt =
-      Fmt.kstr
-        (fun s ->
-          log_stack := s :: !log_stack ;
-          Var.set result
-            (`Fetching (String.concat ~sep:"\n" (List.rev !log_stack))))
-        fmt in
-    let micheline_of_json s =
-      let json =
-        match Ezjsonm.value_from_string s with
-        | `O (("code", code) :: _) -> code
-        | other -> other in
-      let enc =
-        Tezos_micheline.Micheline.canonical_encoding ~variant:"custom"
-          Data_encoding.string in
-      let mich = Data_encoding.Json.destruct enc json in
-      Tezos_micheline.Micheline.root mich in
-    let get path =
-      let uri = Fmt.str "%s/%s" node.prefix path in
-      Js_of_ocaml_lwt.XmlHttpRequest.(
-        get uri
-        >>= fun frame ->
-        dbgf "%s %s code: %d" node.prefix path frame.code ;
-        match frame.code with
-        | 200 -> return frame.content
-        | other -> Fmt.failwith "Getting %S returned code: %d" path other) in
-    let slow_step () = Js_of_ocaml_lwt.Lwt_js.sleep 0.4 in
+    let log s =
+      log_stack := s :: !log_stack ;
+      Var.set uri_result
+        (`Fetching (String.concat ~sep:"\n" (List.rev !log_stack))) in
+    let logf fmt = Fmt.kstr log fmt in
+    let addr = Var.value contract_address in
     catch
       (fun () ->
-        Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/storage"
-          addr
-        >>= fun storage_string ->
-        log "Got raw storage: %s" storage_string ;
-        let mich_storage = micheline_of_json storage_string in
-        log "As concrete: %a"
-          Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
-          mich_storage ;
-        slow_step ()
-        >>= fun () ->
-        Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/script" addr
-        >>= fun script_string ->
-        log "Got raw script: %s…" (String.prefix script_string 30) ;
-        let mich_storage_type =
-          micheline_of_json script_string
-          |> Tezos_micheline.Micheline.strip_locations
-          |> Tezos_contract_metadata.Contract_storage.get_storage_type_exn in
-        log "Storage type: %a"
-          Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
-          mich_storage_type ;
-        slow_step ()
-        >>= fun () ->
-        let bgs =
-          Tezos_contract_metadata.Contract_storage.find_metadata_big_maps
-            ~storage_node:mich_storage ~type_node:mich_storage_type in
-        match bgs with
-        | [] -> Fmt.failwith "Contract has no valid %%metadata big-map!"
-        | _ :: _ :: _ ->
-            Fmt.failwith "Contract has too many %%metadata big-maps: %s"
-              ( oxfordize_list bgs ~map:Z.to_string
-                  ~sep:(fun () -> ",")
-                  ~last_sep:(fun () -> ", and ")
-              |> String.concat ~sep:"" )
-        | [one] -> (
-            log "Metadata big-map: %s" (Z.to_string one) ;
-            let empty_string =
-              "expru5X1yxJG6ezR2uHMotwMLNmSzQyh5t1vUnhjx4cS6Pv9qE1Sdo" in
-            Fmt.kstr get "/chains/main/blocks/head/context/big_maps/%s/%s"
-              (Z.to_string one) empty_string
-            >>= fun uri_raw_value ->
-            log "URI raw value: %s" uri_raw_value ;
-            let uri =
-              match Ezjsonm.value_from_string uri_raw_value with
-              | `O [("bytes", `String b)] -> Hex.to_string (`Hex b)
-              | _ -> Fmt.failwith "Cannot find URI bytes in %s" uri_raw_value
-            in
-            log "URI: `%s`" uri ;
-            match
-              Tezos_contract_metadata.Metadata_uri.of_uri (Uri.of_string uri)
-            with
-            | Ok mu ->
-                log "Parsed uri: %a" Tezos_contract_metadata.Metadata_uri.pp mu ;
-                slow_step ()
-                >>= fun () ->
-                Var.set result (`Done_uri (List.rev !log_stack, uri, mu)) ;
-                return ()
-            | Error e ->
-                Fmt.failwith "Error parsing URI: %a"
-                  Tezos_error_monad.Error_monad.pp_print_error e ))
+        Tezos_nodes.metadata_value nodes ~address:addr ~key:"" ~log
+        >>= fun uri ->
+        logf "URI: `%s`" uri ;
+        match
+          Tezos_contract_metadata.Metadata_uri.of_uri (Uri.of_string uri)
+        with
+        | Ok mu ->
+            logf "Parsed uri: %a" Tezos_contract_metadata.Metadata_uri.pp mu ;
+            slow_step ()
+            >>= fun () ->
+            Var.set uri_result (`Done_uri (List.rev !log_stack, uri, mu)) ;
+            return ()
+        | Error e ->
+            Fmt.failwith "Error parsing URI: %a"
+              Tezos_error_monad.Error_monad.pp_print_error e)
       (function
         | Json_encoding.Cannot_destruct (path, e) ->
-            Var.set result
+            Var.set uri_result
               (`Failed
                 ( List.rev !log_stack
                 , Fmt.str "JSON-parsing: At %a: %a"
@@ -1182,24 +1259,80 @@ let metadata_explorer _state =
                     path Exn.pp e )) ;
             return ()
         | Failure s ->
-            Var.set result (`Failed (List.rev !log_stack, s)) ;
+            Var.set uri_result (`Failed (List.rev !log_stack, s)) ;
             return ()
         | e ->
-            Var.set result
+            Var.set uri_result
               (`Failed (List.rev !log_stack, Fmt.str "Exception: %a" Exn.pp e)) ;
             return ()) in
-  [ div [txt "WIP"]
-  ; div
-      [ Reactive.ul
-          (Var.map_to_list (Tezos_nodes.nodes nodes) ~f:(fun nodes ->
-               List.map nodes ~f:(fun s ->
-                   li
-                     [ txt "Node: "; code [txt s.prefix]; txt " → "
-                     ; node_status s ]))) ]
-  ; div
-      [ textarea
-          ~a:
-            [ a_style "font-family: monospace"; a_rows 1; a_cols 40
+  let uri_input = Var.create "uri-input-in-explorer" "tezos-storage:foo" in
+  let metadata_result = Var.create "explorer-metadata" `Not_started in
+  let fetch_uri () =
+    let open Lwt in
+    dbgf "fetching uri" ;
+    let log_stack = ref [] in
+    let log s =
+      log_stack := s :: !log_stack ;
+      Var.set metadata_result
+        (`Fetching (String.concat ~sep:"\n" (List.rev !log_stack))) in
+    let logf fmt = Fmt.kstr log fmt in
+    let ni s = Fmt.failwith "Not Implemented: %s" s in
+    catch
+      (fun () ->
+        let uri = Var.value uri_input |> Uri.of_string in
+        match Tezos_contract_metadata.Metadata_uri.of_uri uri with
+        | Ok mu ->
+            logf "Parsed uri: %a" Tezos_contract_metadata.Metadata_uri.pp mu ;
+            slow_step ()
+            >>= fun () ->
+            let rec resolve =
+              let open Tezos_contract_metadata.Metadata_uri in
+              function
+              | Web http ->
+                  logf "HTTP %S, will likely fail because of origin policy" http ;
+                  Js_of_ocaml_lwt.XmlHttpRequest.(
+                    get http
+                    >>= fun frame ->
+                    dbgf "%s -> code: %d" http frame.code ;
+                    match frame.code with
+                    | 200 -> return frame.content
+                    | other ->
+                        Fmt.failwith "Getting %S returned code: %d" http other)
+                  >>= fun content -> logf "Got %S" content ; ni "web uri"
+              | Ipfs {cid; path} -> logf "IPFS %s %s" cid path ; ni "ipfs uri"
+              | Storage {network= None; address; key} ->
+                  let addr =
+                    match address with
+                    | Some s -> s
+                    | None -> Var.value contract_address in
+                  logf "Using address %S (key = %S)" addr key ;
+                  Tezos_nodes.metadata_value nodes ~address:addr ~key ~log
+              | Storage {network= Some network; address; key} ->
+                  logf "storage %s %a %S" network
+                    Fmt.Dump.(option string)
+                    address key ;
+                  Fmt.kstr ni "storage uri with network = %s" network
+              | Hash {kind= `Sha256; value; target} ->
+                  logf "sha256: %S" value ; resolve target in
+            resolve mu
+            >>= fun data ->
+            logf "Got data: %S" data ;
+            Var.set metadata_result (`Done_metadata (data, List.rev !log_stack)) ;
+            return ()
+        | Error e ->
+            Fmt.failwith "Error parsing URI: %a"
+              Tezos_error_monad.Error_monad.pp_print_error e
+            >>= fun () -> return ())
+      (function
+        | e ->
+            Var.set metadata_result
+              (`Failed (List.rev !log_stack, Fmt.str "Exception: %a" Exn.pp e)) ;
+            return ()) in
+  let input_and_button ?(a = []) content ~active ~action =
+    [ Reactive.textarea
+        ~a:
+          ( a
+          @ [ a_style "font-family: monospace"; a_rows 1; a_cols 60
             ; a_onchange
                 Js_of_ocaml.(
                   fun ev ->
@@ -1208,35 +1341,88 @@ let metadata_explorer _state =
                           (fun input ->
                             let v = input##.value |> Js.to_string in
                             dbgf "TA inputs: %d bytes: %S" (String.length v) v ;
-                            Var.set address v)) ;
-                    false) ]
-          (txt "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9")
-      ; button
-          ~a:
-            [ a_onclick (fun _ ->
-                  Var.set result (`Fetching "Start fetching data …") ;
-                  Lwt.async get_metadata ;
-                  true)
-            ; Reactive.a_class
-                ( Var.signal result
-                |> React.S.map (function
-                     | `Not_started | `Failed _ | `Done_uri _ ->
-                         ["btn"; "btn-primary"]
-                     | _ -> ["btn"; "btn-default"; "disabled"]) ) ]
-          [ Reactive.span ~a:[a_style "width: 4em"]
-              (Var.map_to_list result ~f:(function
-                | `Not_started | `Failed _ | `Done_uri _ -> [txt "Go!"]
-                | _ ->
-                    [ img ~src:"loading.gif" ~a:[a_width 30] ~alt:"LOAADDDINGGG"
-                        () ])) ]
+                            Var.set content v)) ;
+                    false) ] )
+        (Var.signal content |> React.S.map txt)
+    ; button
+        ~a:
+          [ a_onclick (fun _ -> action () ; true)
+          ; Reactive.a_class
+              ( Var.signal active
+              |> React.S.map (function
+                   | true -> ["btn"; "btn-primary"]
+                   | false -> ["btn"; "btn-default"; "disabled"]) ) ]
+        [ Reactive.span ~a:[a_style "width: 4em"]
+            (Var.map_to_list active ~f:(function
+              | true -> [txt "Go!"]
+              | false ->
+                  [img ~src:"loading.gif" ~a:[a_width 30] ~alt:"LOAADDDINGGG" ()]))
+        ] ] in
+  [ div [h2 [txt "This is Work-In-Progress"]]
+  ; div [Tezos_nodes.table_of_statuses nodes]
+  ; div
+      [ h3 [txt "Find Metadata of contract"]
+      ; div
+          ( input_and_button contract_address
+              ~active:
+                (Var.map uri_result ~f:(function
+                  | `Not_started | `Failed _ | `Done_uri _ -> true
+                  | _ -> false))
+              ~action:(fun () ->
+                Var.set uri_result (`Fetching "Start fetching data …") ;
+                Lwt.async get_metadata_uri)
+          @ [ txt " ("
+            ; a
+                ~a:
+                  [ Reactive.a_href
+                      ( Var.signal contract_address
+                      |> React.S.map
+                           (Fmt.str "https://better-call.dev/search?text=%s") )
+                  ]
+                [txt "BCD"]; txt ")" ] )
       ; Reactive.div
-          (Var.map_to_list result ~f:(function
+          (Var.map_to_list uri_result ~f:(function
             | `Not_started -> []
             | `Done_uri (log, uri_code, muri) ->
                 [ big_answer `Ok [txt "This metadata URI is VALID 👍"]
                 ; div [txt "→ "; code [txt uri_code]]
                 ; div (Contract_metadata.Uri.to_html muri)
                 ; div [sizing_table [("URI", String.length uri_code)]]
+                ; details
+                    (summary [txt "See logs …"])
+                    [ pre
+                        ~a:[a_style "color: #999; font-size: 140%"]
+                        [span [txt (String.concat ~sep:"\n" log)]] ]
+                ; button
+                    ~a:[a_onclick (fun _ -> Var.set uri_input uri_code ; true)]
+                    [strong [txt "Set It as Input To Fetch It ↴"]] ]
+            | `Fetching msg ->
+                [ pre
+                    ~a:[a_style "color: #999; font-size: 140%"]
+                    [span [txt msg]] ]
+            | `Failed (log, msg) ->
+                [ pre
+                    ~a:[a_style "color: #999; font-size: 140%"]
+                    [ txt (String.concat ~sep:"\n" log)
+                    ; span ~a:[a_style "color: #900"] [txt ("\n" ^ msg)] ] ]))
+      ]
+  ; div
+      [ h3 [txt "Resolve/fetch metadata URI "]
+      ; div
+          (input_and_button uri_input
+             ~active:
+               (Var.map metadata_result ~f:(function
+                 | `Not_started | `Failed _ | `Done_metadata _ -> true
+                 | _ -> false))
+             ~action:(fun () ->
+               Var.set metadata_result
+                 (`Fetching "Start fetching metadatadata …") ;
+               Lwt.async fetch_uri))
+      ; Reactive.div
+          (Var.map_to_list metadata_result ~f:(function
+            | `Not_started -> []
+            | `Done_metadata (json, log) ->
+                [ div (metadata_json_to_html json)
                 ; details
                     (summary [txt "See logs …"])
                     [ pre
@@ -1370,7 +1556,8 @@ let attach_to_page gui =
 let get_fragment () =
   let open Js_of_ocaml in
   let frag = Dom_html.window##.location##.hash |> Js.to_string in
-  dbgf "fragment  → %s" frag ;
+  let q = Js_of_ocaml.Url.Current.arguments in
+  dbgf "fragment  → %s %a" frag Fmt.(Dump.list (pair string string)) q ;
   String.chop_prefix_if_exists frag ~prefix:"#"
 
 let go _ =
