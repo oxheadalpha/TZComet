@@ -60,6 +60,10 @@ module State = struct
     ; explorer_address_input
     ; explorer_uri_input }
 
+  let go_to_explorer state ?uri ?address () =
+    Option.iter address ~f:(Var.set state.explorer_address_input) ;
+    Option.iter uri ~f:(Var.set state.explorer_uri_input) ;
+    Var.set state.current_view View.Metadata_explorer
 
   let slow_step s =
     if s.dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5 else Lwt.return ()
@@ -390,7 +394,7 @@ let big_answer level content =
   let bgclass = match level with `Ok -> "bg-success" | `Error -> "bg-danger" in
   p ~a:[a_class ["lead"; bgclass]] content
 
-let metadata_uri_editor_page _state ~metadata_uri_editor ~metadata_uri_code =
+let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
   let open RD in
   let examples =
     let ex name u = (name, Uri.to_string u) in
@@ -410,7 +414,15 @@ let metadata_uri_editor_page _state ~metadata_uri_editor ~metadata_uri_code =
         | Ok o ->
             [ big_answer `Ok [txt "This metadata URI is VALID 👍"]
             ; div (Contract_metadata.Uri.to_html o)
-            ; div [sizing_table [("URI", String.length uri_code)]] ]
+            ; div [sizing_table [("URI", String.length uri_code)]]
+            ; div
+                [ button
+                    ~a:
+                      [ a_class ["btn"; "btn-primary"]
+                      ; a_onclick (fun _ ->
+                            State.go_to_explorer state ~uri:uri_code () ;
+                            true) ]
+                    [txt "Try it in the explorer!"] ] ]
         | Error el ->
             [ big_answer `Error [txt "There were parsing/validation errors:"]
             ; div (show_tezos_error el) ]) in
