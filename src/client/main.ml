@@ -401,6 +401,10 @@ let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
     let https_ok =
       "https://raw.githubusercontent.com/smondet/comevitz/master/data/metadata_example0.json"
     in
+    let hash_of_https_ok =
+      (* `sha256sum data/metadata_example0.json` → Achtung, the URL
+         above takes about 5 minutes to be up to date with `master` *)
+      "7baf4143a2afbd2682395cda14c9d29e78dee2b5cf7bb544bb434a6a4ac31794" in
     let ex name u = (name, Uri.to_string u) in
     [ ex "In KT1 Storage"
         (Uri.make ~scheme:"tezos-storage" ~host:State.kt1_with_metadata
@@ -410,8 +414,7 @@ let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
            "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json")
     ; ex "SHA256-checked HTTPS"
         (Uri.of_string
-           (Caml.Filename.concat
-              "sha256://0xb0a9b792fc921db312612f85582c55d96e29c436450c0227869543cbba52eea4/"
+           (Fmt.str "sha256://0x%s/%s" hash_of_https_ok
               (Uri.pct_encode https_ok))) ] in
   let result_div =
     Reactive.div_of_var metadata_uri_code ~f:(fun uri_code ->
