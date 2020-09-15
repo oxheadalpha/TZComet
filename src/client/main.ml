@@ -29,15 +29,20 @@ module State = struct
     { dev_mode: bool
     ; current_view: View.t Var.t
     ; explorer_address_input: string Var.t
-    ; explorer_uri_input: string Var.t }
+    ; start_fetching_address: bool Var.t
+    ; explorer_uri_input: string Var.t
+    ; start_fetching_uri: bool Var.t }
 
   let kt1_with_metadata = "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
 
   let init ~arguments () =
     let arg s = List.Assoc.find arguments ~equal:String.equal s in
-    let dev_mode =
+    let is_true s =
       let ( = ) = Option.equal String.equal in
-      arg "dev" = Some "true" in
+      arg s = Some "true" in
+    let dev_mode = is_true "dev" in
+    let fetch_uri = is_true "fetch_uri" in
+    let fetch_address = is_true "fetch_address" in
     let initial_view =
       match arg "tab" with
       | Some s -> (
@@ -59,12 +64,29 @@ module State = struct
     { current_view= Var.create "current-view" initial_view
     ; dev_mode
     ; explorer_address_input
-    ; explorer_uri_input }
+    ; explorer_uri_input
+    ; start_fetching_uri= Var.create "start_fetching_uri" fetch_uri
+    ; start_fetching_address= Var.create "start_fetching_address" fetch_address
+    }
 
   let go_to_explorer state ?uri ?address () =
-    Option.iter address ~f:(Var.set state.explorer_address_input) ;
-    Option.iter uri ~f:(Var.set state.explorer_uri_input) ;
+    Option.iter address ~f:(fun a ->
+        Var.set state.explorer_address_input a ;
+        Var.set state.start_fetching_address true) ;
+    Option.iter uri ~f:(fun u ->
+        Var.set state.explorer_uri_input u ;
+        Var.set state.start_fetching_uri true) ;
     Var.set state.current_view View.Metadata_explorer
+
+  let should_start_fetching_address state =
+    let should_i = Var.value state.start_fetching_address in
+    Var.set state.start_fetching_address false ;
+    should_i
+
+  let should_start_fetching_uri state =
+    let should_i = Var.value state.start_fetching_uri in
+    Var.set state.start_fetching_uri false ;
+    should_i
 
   let slow_step s =
     if s.dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5 else Lwt.return ()
@@ -980,19 +1002,26 @@ let metadata_explorer state_handle =
     Var.map metadata_result ~f:(function
       | `Not_started | `Failed _ | `Done_metadata _ -> true
       | _ -> false) in
+  let fetch_metadata_uri_action () =
+    Var.set uri_result (`Fetching "Start fetching data …") ;
+    Lwt.async get_metadata_uri in
+  if State.should_start_fetching_address state_handle then
+    fetch_metadata_uri_action () ;
+  let fetch_uri_action () =
+    Var.set metadata_result (`Fetching "Start fetching metadatadata …") ;
+    Lwt.async fetch_uri in
+  if State.should_start_fetching_uri state_handle then fetch_uri_action () ;
   [ div [h2 [txt "This is Work-In-Progress"]]
   ; div [Tezos_nodes.table_of_statuses nodes]
   ; div
-      [ h3 [txt "Find Metadata of contract"]
+      [ h3 [txt "Find The Metadata URI of A Contract"]
       ; div
           ( input_and_button contract_address
               ~active:
                 (Var.map uri_result ~f:(function
                   | `Not_started | `Failed _ | `Done_uri _ -> true
                   | _ -> false))
-              ~action:(fun () ->
-                Var.set uri_result (`Fetching "Start fetching data …") ;
-                Lwt.async get_metadata_uri)
+              ~action:fetch_metadata_uri_action
           @ [ txt " ("
             ; a
                 ~a:
@@ -1019,9 +1048,7 @@ let metadata_explorer state_handle =
                     ~a:
                       [ a_onclick (fun _ ->
                             Var.set uri_input uri_code ;
-                            Var.set metadata_result
-                              (`Fetching "Fetching now …") ;
-                            Lwt.async fetch_uri ;
+                            fetch_uri_action () ;
                             true)
                       ; Reactive.a_class
                           ( Var.signal fetch_uri_activable
@@ -1041,13 +1068,10 @@ let metadata_explorer state_handle =
                     ; span ~a:[a_style "color: #900"] [txt ("\n" ^ msg)] ] ]))
       ]
   ; div
-      [ h3 [txt "Resolve/fetch metadata URI "]
+      [ h3 [txt "Resolve/Fetch Metadata URIs"]
       ; div
           (input_and_button uri_input ~active:fetch_uri_activable
-             ~action:(fun () ->
-               Var.set metadata_result
-                 (`Fetching "Start fetching metadatadata …") ;
-               Lwt.async fetch_uri))
+             ~action:fetch_uri_action)
       ; Reactive.div
           (Var.map_to_list metadata_result ~f:(function
             | `Not_started -> []
