@@ -671,11 +671,15 @@ module Tezos_nodes = struct
 
   type t =
     { nodes: Node.t list Var.t
+    ; wake_up_call: unit Lwt_condition.t
     ; loop_started: bool Var.t
     ; loop_interval: float Var.t }
 
   let create nodes =
-    { nodes= Var.create "list-of-nodes" nodes
+    { nodes=
+        Var.create "list-of-nodes" nodes
+          ~eq:(List.equal Node.(fun na nb -> String.equal na.prefix nb.prefix))
+    ; wake_up_call= Lwt_condition.create ()
     ; loop_started= Var.create "loop-started" false
     ; loop_interval= Var.create "loop-interval" 10. }
 
@@ -689,6 +693,8 @@ module Tezos_nodes = struct
       ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
       ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
       ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io" ]
+
+  let wake_up_update_loop t = Lwt_condition.broadcast t.wake_up_call ()
 
   let start_update_loop t =
     let open Lwt in
@@ -720,7 +726,9 @@ module Tezos_nodes = struct
                 Var.set nod.status (now, new_status) ;
                 return ())
          >>= fun () ->
-         Js_of_ocaml_lwt.Lwt_js.sleep sleep_time
+         pick
+           [ Js_of_ocaml_lwt.Lwt_js.sleep sleep_time
+           ; Lwt_condition.wait t.wake_up_call ]
          >>= fun () ->
          Var.set t.loop_interval (Float.min (sleep_time *. 1.4) 90.) ;
          loop (count + 1) in
@@ -961,43 +969,55 @@ let metadata_explorer state_handle =
                   | Failure s -> s
                   | e -> Fmt.str "Exception: %a" Exn.pp e )) ;
             return ()) in
-  let input_and_button ?(a = []) content ~active ~action =
-    [ Reactive.textarea
-        ~a:
-          ( a
-          @ [ a_style "font-family: monospace"; a_rows 1; a_cols 60
-            ; a_class ["form-control"]
-            ; a_onkeypress (fun ev ->
-                  dbgf "keycode: %d" ev##.keyCode ;
-                  match ev##.keyCode with
-                  | 13 when not (Js_of_ocaml.Js.to_bool ev##.shiftKey) ->
-                      action () ; false
-                  | _ -> true)
-            ; a_onchange
-                Js_of_ocaml.(
-                  fun ev ->
-                    Js.Opt.iter ev##.target (fun input ->
-                        Js.Opt.iter (Dom_html.CoerceTo.textarea input)
-                          (fun input ->
-                            let v = input##.value |> Js.to_string in
-                            dbgf "TA inputs: %d bytes: %S" (String.length v) v ;
-                            Var.set content v)) ;
-                    false) ] )
-        (Var.signal content |> React.S.map txt)
-    ; button
-        ~a:
-          [ a_onclick (fun _ -> action () ; true)
-          ; Reactive.a_class
-              ( Var.signal active
-              |> React.S.map (function
-                   | true -> ["btn"; "btn-primary"]
-                   | false -> ["btn"; "btn-default"; "disabled"]) ) ]
-        [ Reactive.span ~a:[a_style "width: 4em"]
-            (Var.map_to_list active ~f:(function
-              | true -> [txt "Go!"]
-              | false ->
-                  [img ~src:"loading.gif" ~a:[a_width 30] ~alt:"LOAADDDINGGG" ()]))
-        ] ] in
+  let inputs_and_button ?(a = []) ?(button_text = "Go!") ?(more_items = [])
+      content ~active ~action =
+    let inputs =
+      List.map content ~f:(fun (lbl, var) ->
+          div
+            ~a:[a_class ["form-group"]]
+            [ label [txt lbl]; txt " "
+            ; Reactive.textarea
+                ~a:
+                  ( a
+                  @ [ a_style "font-family: monospace"; a_rows 1; a_cols 60
+                    ; a_class ["form-control"]
+                    ; a_onkeypress (fun ev ->
+                          dbgf "keycode: %d" ev##.keyCode ;
+                          match ev##.keyCode with
+                          | 13 when not (Js_of_ocaml.Js.to_bool ev##.shiftKey)
+                            ->
+                              action () ; false
+                          | _ -> true)
+                    ; a_onchange
+                        Js_of_ocaml.(
+                          fun ev ->
+                            Js.Opt.iter ev##.target (fun input ->
+                                Js.Opt.iter (Dom_html.CoerceTo.textarea input)
+                                  (fun input ->
+                                    let v = input##.value |> Js.to_string in
+                                    dbgf "TA inputs: %d bytes: %S"
+                                      (String.length v) v ;
+                                    Var.set var v)) ;
+                            false) ] )
+                (Var.signal var |> React.S.map txt); txt " " ]) in
+    div
+      ~a:[a_class ["form-inline"]]
+      ( inputs
+      @ [ button
+            ~a:
+              [ a_onclick (fun _ -> action () ; true)
+              ; Reactive.a_class
+                  ( Var.signal active
+                  |> React.S.map (function
+                       | true -> ["btn"; "btn-primary"]
+                       | false -> ["btn"; "btn-default"; "disabled"]) ) ]
+            [ Reactive.span ~a:[a_style "width: 4em"]
+                (Var.map_to_list active ~f:(function
+                  | true -> [txt button_text]
+                  | false ->
+                      [ img ~src:"loading.gif" ~a:[a_width 30]
+                          ~alt:"LOAADDDINGGG" () ])) ] ]
+      @ more_items ) in
   let fetch_uri_activable =
     Var.map metadata_result ~f:(function
       | `Not_started | `Failed _ | `Done_metadata _ -> true
@@ -1010,27 +1030,48 @@ let metadata_explorer state_handle =
   let fetch_uri_action () =
     Var.set metadata_result (`Fetching "Start fetching metadatadata …") ;
     Lwt.async fetch_uri in
+  let add_node_name = Var.create "node-name" "User1" in
+  let add_node_rpc_prefix = Var.create "node-rpc" "http://betanet.example.com" in
   if State.should_start_fetching_uri state_handle then fetch_uri_action () ;
-  [ div [h2 [txt "This is Work-In-Progress"]]
-  ; div [Tezos_nodes.table_of_statuses nodes]
+  [ div [h2 [txt "Work-In-Progress: Metadata Explorer"]]
+  ; div
+      [ h3 [txt "Tezos Nodes"]; Tezos_nodes.table_of_statuses nodes
+      ; inputs_and_button ~button_text:"Add Node"
+          [("Name:", add_node_name); ("RPC-Prefix:", add_node_rpc_prefix)]
+          ~active:(Var.create "add-node-active" true) ~action:(fun () ->
+            let nodes_var = nodes.Tezos_nodes.nodes in
+            let current = Var.value nodes_var in
+            Var.set nodes_var
+              ( current
+              @ [ Tezos_nodes.Node.create (Var.value add_node_name)
+                    (Var.value add_node_rpc_prefix) ] ) ;
+            Tezos_nodes.wake_up_update_loop nodes) ]; hr ()
   ; div
       [ h3 [txt "Find The Metadata URI of A Contract"]
       ; div
-          ( input_and_button contract_address
+          [ inputs_and_button
+              [("KT1 Address:", contract_address)]
               ~active:
                 (Var.map uri_result ~f:(function
                   | `Not_started | `Failed _ | `Done_uri _ -> true
                   | _ -> false))
               ~action:fetch_metadata_uri_action
-          @ [ txt " ("
-            ; a
-                ~a:
-                  [ Reactive.a_href
-                      ( Var.signal contract_address
-                      |> React.S.map
-                           (Fmt.str "https://better-call.dev/search?text=%s") )
-                  ]
-                [txt "BCD"]; txt ")" ] )
+              ~more_items:
+                (let link text ~f =
+                   a
+                     ~a:
+                       [ Reactive.a_href
+                           (Var.signal contract_address |> React.S.map f) ]
+                     [txt text] in
+                 [ txt " ("
+                 ; link "BCD"
+                     ~f:(Fmt.str "https://better-call.dev/search?text=%s")
+                 ; txt ", "
+                 ; link "SmartPy"
+                     ~f:
+                       (Fmt.str
+                          "https://smartpy.io/dev/explorer.html?address=%s")
+                 ; txt ")" ]) ]
       ; Reactive.div
           (Var.map_to_list uri_result ~f:(function
             | `Not_started -> []
@@ -1066,12 +1107,12 @@ let metadata_explorer state_handle =
                     ~a:[a_style "color: #999; font-size: 140%"]
                     [ txt (String.concat ~sep:"\n" log)
                     ; span ~a:[a_style "color: #900"] [txt ("\n" ^ msg)] ] ]))
-      ]
+      ]; hr ()
   ; div
       [ h3 [txt "Resolve/Fetch Metadata URIs"]
       ; div
-          (input_and_button uri_input ~active:fetch_uri_activable
-             ~action:fetch_uri_action)
+          [ inputs_and_button [("URI:", uri_input)] ~active:fetch_uri_activable
+              ~action:fetch_uri_action ]
       ; Reactive.div
           (Var.map_to_list metadata_result ~f:(function
             | `Not_started -> []
