@@ -944,6 +944,13 @@ let metadata_explorer state_handle =
         ~a:
           ( a
           @ [ a_style "font-family: monospace"; a_rows 1; a_cols 60
+            ; a_class ["form-control"]
+            ; a_onkeypress (fun ev ->
+                  dbgf "keycode: %d" ev##.keyCode ;
+                  match ev##.keyCode with
+                  | 13 when not (Js_of_ocaml.Js.to_bool ev##.shiftKey) ->
+                      action () ; false
+                  | _ -> true)
             ; a_onchange
                 Js_of_ocaml.(
                   fun ev ->
