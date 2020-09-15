@@ -880,7 +880,7 @@ let metadata_explorer state_handle =
                     | 200 -> return frame.content
                     | other ->
                         Fmt.failwith "Getting %S returned code: %d" http other)
-                  >>= fun content -> logf "Got %S" content ; ni "web uri"
+                  >>= fun content -> logf "Got %S" content ; return content
               | Ipfs {cid; path} -> logf "IPFS %s %s" cid path ; ni "ipfs uri"
               | Storage {network= None; address; key} ->
                   let addr =
@@ -895,8 +895,32 @@ let metadata_explorer state_handle =
                     Fmt.Dump.(option string)
                     address key ;
                   Fmt.kstr ni "storage uri with network = %s" network
-              | Hash {kind= `Sha256; value; target} ->
-                  logf "sha256: %S" value ; resolve target in
+              | Hash {kind= `Sha256; value; target} -> (
+                  let expected =
+                    match Digestif.of_raw_string_opt Digestif.sha256 value with
+                    | Some s -> s
+                    | None ->
+                        Fmt.failwith "%a is not a valid SHA256 hash" Hex.pp
+                          (Hex.of_string value) in
+                  logf "sha256: %a" (Digestif.pp Digestif.sha256) expected ;
+                  resolve target
+                  >>= fun content ->
+                  let obtained =
+                    Digestif.digest_string Digestif.sha256 content in
+                  logf "hash of content: %a"
+                    (Digestif.pp Digestif.sha256)
+                    obtained ;
+                  match
+                    Digestif.unsafe_compare Digestif.sha256 expected obtained
+                  with
+                  | 0 -> return content
+                  | _ ->
+                      Fmt.failwith
+                        "Hash of content %a is different from expected %a"
+                        (Digestif.pp Digestif.sha256)
+                        obtained
+                        (Digestif.pp Digestif.sha256)
+                        expected ) in
             resolve mu
             >>= fun data ->
             logf "Got data: %S" data ;
@@ -909,7 +933,11 @@ let metadata_explorer state_handle =
       (function
         | e ->
             Var.set metadata_result
-              (`Failed (List.rev !log_stack, Fmt.str "Exception: %a" Exn.pp e)) ;
+              (`Failed
+                ( List.rev !log_stack
+                , match e with
+                  | Failure s -> s
+                  | e -> Fmt.str "Exception: %a" Exn.pp e )) ;
             return ()) in
   let input_and_button ?(a = []) content ~active ~action =
     [ Reactive.textarea
