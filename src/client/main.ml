@@ -8,12 +8,42 @@ module State = struct
       | Metadata_uri_editor
       | Michelson_bytes_parser
       | Metadata_explorer
+
+    let to_string = function
+      | Welcome -> "Welcome"
+      | Metadata_json_editor -> "Metadata_json_editor"
+      | Metadata_uri_editor -> "Metadata_uri_editor"
+      | Michelson_bytes_parser -> "Michelson_bytes_parser"
+      | Metadata_explorer -> "Metadata_explorer"
+
+    let of_string = function
+      | "Welcome" -> Welcome
+      | "Metadata_json_editor" -> Metadata_json_editor
+      | "Metadata_uri_editor" -> Metadata_uri_editor
+      | "Michelson_bytes_parser" -> Michelson_bytes_parser
+      | "Metadata_explorer" -> Metadata_explorer
+      | other -> Fmt.failwith "View.of_string: %S" other
   end
 
   type t = {dev_mode: bool; current_view: View.t Var.t}
 
-  let init ?(dev_mode = false) () =
-    {current_view= Var.create "current-view" View.Welcome; dev_mode}
+  let init ~arguments () =
+    let arg s = List.Assoc.find arguments ~equal:String.equal s in
+    let dev_mode =
+      let ( = ) = Option.equal String.equal in
+      arg "dev" = Some "true" in
+    let initial_view =
+      match arg "tab" with
+      | Some s -> (
+        try View.of_string s
+        with e ->
+          dbgf "Wrong view name: %a" Exn.pp e ;
+          View.Welcome )
+      | None -> View.Welcome in
+    {current_view= Var.create "current-view" initial_view; dev_mode}
+
+  let slow_step s =
+    if s.dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5 else Lwt.return ()
 end
 
 module Menu = struct
@@ -521,7 +551,7 @@ module Tezos_nodes = struct
       let mich = Data_encoding.Json.destruct enc json in
       Tezos_micheline.Micheline.root mich
 
-    let metadata_big_map node ~address ~log =
+    let metadata_big_map state_handle node ~address ~log =
       let open Lwt in
       let get = rpc_get node in
       let log fmt = Fmt.kstr log fmt in
@@ -533,7 +563,7 @@ module Tezos_nodes = struct
       log "As concrete: %a"
         Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
         mich_storage ;
-      slow_step ()
+      State.slow_step state_handle
       >>= fun () ->
       Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/script"
         address
@@ -546,7 +576,7 @@ module Tezos_nodes = struct
       log "Storage type: %a"
         Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
         mich_storage_type ;
-      slow_step ()
+      State.slow_step state_handle
       >>= fun () ->
       let bgs =
         Tezos_contract_metadata.Contract_storage.find_metadata_big_maps
@@ -644,13 +674,13 @@ module Tezos_nodes = struct
           (nodes node_list |> Var.value))
       (fun _ -> Fmt.failwith "Cannot find a node that knows about %S" addr)
 
-  let metadata_value nodes ~address ~key ~log =
+  let metadata_value state_handle nodes ~address ~key ~log =
     let open Lwt in
     let logf f = Fmt.kstr log f in
     find_node_with_contract nodes address
     >>= fun node ->
     logf "Found contract with node %S" node.name ;
-    Node.metadata_big_map node ~address ~log
+    Node.metadata_big_map state_handle node ~address ~log
     >>= fun big_map_id ->
     logf "Metadata big-map: %s" (Z.to_string big_map_id) ;
     Node.bytes_value_of_big_map_at_string node ~big_map_id ~key ~log
@@ -717,7 +747,7 @@ module Tezos_nodes = struct
                                   [txt date_string])) ] ]))) ]
 end
 
-let metadata_explorer _state =
+let metadata_explorer state_handle =
   let open RD in
   let nodes = Tezos_nodes._global in
   Tezos_nodes.ensure_update_loop nodes ;
@@ -735,7 +765,7 @@ let metadata_explorer _state =
     let addr = Var.value contract_address in
     catch
       (fun () ->
-        Tezos_nodes.metadata_value nodes ~address:addr ~key:"" ~log
+        Tezos_nodes.metadata_value state_handle nodes ~address:addr ~key:"" ~log
         >>= fun uri ->
         logf "URI: `%s`" uri ;
         match
@@ -743,7 +773,7 @@ let metadata_explorer _state =
         with
         | Ok mu ->
             logf "Parsed uri: %a" Tezos_contract_metadata.Metadata_uri.pp mu ;
-            slow_step ()
+            State.slow_step state_handle
             >>= fun () ->
             Var.set uri_result (`Done_uri (List.rev !log_stack, uri, mu)) ;
             return ()
@@ -784,7 +814,7 @@ let metadata_explorer _state =
         match Tezos_contract_metadata.Metadata_uri.of_uri uri with
         | Ok mu ->
             logf "Parsed uri: %a" Tezos_contract_metadata.Metadata_uri.pp mu ;
-            slow_step ()
+            State.slow_step state_handle
             >>= fun () ->
             let rec resolve =
               let open Tezos_contract_metadata.Metadata_uri in
@@ -807,7 +837,8 @@ let metadata_explorer _state =
                     | Some s -> s
                     | None -> Var.value contract_address in
                   logf "Using address %S (key = %S)" addr key ;
-                  Tezos_nodes.metadata_value nodes ~address:addr ~key ~log
+                  Tezos_nodes.metadata_value state_handle nodes ~address:addr
+                    ~key ~log
               | Storage {network= Some network; address; key} ->
                   logf "storage %s %a %S" network
                     Fmt.Dump.(option string)
@@ -991,17 +1022,20 @@ let gui ?version_string state =
                 | _ -> true))
             (fun () -> Var.set state.State.current_view Michelson_bytes_parser)
         ]
-        @
-        if state.dev_mode then
-          [ Menu.item (txt "Metadata Explorer")
+        @ [ Menu.item (txt "Metadata Explorer")
               ~long_message:(txt "Explore metadata in existing contracts.")
-              ~description:(p [txt "This is WIP."])
+              ~description:
+                (p
+                   [ txt
+                       "This is a work-in-progress metadata explorer that \
+                        fetches metadata from KT1-contracts using public \
+                        nodes …" ])
               ~active:
                 (Var.map state.State.current_view ~f:(function
                   | Metadata_explorer -> false
                   | _ -> true))
               (fun () -> Var.set state.State.current_view Metadata_explorer) ]
-        else [] in
+      in
       let home =
         Menu.item (txt "Home")
           ~active:
@@ -1066,20 +1100,12 @@ let attach_to_page gui =
   |> ignore ;
   Lwt.return ()
 
-let get_fragment () =
-  let open Js_of_ocaml in
-  let frag = Dom_html.window##.location##.hash |> Js.to_string in
-  let q = Js_of_ocaml.Url.Current.arguments in
-  dbgf "fragment  → %s %a" frag Fmt.(Dump.list (pair string string)) q ;
-  String.chop_prefix_if_exists frag ~prefix:"#"
-
 let go _ =
   dbg Fmt.(const string "Hello Go!") ;
   Bootstrap_css.ensure () ;
   ignore
     Lwt.(
-      let frag = get_fragment () in
-      let state = State.init ~dev_mode:(String.equal frag "dev") () in
+      let state = State.init ~arguments:Js_of_ocaml.Url.Current.arguments () in
       catch
         (fun () ->
           Js_of_ocaml_lwt.XmlHttpRequest.(

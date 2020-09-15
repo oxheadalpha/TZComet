@@ -2,7 +2,6 @@ include Base
 
 let dbg fmt = Fmt.pf Fmt.stdout "@[comevitz-debug: %a@]%!" fmt ()
 let dbgf fmt = Fmt.(kstr (fun s -> dbg (const string s))) fmt
-let slow_step () = Js_of_ocaml_lwt.Lwt_js.sleep 0.5
 
 let rec oxfordize_list l ~map ~sep ~last_sep =
   match l with
