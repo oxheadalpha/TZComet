@@ -533,10 +533,12 @@ module Tezos_nodes = struct
       Js_of_ocaml_lwt.XmlHttpRequest.(
         Fmt.kstr get "%s/chains/main/blocks/head/metadata" node.prefix
         >>= fun frame ->
-        dbgf "%s metadata code: %d" node.prefix frame.code ;
+        dbgf "%s metadata code: %d" node.name frame.code ;
         let new_status =
           match frame.code with
-          | 200 -> Ready frame.content
+          | 200 ->
+              dbgf "%s metadata content: %s" node.name frame.content ;
+              Ready frame.content
           | other -> Non_responsive (Fmt.str "Return-code: %d" other) in
         return new_status)
 
@@ -636,12 +638,17 @@ module Tezos_nodes = struct
          |> List.fold ~init:return_unit ~f:(fun prevm nod ->
                 prevm
                 >>= fun () ->
-                pick
-                  [ ( Js_of_ocaml_lwt.Lwt_js.sleep 5.
-                    >>= fun () ->
-                    return (Non_responsive "Time-out while getting status") )
-                  ; (Node.ping nod >>= fun res -> return res) ]
+                catch
+                  (fun () ->
+                    pick
+                      [ ( Js_of_ocaml_lwt.Lwt_js.sleep 5.
+                        >>= fun () ->
+                        return (Non_responsive "Time-out while getting status")
+                        ); (Node.ping nod >>= fun res -> return res) ])
+                  (fun e ->
+                    return (Non_responsive (Fmt.str "Error: %a" Exn.pp e)))
                 >>= fun new_status ->
+                dbgf "got status for %s" nod.name ;
                 let now = (new%js Js_of_ocaml.Js.date_now)##valueOf in
                 Var.set nod.status (now, new_status) ;
                 return ())
