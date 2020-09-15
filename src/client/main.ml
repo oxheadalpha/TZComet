@@ -25,7 +25,11 @@ module State = struct
       | other -> Fmt.failwith "View.of_string: %S" other
   end
 
-  type t = {dev_mode: bool; current_view: View.t Var.t}
+  type t =
+    { dev_mode: bool
+    ; current_view: View.t Var.t
+    ; explorer_address_input: string Var.t
+    ; explorer_uri_input: string Var.t }
 
   let init ~arguments () =
     let arg s = List.Assoc.find arguments ~equal:String.equal s in
@@ -40,7 +44,22 @@ module State = struct
           dbgf "Wrong view name: %a" Exn.pp e ;
           View.Welcome )
       | None -> View.Welcome in
-    {current_view= Var.create "current-view" initial_view; dev_mode}
+    let initial_explorer_address =
+      arg "explorer_address"
+      |> Option.value ~default:"KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9" in
+    let initial_explorer_uri =
+      arg "explorer_uri"
+      |> Option.value ~default:"https://example.com/my_contract/metadata.json"
+    in
+    let explorer_address_input =
+      Var.create "explorer_address_input" initial_explorer_address in
+    let explorer_uri_input =
+      Var.create "explorer_uri_input" initial_explorer_uri in
+    { current_view= Var.create "current-view" initial_view
+    ; dev_mode
+    ; explorer_address_input
+    ; explorer_uri_input }
+
 
   let slow_step s =
     if s.dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5 else Lwt.return ()
@@ -763,8 +782,7 @@ let metadata_explorer state_handle =
   let open RD in
   let nodes = Tezos_nodes._global in
   Tezos_nodes.ensure_update_loop nodes ;
-  let contract_address =
-    Var.create "contract-address" "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9" in
+  let contract_address = state_handle.State.explorer_address_input in
   let uri_result = Var.create "contract-exploration-uri" `Not_started in
   let get_metadata_uri () =
     let open Lwt in
@@ -808,7 +826,7 @@ let metadata_explorer state_handle =
             Var.set uri_result
               (`Failed (List.rev !log_stack, Fmt.str "Exception: %a" Exn.pp e)) ;
             return ()) in
-  let uri_input = Var.create "uri-input-in-explorer" "tezos-storage:foo" in
+  let uri_input = state_handle.State.explorer_uri_input in
   let metadata_result = Var.create "explorer-metadata" `Not_started in
   let fetch_uri () =
     let open Lwt in
