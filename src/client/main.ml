@@ -31,6 +31,8 @@ module State = struct
     ; explorer_address_input: string Var.t
     ; explorer_uri_input: string Var.t }
 
+  let kt1_with_metadata = "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
+
   let init ~arguments () =
     let arg s = List.Assoc.find arguments ~equal:String.equal s in
     let dev_mode =
@@ -45,8 +47,7 @@ module State = struct
           View.Welcome )
       | None -> View.Welcome in
     let initial_explorer_address =
-      arg "explorer_address"
-      |> Option.value ~default:"KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9" in
+      arg "explorer_address" |> Option.value ~default:kt1_with_metadata in
     let initial_explorer_uri =
       arg "explorer_uri"
       |> Option.value ~default:"https://example.com/my_contract/metadata.json"
@@ -397,16 +398,21 @@ let big_answer level content =
 let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
   let open RD in
   let examples =
+    let https_ok =
+      "https://raw.githubusercontent.com/smondet/comevitz/master/data/metadata_example0.json"
+    in
     let ex name u = (name, Uri.to_string u) in
-    [ ex "Simple in storage" (Uri.make ~scheme:"tezos-storage" ~path:"foo" ())
-    ; ex "HTTPS" (Uri.of_string "https://example.com/path/to/metadata.json")
+    [ ex "In KT1 Storage"
+        (Uri.make ~scheme:"tezos-storage" ~host:State.kt1_with_metadata
+           ~path:"here" ()); ex "HTTPS" (Uri.of_string https_ok)
     ; ex "IPFS"
         (Uri.of_string
            "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json")
     ; ex "SHA256-checked HTTPS"
         (Uri.of_string
-           "sha256://0xeaa42ea06b95d7917d22135a630e65352cfd0a721ae88155a1512468a95cb750/https:%2F%2Fexample.com%2Fmetadata.json")
-    ] in
+           (Caml.Filename.concat
+              "sha256://0xb0a9b792fc921db312612f85582c55d96e29c436450c0227869543cbba52eea4/"
+              (Uri.pct_encode https_ok))) ] in
   let result_div =
     Reactive.div_of_var metadata_uri_code ~f:(fun uri_code ->
         let open Tezos_contract_metadata.Metadata_uri in
