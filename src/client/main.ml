@@ -972,10 +972,14 @@ let metadata_explorer state_handle =
   let inputs_and_button ?(a = []) ?(button_text = "Go!") ?(more_items = [])
       content ~active ~action =
     let inputs =
-      List.map content ~f:(fun (lbl, var) ->
+      oxfordize_list
+        ~sep:(fun () -> txt "  ")
+        ~last_sep:(fun () -> txt "  ")
+        content
+        ~map:(fun (lbl, var) ->
           div
             ~a:[a_class ["form-group"]]
-            [ label [txt lbl]; txt " "
+            [ label [txt lbl]; txt " "
             ; Reactive.textarea
                 ~a:
                   ( a
@@ -999,7 +1003,7 @@ let metadata_explorer state_handle =
                                       (String.length v) v ;
                                     Var.set var v)) ;
                             false) ] )
-                (Var.signal var |> React.S.map txt); txt " " ]) in
+                (Var.signal var |> React.S.map txt) ]) in
     div
       ~a:[a_class ["form-inline"]]
       ( inputs
