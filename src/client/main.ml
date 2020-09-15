@@ -643,8 +643,13 @@ module Tezos_nodes = struct
                     pick
                       [ ( Js_of_ocaml_lwt.Lwt_js.sleep 5.
                         >>= fun () ->
+                        dbgf "%s timeout in start_update_loop" nod.Node.name ;
                         return (Non_responsive "Time-out while getting status")
-                        ); (Node.ping nod >>= fun res -> return res) ])
+                        )
+                      ; ( Node.ping nod
+                        >>= fun res ->
+                        dbgf "%s returned to start_update_loop" nod.name ;
+                        return res ) ])
                   (fun e ->
                     return (Non_responsive (Fmt.str "Error: %a" Exn.pp e)))
                 >>= fun new_status ->
