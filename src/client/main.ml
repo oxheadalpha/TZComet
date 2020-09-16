@@ -432,8 +432,7 @@ let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
         (Uri.make ~scheme:"tezos-storage" ~host:State.kt1_with_metadata
            ~path:"here" ()); ex "HTTPS" (Uri.of_string https_ok)
     ; ex "IPFS"
-        (Uri.of_string
-           "ipfs://QmXfrS3pHerg44zzK6QKQj6JDk8H6cMtQS7pdXbohwNQfK/pages/hello.json")
+        (Uri.of_string "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o")
     ; ex "SHA256-checked HTTPS"
         (Uri.of_string
            (Fmt.str "sha256://0x%s/%s" hash_of_https_ok
