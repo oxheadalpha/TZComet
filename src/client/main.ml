@@ -901,17 +901,24 @@ let metadata_explorer state_handle =
               let open Tezos_contract_metadata.Metadata_uri in
               function
               | Web http ->
-                  logf "HTTP %S, will likely fail because of origin policy" http ;
+                  logf "HTTP %S, may fail because of origin policy" http ;
                   Js_of_ocaml_lwt.XmlHttpRequest.(
                     get http
                     >>= fun frame ->
                     dbgf "%s -> code: %d" http frame.code ;
                     match frame.code with
-                    | 200 -> return frame.content
+                    | 200 ->
+                        logf "HTTP success (%d bytes)"
+                          (String.length frame.content) ;
+                        return frame.content
                     | other ->
                         Fmt.failwith "Getting %S returned code: %d" http other)
-                  >>= fun content -> logf "Got %S" content ; return content
-              | Ipfs {cid; path} -> logf "IPFS %s %s" cid path ; ni "ipfs uri"
+                  >>= fun content -> return content
+              | Ipfs {cid; path} ->
+                  let gateway = "https://gateway.ipfs.io/ipfs/" in
+                  let gatewayed = Fmt.str "%s%s%s" gateway cid path in
+                  logf "IPFS CID %S path %S, adding gateway %S" cid path gateway ;
+                  resolve (Web gatewayed)
               | Storage {network= None; address; key} ->
                   let addr =
                     match address with
