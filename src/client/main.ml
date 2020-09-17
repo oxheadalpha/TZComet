@@ -474,8 +474,72 @@ let metadata_json_to_html json_code =
       [ big_answer `Ok
           [txt "This piece of metadata, while valid, is completely empty!"] ]
   | Ok ex ->
-      [ big_answer `Ok [txt "This metadata blob is VALID 👍"]
-      ; div [Contract_metadata.Content.to_html ex]
+      let errs, warns = Validation.validate ex in
+      let thumbdsup = "👍" in
+      let thumbdsdown = "👎" in
+      let warning = "⚠" in
+      let actual_status, msg =
+        match (errs, warns) with
+        | [], [] -> (`Ok, Fmt.str "is valid %s" thumbdsup)
+        | _ :: _, _ ->
+            (`Error, Fmt.str "parses correctly but is invalid %s" thumbdsdown)
+        | [], _ :: _ -> (`Ok, Fmt.str "is okay, but with warnings %s" warning)
+      in
+      let events title list to_html =
+        match list with
+        | [] -> []
+        | more ->
+            [ h4 [Fmt.kstr txt "%s: " title]
+            ; ul (List.map more ~f:(fun ev -> li [to_html ev])) ] in
+      let instr s =
+        a
+          ~a:[Fmt.kstr a_href "https://michelson.nomadic-labs.com/#instr-%s" s]
+          [txt s] in
+      let error_to_html =
+        let open Validation.Error in
+        function
+        | Forbidden_michelson_instruction {view; instruction} ->
+            span
+              [ txt "The off-chain-view “"; code [txt view]; txt "” uses a "
+              ; strong [txt "forbidden Michelson instruction: "]
+              ; instr instruction
+              ; txt " (the other forbidden instructions are: "
+              ; span
+                  (oxfordize_list
+                     (List.filter
+                        ~f:String.(( <> ) instruction)
+                        Validation.Data.forbidden_michelson_instructions)
+                     ~sep:(fun () -> txt ", ")
+                     ~last_sep:(fun () -> txt ", and ")
+                     ~map:instr); txt ")." ] in
+      let warning_to_html =
+        let open Validation.Warning in
+        function
+        | Wrong_author_format author ->
+            span
+              [ txt "The author "; code [txt author]
+              ; txt " has a wrong format, it should look like "
+              ; code [txt "Print Name <contact-url-or-email>"]; txt "." ]
+        | Unexpected_whitespace {field; value} ->
+            span
+              [ txt "The field "; code [txt field]; txt " (= "
+              ; code [Fmt.kstr txt "%S" value]
+              ; txt ") uses confusing white-space characters." ]
+        | Self_unaddressed {view; instruction} ->
+            span
+              [ txt "The off-chain-view "; code [txt view]
+              ; txt " uses the instruction "; instr "SELF"
+              ; ( match instruction with
+                | None -> txt " not followed by any instruction."
+                | Some i -> span [txt " followed by "; instr i; txt "."] )
+              ; txt
+                  " The current recommendation is to only use the combination "
+              ; code [instr "SELF"; txt "; "; instr "ADDRESS"]
+              ; txt " in off-chain-views." ] in
+      [ big_answer actual_status [Fmt.kstr txt "This metadata blob %s" msg]
+      ; div (events "Errors" errs error_to_html)
+      ; div (events "Warnings" warns warning_to_html)
+      ; div [h4 [txt "Content:"]; Contract_metadata.Content.to_html ex]
       ; div
           [ sizing_table
               [ ("Current JSON", String.length json_code)
