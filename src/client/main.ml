@@ -468,6 +468,7 @@ let metadata_json_to_html json_code =
       ; version= None
       ; license= None
       ; authors= []
+      ; homepage= None
       ; interfaces= []
       ; views= []
       ; unknown= [] } ->

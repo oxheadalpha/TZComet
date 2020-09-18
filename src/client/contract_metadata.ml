@@ -33,9 +33,19 @@ module Uri = struct
 end
 
 module Content = struct
-  let to_html metadata =
+  open Tezos_contract_metadata.Metadata_contents
+
+  let to_html
+      { name
+      ; description
+      ; version
+      ; license
+      ; authors
+      ; homepage
+      ; interfaces
+      ; views
+      ; unknown } =
     let open RD in
-    let open Tezos_contract_metadata.Metadata_contents in
     let option_field name field f =
       match field with
       | None -> []
@@ -50,7 +60,7 @@ module Content = struct
       go (String.split t ~on:'\n') []
       |> List.rev_map ~f:(fun x -> span [br (); txt x])
       |> span in
-    let license l =
+    let license_elt l =
       let open License in
       span
         [ i [txt l.name]
@@ -60,10 +70,10 @@ module Content = struct
     let list_field name field f =
       option_field name (match field with [] -> None | more -> Some more) f
     in
-    let authors l =
+    let authors_elt l =
       List.map l ~f:code_string |> List.intersperse ~sep:(txt ", ") |> span
     in
-    let interfaces l =
+    let interfaces_elt l =
       let interface s =
         let r = Re.Posix.re "TZIP-([0-9]+)" in
         let normal s = i [txt s] in
@@ -86,7 +96,7 @@ module Content = struct
         Re.split_full (Re.compile r) s |> List.map ~f:tok |> span in
       List.map l ~f:interface |> List.intersperse ~sep:(txt ", ") |> span in
     let _todo l = Fmt.kstr txt "todo: %d items" (List.length l) in
-    let views (views : View.t list) =
+    let views_elt (views : View.t list) =
       let view v =
         let open View in
         let purity =
@@ -151,13 +161,15 @@ module Content = struct
                [ code_string k; txt " "
                ; pre [code [txt (Ezjsonm.value_to_string ~minify:false v)]] ]))
     in
+    let url_elt u = span [a ~a:[a_href u] [txt u]] in
     ul
-      ( option_field "Name" metadata.name code_string
-      @ option_field "Version" metadata.version code_string
-      @ option_field "Description" metadata.description paragraphs
-      @ option_field "License" metadata.license license
-      @ list_field "Authors" metadata.authors authors
-      @ list_field "Interfaces" metadata.interfaces interfaces
-      @ list_field "Views" metadata.views views
-      @ list_field "Extra/Unknown" metadata.unknown unknown_extras )
+      ( option_field "Name" name code_string
+      @ option_field "Version" version code_string
+      @ option_field "Description" description paragraphs
+      @ option_field "License" license license_elt
+      @ option_field "Homepage" homepage url_elt
+      @ list_field "Authors" authors authors_elt
+      @ list_field "Interfaces" interfaces interfaces_elt
+      @ list_field "Views" views views_elt
+      @ list_field "Extra/Unknown" unknown unknown_extras )
 end
