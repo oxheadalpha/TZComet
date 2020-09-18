@@ -1148,14 +1148,14 @@ let metadata_explorer state_handle =
         ~sep:(fun () -> txt "  ")
         ~last_sep:(fun () -> txt "  ")
         content
-        ~map:(fun (lbl, var) ->
+        ~map:(fun (lbl, var, cols) ->
           div
             ~a:[a_class ["form-group"]]
             [ label [txt lbl]; txt " "
             ; Reactive.textarea
                 ~a:
                   ( a
-                  @ [ a_style "font-family: monospace"; a_rows 1; a_cols 60
+                  @ [ a_style "font-family: monospace"; a_rows 1; a_cols cols
                     ; a_class ["form-control"]
                     ; a_onkeypress (fun ev ->
                           dbgf "keycode: %d" ev##.keyCode ;
@@ -1213,7 +1213,8 @@ let metadata_explorer state_handle =
   ; div
       [ h3 [txt "Tezos Nodes"]; Tezos_nodes.table_of_statuses nodes
       ; inputs_and_button ~button_text:"Add Node"
-          [("Name:", add_node_name); ("RPC-Prefix:", add_node_rpc_prefix)]
+          [ ("Name:", add_node_name, 25)
+          ; ("RPC-Prefix:", add_node_rpc_prefix, 50) ]
           ~active:(Var.create "add-node-active" true) ~action:(fun () ->
             let nodes_var = nodes.Tezos_nodes.nodes in
             let current = Var.value nodes_var in
@@ -1226,7 +1227,7 @@ let metadata_explorer state_handle =
       [ h3 [txt "Find The Metadata URI of A Contract"]
       ; div
           [ inputs_and_button
-              [("KT1 Address:", contract_address)]
+              [("KT1 Address:", contract_address, 60)]
               ~active:
                 (Var.map uri_result ~f:(function
                   | `Not_started | `Failed _ | `Done_uri _ -> true
@@ -1287,8 +1288,8 @@ let metadata_explorer state_handle =
   ; div
       [ h3 [txt "Resolve/Fetch Metadata URIs"]
       ; div
-          [ inputs_and_button [("URI:", uri_input)] ~active:fetch_uri_activable
-              ~action:fetch_uri_action ]
+          [ inputs_and_button [("URI:", uri_input, 100)]
+              ~active:fetch_uri_activable ~action:fetch_uri_action ]
       ; Reactive.div
           (Var.map_to_list metadata_result ~f:(function
             | `Not_started -> []
