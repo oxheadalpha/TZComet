@@ -159,12 +159,70 @@ module B58_hashes = struct
     (* expr(54) *)
     "\013\044\064\027"
 
+  let contract_hash =
+    (* src/proto_006_PsCARTHA/lib_protocol/contract_hash.ml KT1(36) *)
+    "\002\090\121"
+
+  let chain_id = (* src/lib_crypto/base58.ml *) "\087\082\000"
+  let blake2b32 = Digestif.blake2b 32
+
   let blake2b x =
-    Digestif.digest_string (Digestif.blake2b 32) x
-    |> Digestif.to_raw_string (Digestif.blake2b 32)
+    Digestif.digest_string blake2b32 x |> Digestif.to_raw_string blake2b32
 
   let b58 s = Base58.of_bytes (module B58_crypto) s |> Base58.to_string
+
+  let unb58 s =
+    Base58.of_string_exn (module B58_crypto) s
+    |> Base58.to_bytes (module B58_crypto)
+
   let b58_script_id_hash s = b58 (script_expr_hash ^ blake2b s)
+
+  let check_b58_hash ~prefix ~size s =
+    let ppstring ppf s =
+      let open Fmt in
+      pf ppf "[%d→0x%a]" (String.length s) Hex.pp (Hex.of_string s) in
+    let optry o k =
+      Fmt.kstr
+        (fun message ->
+          match o () with
+          | Some s -> s
+          | None -> Fmt.failwith "%s" message
+          | exception e -> Fmt.failwith "%s (%a)" message Exn.pp e)
+        k in
+    String.mapi s ~f:(fun idx c ->
+        let bitcoin =
+          "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
+        if String.mem bitcoin c then '\x00'
+        else
+          Fmt.failwith
+            "Invalid character '%c' at position %d in supposedly base-58 %S" c
+            idx s)
+    |> ignore ;
+    let b58 =
+      optry
+        (fun () -> Base58.of_string (module B58_crypto) s)
+        "Cannot decode base58 from %S" s in
+    dbgf "base58: %a" Base58.pp b58 ;
+    let data =
+      optry
+        (fun () -> Base58.to_bytes (module B58_crypto) b58)
+        "Cannot get data from base58 %a" Base58.pp b58 in
+    dbgf "data: %a" ppstring data ;
+    dbgf "prefix: %a" ppstring prefix ;
+    if not (String.is_prefix data ~prefix) then
+      Fmt.failwith "Wrong prefix for data 0x%a, expecting 0x%a" Hex.pp
+        (Hex.of_string data) Hex.pp (Hex.of_string prefix) ;
+    let hashpart =
+      optry
+        (fun () -> String.chop_prefix data ~prefix)
+        "Wrong refix AGAIN??? %S %S" data prefix in
+    dbgf "hash: %a" ppstring hashpart ;
+    optry
+      (fun () -> Digestif.of_raw_string_opt (Digestif.blake2b size) hashpart)
+      "This is not a blake2b hash: %a" ppstring hashpart
+
+  let check_b58_kt1_hash s = check_b58_hash ~prefix:contract_hash ~size:20 s
+  let check_b58_chain_id_hash s = check_b58_hash ~prefix:chain_id ~size:4 s
 
   let b58_script_id_hash_of_michelson_string s =
     b58_script_id_hash ("\x05" ^ Michelson_bytes.encode_michelson_string s)
@@ -436,14 +494,57 @@ let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
     ; ex "SHA256-checked HTTPS"
         (Uri.of_string
            (Fmt.str "sha256://0x%s/%s" hash_of_https_ok
-              (Uri.pct_encode https_ok))) ] in
+              (Uri.pct_encode https_ok)))
+    ; ex "In storage with chain-id"
+        (Uri.make ~scheme:"tezos-storage"
+           ~host:(State.kt1_with_metadata ^ ".NetXrtZMmJmZSeb")
+           ~path:"here" ()) ] in
   let result_div =
     Reactive.div_of_var metadata_uri_code ~f:(fun uri_code ->
         let open Tezos_contract_metadata.Metadata_uri in
-        match Uri.of_string uri_code |> of_uri with
+        let errors = ref [] in
+        let error w src e = errors := (w, src, e) :: !errors in
+        let validate_kt1_address s =
+          ( try ignore (B58_hashes.check_b58_kt1_hash s) with
+          | Failure f -> error `Address s f
+          | e -> Fmt.kstr (error `Address s) "%a" Exn.pp e ) ;
+          Ok () in
+        let validate_network = function
+          | "mainnet" | "carthagenet" | "delphinet" | "dalphanet" | "zeronet" ->
+              Ok ()
+          | s ->
+              ( try ignore (B58_hashes.check_b58_chain_id_hash s) with
+              | Failure f -> error `Network s f
+              | e -> Fmt.kstr (error `Network s) "%a" Exn.pp e ) ;
+              Ok () in
+        match
+          Uri.of_string uri_code
+          |> of_uri ~validate_kt1_address ~validate_network
+        with
         | Ok o ->
-            [ big_answer `Ok [txt "This metadata URI is VALID 👍"]
-            ; div (Contract_metadata.Uri.to_html o)
+            let header =
+              match !errors with
+              | [] -> big_answer `Ok [txt "This metadata URI is VALID 👍"]
+              | _ ->
+                  big_answer `Error
+                    [txt "This metadata URI parses OK but is not VALID 😞"]
+            in
+            let errors_div =
+              match !errors with
+              | [] -> []
+              | more ->
+                  [ txt "Validation errors:"
+                  ; ul
+                      (List.map more ~f:(fun (which, source, error) ->
+                           li
+                             [ strong
+                                 [ txt
+                                     ( match which with
+                                     | `Address -> "Contract address"
+                                     | `Network -> "Network" ) ]; txt " ("
+                             ; code [txt source]; txt "): "; em [txt error] ]))
+                  ] in
+            [ header; div errors_div; div (Contract_metadata.Uri.to_html o)
             ; div [sizing_table [("URI", String.length uri_code)]]
             ; div
                 [ button

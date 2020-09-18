@@ -96,7 +96,7 @@ let encode_michelson_string s =
     Tezos_micheline.Micheline.(String (0, s) |> strip_locations)
   |> Bytes.to_string
 
-let example =
+let example () =
   let bytes = "0707002a002a" in
   let to_display =
     try
