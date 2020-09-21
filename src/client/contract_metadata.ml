@@ -96,6 +96,19 @@ module Content = struct
         Re.split_full (Re.compile r) s |> List.map ~f:tok |> span in
       List.map l ~f:interface |> List.intersperse ~sep:(txt ", ") |> span in
     let _todo l = Fmt.kstr txt "todo: %d items" (List.length l) in
+    let protocol s =
+      let proto s = abbr ~a:[a_title s] [code_string (String.prefix s 12)] in
+      let known name url =
+        span [a ~a:[a_href url] [em [txt name]]; txt " ("; proto s; txt ")"]
+      in
+      match s with
+      | "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSXRLQEb" ->
+          known "Carthage" "http://tezos.gitlab.io/protocols/006_carthage.html"
+      | "PsBabyM1eUXZseaJdmXFApDSBqj8YBfwELoxZHHW77EMcAbbwAS" ->
+          known "Babylon" "http://tezos.gitlab.io/protocols/005_babylon.html"
+      | "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo" ->
+          known "Delphi" "https://blog.nomadic-labs.com/delphi-changelog.html"
+      | s -> proto s in
     let views_elt (views : View.t list) =
       let view v =
         let open View in
@@ -106,7 +119,12 @@ module Content = struct
           let open Implementation in
           ul
             (List.map impls ~f:(function
-              | Michelson_storage ms ->
+              | Michelson_storage
+                  { parameter
+                  ; return_type
+                  ; code= michcode
+                  ; human_annotations
+                  ; version } ->
                   let open Michelson_storage in
                   let mich (Micheline m) =
                     let open Tezos_micheline in
@@ -115,20 +133,19 @@ module Content = struct
                   li
                     [ b [txt "Michelson-storage-view:"]
                     ; ul
-                        ( option_field "Michelson-Version" ms.version (fun s ->
-                              Fmt.kstr code_string "%s" (String.prefix s 12))
+                        ( option_field "Michelson-Version" version protocol
                         @ normal_field "Type"
                             (code
                                [ Fmt.kstr txt "%s<contract-storage> → %s"
-                                   ( match ms.parameter with
+                                   ( match parameter with
                                    | None -> ""
                                    | Some p -> mich p ^ " × " )
-                                   (mich ms.return_type) ])
+                                   (mich return_type) ])
                         @ normal_field "Code"
                             (details
                                (summary [txt "Expand"])
-                               [pre [code [txt (mich ms.code)]]])
-                        @ list_field "Annotations" ms.human_annotations
+                               [pre [code [txt (mich michcode)]]])
+                        @ list_field "Annotations" human_annotations
                             (fun anns ->
                               ul
                                 (List.map anns ~f:(fun (k, v) ->
