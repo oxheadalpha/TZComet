@@ -164,6 +164,8 @@ module B58_hashes = struct
     "\002\090\121"
 
   let chain_id = (* src/lib_crypto/base58.ml *) "\087\082\000"
+  let protocol_hash = "\002\170" (* P(51) *)
+
   let blake2b32 = Digestif.blake2b 32
 
   let blake2b x =
@@ -223,6 +225,9 @@ module B58_hashes = struct
 
   let check_b58_kt1_hash s = check_b58_hash ~prefix:contract_hash ~size:20 s
   let check_b58_chain_id_hash s = check_b58_hash ~prefix:chain_id ~size:4 s
+
+  let check_b58_protocol_hash s =
+    check_b58_hash ~prefix:protocol_hash ~size:32 s
 
   let b58_script_id_hash_of_michelson_string s =
     b58_script_id_hash ("\x05" ^ Michelson_bytes.encode_michelson_string s)
@@ -576,7 +581,14 @@ let metadata_json_to_html json_code =
       [ big_answer `Ok
           [txt "This piece of metadata, while valid, is completely empty!"] ]
   | Ok ex ->
-      let errs, warns = Validation.validate ex in
+      let errs, warns =
+        Validation.validate ex ~protocol_hash_is_valid:(fun s ->
+            try
+              let _ = B58_hashes.check_b58_protocol_hash s in
+              true
+            with e ->
+              dbgf "Protocol hash problem: %a" Exn.pp e ;
+              false) in
       let thumbdsup = "👍" in
       let thumbdsdown = "👎" in
       let warning = "⚠" in
@@ -599,10 +611,12 @@ let metadata_json_to_html json_code =
           [txt s] in
       let error_to_html =
         let open Validation.Error in
+        let the_off_chain_view view =
+          span [txt "The off-chain-view “"; code [txt view]; txt "”"] in
         function
         | Forbidden_michelson_instruction {view; instruction} ->
             span
-              [ txt "The off-chain-view “"; code [txt view]; txt "” uses a "
+              [ the_off_chain_view view; txt " uses a "
               ; strong [txt "forbidden Michelson instruction: "]
               ; instr instruction
               ; txt " (the other forbidden instructions are: "
@@ -613,7 +627,15 @@ let metadata_json_to_html json_code =
                         Validation.Data.forbidden_michelson_instructions)
                      ~sep:(fun () -> txt ", ")
                      ~last_sep:(fun () -> txt ", and ")
-                     ~map:instr); txt ")." ] in
+                     ~map:instr); txt ")." ]
+        | Michelson_version_not_a_protocol_hash {view; value} ->
+            span
+              [ the_off_chain_view view
+              ; txt " references a wrong version of Michelson ("
+              ; code [txt value]
+              ; txt "), it should be a valid protocol hash, like "
+              ; code [txt "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo"]
+              ; txt "." ] in
       let warning_to_html =
         let open Validation.Warning in
         function
