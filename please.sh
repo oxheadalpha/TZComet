@@ -18,6 +18,7 @@ ensure_vendors () {
     # We use the following pointer to the main repo's master branch:
     tezos_branch=smondet-contract-metadata
     tezos_remote=https://gitlab.com/smondet/tezos.git
+    tezos_commit="5c57bf7a80a68fa838704cb023b14ae2dff5ae22"
     say "Vendoring tezos @ %10s" "$tezos_branch"
     if [ -f "local-vendor/tezos/README.md" ] ; then
         say "Tezos already cloned"
@@ -30,6 +31,7 @@ ensure_vendors () {
         cd local-vendor/tezos/
         git checkout "$tezos_branch"
         git pull
+        git checkout "$tezos_commit"
         git log --oneline -n 5
         #echo "(data_only_dirs flextesa-lib) ;; Unvendored flextesa" > vendors/dune
     )
