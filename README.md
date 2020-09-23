@@ -3,7 +3,7 @@
 
 ![comevitz-20200902](https://user-images.githubusercontent.com/617111/91987948-b0c78180-ecfc-11ea-8be4-00b54ced0fff.gif)
 
-… currently running at <https://wr.mondet.org/comevitz/> …
+… currently running at <https://tqtezos.github.io/comevitz/> …
 
 ## Build
 
