@@ -1442,6 +1442,22 @@ let gui ?version_string state =
                   ~michelson_bytes_code
             | Metadata_explorer -> metadata_explorer state)) ])
 
+let lwd_onload _ =
+  let open Tyxml_lwd in
+  let open Lwdom in
+  let open Js_of_ocaml in
+  let base_div = Dom_html.getElementById "attach-ui" in
+  base_div##.innerHTML := Js.string "" ;
+  let doc = Html.span [Html.txt (Lwd.pure "Hello world")] in
+  let root = Lwd.observe doc in
+  Lwd.set_on_invalidate root (fun _ ->
+      ignore
+        (Dom_html.window##requestAnimationFrame
+           (Js.wrap_callback (fun _ -> ignore (Lwd.quick_sample root))))) ;
+  List.iter ~f:(Dom.appendChild base_div)
+    (Lwd_seq.to_list (Lwd.quick_sample root) : _ node list :> raw_node list) ;
+  Js._false
+
 let attach_to_page gui =
   let open Js_of_ocaml in
   let base_div = Dom_html.getElementById "attach-ui" in
@@ -1477,4 +1493,9 @@ let _ =
   dbgf "Hello Main!" ;
   let open Js_of_ocaml in
   (Lwt.async_exception_hook := fun e -> dbgf "Async Exn: %s" (Exn.to_string e)) ;
-  Dom_html.window##.onload := Dom_html.handler go
+  let arg s =
+    List.Assoc.find Js_of_ocaml.Url.Current.arguments ~equal:String.equal s
+  in
+  match arg "lwd" with
+  | Some "true" -> Dom_html.window##.onload := Dom_html.handler lwd_onload
+  | _ -> Dom_html.window##.onload := Dom_html.handler go

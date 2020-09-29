@@ -49,7 +49,17 @@ ensure_vendors () {
         # We need to expose this for the Ledger-like hash:
         echo 'val raw_encode : ?alphabet:Alphabet.t -> string -> string' >> src/base58.mli
     )
-
+    say "Vendoring Lwd++"
+    if [ -f "local-vendor/lwd/lwd.opam" ] ; then
+        say "Already cloned"
+    else
+        git clone --depth 10 https://github.com/let-def/lwd.git \
+            local-vendor/lwd
+    fi
+    (
+        cd local-vendor/lwd
+        git pull
+    )
 }
 
 ensure_setup () {
@@ -72,6 +82,7 @@ eval $(opam env)
 build_all () {
     dune build --profile release src/client/index.html
     echo "Done: file://$PWD/_build/default/src/client/index.html?dev=true"
+    echo "Done: file://$PWD/_build/default/src/client/index.html?lwd=true"
 }
 build_ () {
     build_all
