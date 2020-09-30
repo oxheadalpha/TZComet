@@ -1,6 +1,6 @@
 include Base
 
-let dbg fmt = Fmt.pf Fmt.stdout "@[comevitz-debug: %a@]%!" fmt ()
+let dbg fmt = Fmt.pf Fmt.stdout "@[tzcomet-debug: %a@]%!" fmt ()
 let dbgf fmt = Fmt.(kstr (fun s -> dbg (const string s))) fmt
 
 let rec oxfordize_list l ~map ~sep ~last_sep =

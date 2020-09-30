@@ -360,7 +360,7 @@ let welcome_page ?version_string state ~menu_welcome =
     [ h3 [txt "Welcome"]
     ; p
         [ txt "This is "
-        ; a ~a:[a_href "https://github.com/tqtezos/comevitz"] [txt "Comevitz "]
+        ; a ~a:[a_href "https://github.com/tqtezos/TZComet"] [txt "TZComet "]
         ; ( match version_string with
           | None -> i [txt "unknown version"]
           | Some vs ->
@@ -369,7 +369,7 @@ let welcome_page ?version_string state ~menu_welcome =
                 ; a
                     ~a:
                       [ Fmt.kstr a_href
-                          "https://github.com/tqtezos/comevitz/commit/%s" vs ]
+                          "https://github.com/tqtezos/TZComet/commit/%s" vs ]
                     [i [txt vs]] ] )
         ; Fmt.kstr txt "%s."
             (if state.State.dev_mode then " (in “dev” mode)" else "") ]
@@ -378,8 +378,8 @@ let welcome_page ?version_string state ~menu_welcome =
     ; p
         [ txt "The source for this webpage is available on Github: "
         ; a
-            ~a:[a_href "https://github.com/tqtezos/comevitz"]
-            [code [txt "tqtezos/comevitz"]]; txt "." ]
+            ~a:[a_href "https://github.com/tqtezos/TZComet"]
+            [code [txt "tqtezos/TZComet"]]; txt "." ]
     ; p
         [ txt
             "The Contract Metadata standard, a.k.a. TZIP-16, is currently \
@@ -484,7 +484,7 @@ let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
   let open RD in
   let examples =
     let https_ok =
-      "https://raw.githubusercontent.com/tqtezos/comevitz/master/data/metadata_example0.json"
+      "https://raw.githubusercontent.com/tqtezos/TZComet/master/data/metadata_example0.json"
     in
     let hash_of_https_ok =
       (* `sha256sum data/metadata_example0.json` → Achtung, the URL
