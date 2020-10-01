@@ -4,7 +4,7 @@
   "interfaces": [
     "TZIP-16 draft as of Tue, 15 Sep 2020 14:49:48 -0400"
   ],
-  "source": "https://github.com/smondet/comevitz/blob/master/please.sh",
+  "source": "https://github.com/tqtezos/TZComet/blob/master/please.sh",
   "purpose": [
      "example", "tutorial"
   ]
