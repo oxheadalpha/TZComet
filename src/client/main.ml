@@ -494,7 +494,7 @@ let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
     let hash_of_https_ok =
       (* `sha256sum data/metadata_example0.json` → Achtung, the URL
          above takes about 5 minutes to be up to date with `master` *)
-      "7baf4143a2afbd2682395cda14c9d29e78dee2b5cf7bb544bb434a6a4ac31794" in
+      "7d961916f05d72afc765389a695458a9b451954419b41fa3cdd5fa816128b744" in
     let ex name u = (name, Uri.to_string u) in
     [ ex "In KT1 Storage"
         (Uri.make ~scheme:"tezos-storage" ~host:State.kt1_with_metadata
