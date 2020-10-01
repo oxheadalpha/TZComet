@@ -383,10 +383,15 @@ let welcome_page ?version_string state ~menu_welcome =
     ; p
         [ txt
             "The Contract Metadata standard, a.k.a. TZIP-16, is currently \
-             being drafted in the merge-request: "
+             currently work-in-progress: "
         ; a
-            ~a:[a_href "https://gitlab.com/tzip/tzip/-/merge_requests/76"]
-            [txt "tzip/tzip!76"]; txt "." ] ]
+            ~a:
+              [ a_href
+                  "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-16/tzip-16.md"
+              ]
+            [ txt
+                "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-16/tzip-16.md"
+            ]; txt "." ] ]
 
 let rec show_tezos_error =
   let open RD in
