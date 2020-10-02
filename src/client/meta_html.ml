@@ -44,9 +44,30 @@ module Example = struct
                       "Click %d" count ])))
     % p
         (H5.span
+           ~a:[H5.a_class (Lwd.pure ["alert"; "alert-primary"])]
            [ Lwd.map
                (fun x ->
                  Fmt.kstr (fun s -> H5.txt (Lwd.pure s)) "[%d cLicks]" x)
                (Lwd.get button_calls)
              |> Lwd.join ])
+    % H5.(
+        let open Tyxml_lwd.Lwdom in
+        div
+          ~a:[a_class (Lwd.pure ["dropdown"])]
+          [ button
+              ~a:
+                [ a_class (Lwd.pure ["btn"; "btn-secondary"; "dropdown-toggle"])
+                  (* ; a_type (Lwd.pure `Button) *)
+                ; a_id (Lwd.pure "theIdOfTheDropDown")
+                ; a_user_data "toggle" (Lwd.pure "dropdown")
+                ; a_aria "haspopup" (Lwd.pure ["true"])
+                ; a_aria "expanded" (Lwd.pure ["false"]) ]
+              [txt (Lwd.pure "Example Dropdown")]
+          ; div
+              ~a:
+                [ a_class (Lwd.pure ["dropdown-menu"])
+                ; a_aria "labelledby" (Lwd.pure ["theIdOfTheDropDown"]) ]
+              [ a
+                  ~a:[a_class (Lwd.pure ["dropdown-item"])]
+                  [txt (Lwd.pure "one")] ] ])
 end
