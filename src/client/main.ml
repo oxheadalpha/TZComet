@@ -1336,7 +1336,60 @@ let metadata_explorer state_handle =
                     ~a:[a_style "color: #999; font-size: 140%"]
                     [ txt (String.concat ~sep:"\n" log)
                     ; span ~a:[a_style "color: #900"] [txt ("\n" ^ msg)] ] ]))
-      ] ]
+      ]
+  ; div
+      [ h3 [txt "Call Off-Chain-Views"]
+      ; Reactive.div
+          (Var.map_to_list metadata_result ~f:(function
+            | `Done_metadata (json, _) -> (
+                let open Tezos_contract_metadata.Metadata_contents in
+                match of_json json with
+                | Error _ | Ok {views= []; _} ->
+                    [ big_answer `Error
+                        [txt "This piece of metadata does not have any views."]
+                    ]
+                | Ok ex ->
+                    let implementation_form impl =
+                      let open Tezos_contract_metadata.Metadata_contents.View
+                               .Implementation in
+                      match impl with
+                      | Michelson_storage michview -> (
+                          let open Tezos_contract_metadata.Metadata_contents
+                                   .View
+                                   .Implementation
+                                   .Michelson_storage in
+                          match michview.parameter with
+                          | None ->
+                              div [txt "TODO: Michelson parameter-less form"]
+                          | Some (Micheline m) ->
+                              div
+                                [ Fmt.kstr txt "TODO: Michelson form for %a"
+                                    Tezos_contract_metadata.Contract_storage
+                                    .pp_arbitrary_micheline
+                                    (Tezos_micheline.Micheline.root m) ] )
+                      | Rest_api_query _ -> div [txt "TODO: REST API form"]
+                    in
+                    let view_list =
+                      List.map ex.views ~f:(fun v ->
+                          let open Tezos_contract_metadata.Metadata_contents
+                                   .View in
+                          div
+                            [ code [txt v.name]; txt ": "
+                            ; em
+                                [ txt
+                                    (Option.value ex.description
+                                       ~default:"No description available …")
+                                ]
+                            ; div
+                                (List.map v.implementations implementation_form)
+                            ]) in
+                    [ h4 [Fmt.kstr txt "TODO: %d views" (List.length ex.views)]
+                    ; div view_list ] )
+            | _ ->
+                [ div
+                    [ txt
+                        "You need to fetch some metadata above for this to \
+                         work!" ] ])) ] ]
 
 let gui ?version_string state =
   RD.(
