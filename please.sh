@@ -80,9 +80,12 @@ ensure_setup () {
 eval $(opam env)
 
 build_all () {
-    dune build --profile release src/client/index.html
-    echo "Done: file://$PWD/_build/default/src/client/index.html?dev=true"
-    echo "Done: file://$PWD/_build/default/src/client/index.html?lwd=true"
+    mkdir -p _build/website/
+    dune build --profile release src/client/main.bc.js
+    cp --no-preserve mode _build/default/src/client/main.bc.js _build/website/main-client.js
+    cp data/loading.gif _build/website/
+    dune exec src/gen-web/main.exe index > _build/website/index.html
+    echo "Done: file://$PWD/_build/website/index.html?lwd=true"
 }
 build_ () {
     build_all
@@ -92,9 +95,7 @@ deploy_website () {
     build_all
     dst="$1"
     mkdir -p "$dst"
-    cp _build/default/src/client/index.html "$dst/"
-    cp _build/default/src/client/main.bc.js "$dst/"
-    cp _build/default/src/client/loading.gif "$dst/"
+    cp _build/website/* "$dst/"
     chmod a+w "$dst/"*
     git describe --always HEAD > "$dst/VERSION"
     echo "Done → $dst"

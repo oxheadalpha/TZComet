@@ -10,16 +10,3 @@
              lwd tyxml-lwd
              )
   )
-
-(rule
-  (targets index.html)
-  (deps main.bc.js loading.gif)
-  (action
-    (with-stdout-to index.html
-      (progn
-       (echo "<html><head>
-    <meta charset=\"utf-8\">
-    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-</head><body><div id=\"attach-ui\"><h2>Loading TZComet …</h2><img src=\"loading.gif\"/><br/><br/>See also <a href=\"https://github.com/tqtezos/TZComet\">https://github.com/tqtezos/TZComet</a></div><script src=\"main.bc.js\"></script></body></html>")
-       ))))
