@@ -84,7 +84,7 @@ build_all () {
     dune build --profile release src/client/main.bc.js
     cp --no-preserve mode _build/default/src/client/main.bc.js _build/website/main-client.js
     cp data/loading.gif _build/website/
-    dune exec src/gen-web/main.exe index > _build/website/index.html
+    dune exec src/gen-web/main.exe index "TZComet" > _build/website/index.html
     echo "Done: file://$PWD/_build/website/index.html?lwd=true"
 }
 build_ () {
