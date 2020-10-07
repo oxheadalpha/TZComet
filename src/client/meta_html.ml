@@ -4,6 +4,7 @@ module H5 = Tyxml_lwd.Html
 type 'a t = 'a H5.elt (* list Lwd.t *)
 
 let t (s : string) : _ t = H5.(txt (Lwd.pure s))
+let empty () = t ""
 let ( % ) a b : _ t = Lwd.map2 Lwd_seq.concat a b
 let ( %% ) a b : _ t = a % t " " % b
 let singletize f ?a x = f ?a [x]
@@ -34,6 +35,11 @@ let onclick_action action =
 
 let bind_var : 'a Lwd.var -> f:('a -> 'b t) -> 'b t =
  fun v ~f -> Lwd.bind (Lwd.get v) f
+
+let itemize ?(numbered = false) ?a_ul ?a_li l =
+  (if numbered then H5.ul else H5.ol)
+    ?a:a_ul
+    (List.map l ~f:(fun item -> H5.li ?a:a_li [item]))
 
 module Bootstrap = struct
   module Label_kind = struct
@@ -70,6 +76,8 @@ module Bootstrap = struct
 
   let container ?(suffix = "-md") c =
     H.div ~a:[classes [Fmt.str "container%s" suffix]] c
+
+  let container_fluid c = container ~suffix:"-fluid" c
 
   module Fresh_id = struct
     let _ids = ref 0
@@ -174,6 +182,110 @@ module Bootstrap = struct
       nav content
         ~a:[classes ["navbar"; "navbar-expand-lg"; "navbar-light"; "bg-light"]]
   end
+
+  module Form = struct
+    module Item = struct
+      type input =
+        { label: Html_types.label_content_fun H5.elt
+        ; id: string option
+        ; help: Html_types.small_content_fun H5.elt option }
+
+      type t =
+        | Input of {input: input; content: string Lwd.var}
+        | Check_box of {input: input; checked: bool Lwd.var}
+        | Button of
+            {label: Html_types.button_content_fun H5.elt; action: unit -> unit}
+
+      let to_div =
+        let open H5 in
+        let generic_input ?id ?help ~kind lbl more_a =
+          let the_id = Fresh_id.of_option "input-item" id in
+          let help_id = the_id ^ "Help" in
+          let full_label =
+            label
+              ~a:
+                [ (* shoud be for="<id>" *)
+                  classes
+                    ( match kind with
+                    | `Text -> []
+                    | `Checkbox -> ["form-check-label"] ) ]
+              [lbl] in
+          let full_input =
+            input
+              ~a:
+                ( [ classes
+                      [ ( match kind with
+                        | `Text -> "form-control"
+                        | `Checkbox -> "form-check-input" ) ]
+                  ; a_id (Lwd.pure the_id)
+                  ; a_aria "describedBy" (Lwd.pure [help_id])
+                  ; a_input_type (Lwd.pure kind) ]
+                @ more_a )
+              () in
+          let full_help =
+            small
+              ~a:[a_id (Lwd.pure help_id); classes ["form-text"; "text-muted"]]
+              (match help with None -> [] | Some h -> [h]) in
+          let div_content =
+            match kind with
+            | `Text -> [full_label; full_input; full_help]
+            | `Checkbox -> [full_input; full_label; full_help] in
+          let div_classes =
+            match kind with `Text -> [] | `Checkbox -> ["form-check"] in
+          div ~a:[classes ("form-group" :: div_classes)] div_content in
+        function
+        | Input {input= {label= lbl; id; help}; content} ->
+            generic_input ?id ?help ~kind:`Text lbl
+              [ a_value (Lwd.get content)
+              ; a_oninput
+                  (Tyxml_lwd.Lwdom.attr
+                     Js_of_ocaml.(
+                       fun ev ->
+                         Js.Opt.iter ev##.target (fun input ->
+                             Js.Opt.iter (Dom_html.CoerceTo.input input)
+                               (fun input ->
+                                 let v = input##.value |> Js.to_string in
+                                 dbgf "TA inputs: %d bytes: %S"
+                                   (String.length v) v ;
+                                 Lwd.set content v)) ;
+                         true)) ]
+        | Check_box {input= {label= lbl; id; help}; checked} ->
+            let initstatus = if Lwd.peek checked then [a_checked ()] else [] in
+            generic_input ?id ?help ~kind:`Checkbox lbl
+              ( initstatus
+              @ [ a_onclick
+                    (Tyxml_lwd.Lwdom.attr
+                       Js_of_ocaml.(
+                         fun ev ->
+                           Js.Opt.iter ev##.target (fun input ->
+                               Js.Opt.iter (Dom_html.CoerceTo.input input)
+                                 (fun input ->
+                                   let v = input##.checked |> Js.to_bool in
+                                   dbgf "checkbox → %b" v ; Lwd.set checked v)) ;
+                           true)) ] )
+        | Button {label= lbl; action} ->
+            button
+              ~a:
+                [ a_button_type (Lwd.pure `Submit)
+                ; classes ["btn"; "btn-primary"]
+                ; a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false))
+                ]
+              [lbl]
+    end
+
+    open Item
+
+    let input ?id ?help content label = Input {input= {label; id; help}; content}
+
+    let check_box ?id ?help checked label =
+      Check_box {input= {label; id; help}; checked}
+
+    let submit_button label action = Button {action; label}
+
+    let make items =
+      let div_items = List.map ~f:Item.to_div items in
+      H5.form div_items
+  end
 end
 
 module Example = struct
@@ -182,8 +294,8 @@ module Example = struct
   let e1 () =
     let button_calls = Lwd.var 0 in
     p (e0 ())
-    % Bootstrap.container
-        ( p (t "This is in a bootstrap container.")
+    % Bootstrap.container_fluid
+        ( p (t "This is in a bootstrap" %% ct "container-fluid.")
         % p
             (Bootstrap.button ~kind:`Primary
                ~action:(fun () ->
@@ -215,5 +327,56 @@ module Example = struct
                   ~action:(fun () -> dbgf "one from nav bar")
                   ~fragment:"page-one"
               ; item ~active:(Lwd.pure false) (t "One-inactive")
-                  ~action:(fun () -> assert false) ]) )
+                  ~action:(fun () -> assert false) ])
+        %
+        let hello = Lwd.var "is it me …" in
+        let checkboxed = Lwd.var false in
+        let submissions = Lwd.var [] in
+        p (t "And now some forms")
+        % Bootstrap.Form.(
+            make
+              [ input hello (t "Say Hello")
+              ; check_box checkboxed (t "Check this box")
+              ; submit_button (t "Submit This!") (fun () ->
+                    Lwd.set submissions
+                      ( (Lwd.peek hello, Lwd.peek checkboxed)
+                      :: Lwd.peek submissions )) ])
+        % p
+            ( t "Form results:"
+            %% bind_var hello ~f:(fun v -> t "Hello:" %% ct v)
+            % t ", checkbox is "
+            %% bind_var checkboxed ~f:(function
+                 | false -> bt "not"
+                 | true -> empty ())
+            %% t "checked." )
+        % itemize
+            [ t "Some item"; t "Some other item"
+            ; t "truc" %% it "bidule" %% bt "chouette"
+            ; t "Form submissions:"
+              %% bind_var submissions ~f:(fun subs ->
+                     itemize ~numbered:true
+                       (List.rev_map subs ~f:(fun (h, c) ->
+                            t "Submission:" %% ct h % t ","
+                            %% if c then it "checked" else it "unchecked"))) ]
+        %
+        let content = Lwd.var "content" in
+        H5.div
+          [ ( p (t "more input experiemnt" %% bind_var content ~f:ct)
+            %% H5.(
+                 input
+                   ~a:
+                     [ a_input_type (Lwd.pure `Text); a_value (Lwd.pure "hello")
+                     ; a_oninput
+                         (Tyxml_lwd.Lwdom.attr
+                            Js_of_ocaml.(
+                              fun ev ->
+                                Js.Opt.iter ev##.target (fun input ->
+                                    Js.Opt.iter (Dom_html.CoerceTo.input input)
+                                      (fun input ->
+                                        let v = input##.value |> Js.to_string in
+                                        dbgf "TA inputs: %d bytes: %S"
+                                          (String.length v) v ;
+                                        Lwd.set content v)) ;
+                                false)) ]
+                   ()) ) ] )
 end
