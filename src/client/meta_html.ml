@@ -68,6 +68,9 @@ module Bootstrap = struct
       ~a:[classes ["btn"; Fmt.str "btn-%s" (Label_kind.to_string kind)]]
       content
 
+  let container ?(suffix = "-md") c =
+    H.div ~a:[classes [Fmt.str "container%s" suffix]] c
+
   module Fresh_id = struct
     let _ids = ref 0
 
@@ -179,35 +182,38 @@ module Example = struct
   let e1 () =
     let button_calls = Lwd.var 0 in
     p (e0 ())
-    % p (t "This is greater than great.")
-    % p
-        (Bootstrap.button ~kind:`Primary
-           ~action:(fun () -> Lwd.set button_calls (Lwd.peek button_calls + 1))
-           (bind_var button_calls ~f:(fun count ->
-                H5.span
-                  [ Fmt.kstr
-                      (if Stdlib.( mod ) count 2 = 0 then it else bt)
-                      "Click %d" count ])))
-    % p
-        (Bootstrap.label `Danger
-           (bind_var button_calls ~f:(fun count ->
-                Fmt.kstr t "Button above clicked %d time%s." count
-                  (if count = 1 then "" else "s"))))
-    % p (t "A dropdown menu:")
-    % Bootstrap.Dropdown_menu.(
-        button
-          (t "This is a" %% ct "Dropdown" %% t "menu")
-          [ item (t "The First") ~action:(fun () -> dbgf "Hello from the first")
-          ; header (t "This is a dropdown" %% it "header")
-          ; item (t "The Second") ~action:(fun () ->
-                dbgf "Hellow from the second") ])
-    % p (t "A Nav-bar …")
-    % Bootstrap.Navigation_bar.(
-        make
-          ~brand:(it "Examples of Meta_html")
-          [ item (t "One")
-              ~action:(fun () -> dbgf "one from nav bar")
-              ~fragment:"page-one"
-          ; item ~active:(Lwd.pure false) (t "One-inactive") ~action:(fun () ->
-                assert false) ])
+    % Bootstrap.container
+        ( p (t "This is in a bootstrap container.")
+        % p
+            (Bootstrap.button ~kind:`Primary
+               ~action:(fun () ->
+                 Lwd.set button_calls (Lwd.peek button_calls + 1))
+               (bind_var button_calls ~f:(fun count ->
+                    H5.span
+                      [ Fmt.kstr
+                          (if Stdlib.( mod ) count 2 = 0 then it else bt)
+                          "Click %d" count ])))
+        % p
+            (Bootstrap.label `Danger
+               (bind_var button_calls ~f:(fun count ->
+                    Fmt.kstr t "Button above clicked %d time%s." count
+                      (if count = 1 then "" else "s"))))
+        % p (t "A dropdown menu:")
+        % Bootstrap.Dropdown_menu.(
+            button
+              (t "This is a" %% ct "Dropdown" %% t "menu")
+              [ item (t "The First") ~action:(fun () ->
+                    dbgf "Hello from the first")
+              ; header (t "This is a dropdown" %% it "header")
+              ; item (t "The Second") ~action:(fun () ->
+                    dbgf "Hellow from the second") ])
+        % p (t "A Nav-bar …")
+        % Bootstrap.Navigation_bar.(
+            make
+              ~brand:(it "Examples of Meta_html")
+              [ item (t "One")
+                  ~action:(fun () -> dbgf "one from nav bar")
+                  ~fragment:"page-one"
+              ; item ~active:(Lwd.pure false) (t "One-inactive")
+                  ~action:(fun () -> assert false) ]) )
 end
