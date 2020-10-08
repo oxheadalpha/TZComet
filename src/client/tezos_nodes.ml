@@ -197,6 +197,20 @@ let metadata_value state_handle nodes ~address ~key ~log =
   logf "Metadata big-map: %s" (Z.to_string big_map_id) ;
   Node.bytes_value_of_big_map_at_string node ~big_map_id ~key ~log
 
+let call_off_chain_view node_list ~address ~view ~parameter =
+  let open Lwt in
+  let open Tezos_contract_metadata.Metadata_contents.View.Implementation
+           .Michelson_storage in
+  dbgf "Calling %s(%a)" address
+    Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline parameter ;
+  (* TODO:
+     - get storage
+     - build view contract
+        - also fix SELF and BALANCE
+     - can run script
+     - get storage of the result
+  *)
+  return (Error "Not implemented")
 
 let table_of_statuses node_list =
   let open RD in

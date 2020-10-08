@@ -874,6 +874,7 @@ let metadata_explorer state_handle =
                                .Implementation in
                       match impl with
                       | Michelson_storage michview -> (
+                          let call_result = Var.create "view-result" `None in
                           let open Tezos_contract_metadata.Metadata_contents
                                    .View
                                    .Implementation
@@ -925,7 +926,7 @@ let metadata_explorer state_handle =
                                                  .Micheline_parser
                                                  .parse_expression tokens
                                                with
-                                               | _node, [] ->
+                                               | node, [] ->
                                                    [ button
                                                        ~a:
                                                          [ a_class
@@ -937,6 +938,29 @@ let metadata_explorer state_handle =
                                                                   off-chain \
                                                                   view: %s"
                                                                  c ;
+                                                               Var.set
+                                                                 call_result
+                                                                 `In_progress ;
+                                                               Lwt.async
+                                                                 Lwt.(
+                                                                   fun () ->
+                                                                     Tezos_nodes
+                                                                     .call_off_chain_view
+                                                                       nodes
+                                                                       ~address:
+                                                                         (Var
+                                                                          .value
+                                                                            contract_address)
+                                                                       ~view:
+                                                                         michview
+                                                                       ~parameter:
+                                                                         node
+                                                                     >>= fun res ->
+                                                                     Var.set
+                                                                       call_result
+                                                                       (`Done
+                                                                         res) ;
+                                                                     return ()) ;
                                                                true) ]
                                                        [txt "OK Go!"] ]
                                                | _, errs ->
@@ -951,7 +975,18 @@ let metadata_explorer state_handle =
                                                      Tezos_error_monad
                                                      .Error_monad
                                                      .pp_print_error errs ])) ]
-                                ] )
+                                ; Reactive.div
+                                    (Var.map_to_list call_result ~f:(function
+                                      | `None -> []
+                                      | `In_progress ->
+                                          [txt "Working on it …"]
+                                      | `Done (Ok mich) ->
+                                          [ Fmt.kstr txt "Done: %a"
+                                              Tezos_contract_metadata
+                                              .Contract_storage
+                                              .pp_arbitrary_micheline mich ]
+                                      | `Done (Error s) ->
+                                          [Fmt.kstr txt "Error: %s" s])) ] )
                       | Rest_api_query _ -> div [txt "TODO: REST API form"]
                     in
                     let view_list =
