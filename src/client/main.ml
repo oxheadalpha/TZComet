@@ -1362,11 +1362,76 @@ let metadata_explorer state_handle =
                           | None ->
                               div [txt "TODO: Michelson parameter-less form"]
                           | Some (Micheline m) ->
+                              let parameter = Var.create "view-param" "" in
                               div
-                                [ Fmt.kstr txt "TODO: Michelson form for %a"
-                                    Tezos_contract_metadata.Contract_storage
-                                    .pp_arbitrary_micheline
-                                    (Tezos_micheline.Micheline.root m) ] )
+                                [ txt "Please, provide the parameter of type "
+                                ; code
+                                    [ Fmt.kstr txt "%a"
+                                        Tezos_contract_metadata.Contract_storage
+                                        .pp_arbitrary_micheline
+                                        (Tezos_micheline.Micheline.root m)
+                                    ; txt ": "
+                                    ; input
+                                        ~a:
+                                          [ a_input_type `Text; a_value ""
+                                          ; a_oninput
+                                              Js_of_ocaml.(
+                                                fun ev ->
+                                                  Js.Opt.iter ev##.target
+                                                    (fun input ->
+                                                      Js.Opt.iter
+                                                        (Dom_html.CoerceTo.input
+                                                           input) (fun input ->
+                                                          let v =
+                                                            input##.value
+                                                            |> Js.to_string
+                                                          in
+                                                          dbgf
+                                                            "TA inputs: %d \
+                                                             bytes: %S"
+                                                            (String.length v) v ;
+                                                          Var.set parameter v)) ;
+                                                  false) ]
+                                        ()
+                                    ; Reactive.span
+                                        (Var.map_to_list parameter ~f:(fun c ->
+                                             match
+                                               Tezos_micheline.Micheline_parser
+                                               .tokenize c
+                                             with
+                                             | tokens, [] -> (
+                                               match
+                                                 Tezos_micheline
+                                                 .Micheline_parser
+                                                 .parse_expression tokens
+                                               with
+                                               | _node, [] ->
+                                                   [ button
+                                                       ~a:
+                                                         [ a_class
+                                                             [ "btn"
+                                                             ; "btn-primary" ]
+                                                         ; a_onclick (fun _ ->
+                                                               dbgf
+                                                                 "Call \
+                                                                  off-chain \
+                                                                  view: %s"
+                                                                 c ;
+                                                               true) ]
+                                                       [txt "OK Go!"] ]
+                                               | _, errs ->
+                                                   [ Fmt.kstr txt
+                                                       "errors parsing: %a"
+                                                       Tezos_error_monad
+                                                       .Error_monad
+                                                       .pp_print_error errs ] )
+                                             | _, errs ->
+                                                 [ Fmt.kstr txt
+                                                     "errors tokenizing: %a"
+                                                     Tezos_error_monad
+                                                     .Error_monad
+                                                     .pp_print_error errs ])) ]
+                                ] )
                       | Rest_api_query _ -> div [txt "TODO: REST API form"]
                     in
                     let view_list =
