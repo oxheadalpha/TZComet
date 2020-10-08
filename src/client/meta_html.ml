@@ -8,27 +8,41 @@ let empty () = t ""
 let ( % ) a b : _ t = Lwd.map2 Lwd_seq.concat a b
 let ( %% ) a b : _ t = a % t " " % b
 let singletize f ?a x = f ?a [x]
-let p ?a l = singletize H5.p ?a l
-let i ?a l = singletize H5.i ?a l
-let b ?a l = singletize H5.b ?a l
-let code ?a l = singletize H5.code ?a l
+
+module H = struct
+  let p ?a l = singletize H5.p ?a l
+  let i ?a l = singletize H5.i ?a l
+  let b ?a l = singletize H5.b ?a l
+  let code ?a l = singletize H5.code ?a l
+  let button ?a l = singletize H5.button ?a l
+  let span ?a l = singletize H5.span ?a l
+  let a ?a l = singletize H5.a ?a l
+  let div ?a l = singletize H5.div ?a l
+  let h1 ?a l = singletize H5.h1 ?a l
+  let h2 ?a l = singletize H5.h2 ?a l
+  let h3 ?a l = singletize H5.h3 ?a l
+  let h4 ?a l = singletize H5.h4 ?a l
+  let h5 ?a l = singletize H5.h5 ?a l
+  let h6 ?a l = singletize H5.h6 ?a l
+end
+
+include H
+
+let classes l = H5.a_class (Lwd.pure l)
 let it s = i (t s)
 let bt s = b (t s)
 let ct s = code (t s)
+let p_lead ?(a = []) c = p ~a:(classes ["lead"] :: a) c
 
-module H = struct
-  let button ?a l = singletize H5.button ?a l
-  let span ?a l = singletize H5.span ?a l
-  let p ?a l = singletize H5.p ?a l
-  let div ?a l = singletize H5.div ?a l
-end
+let link ~target ?(a = []) content =
+  H.a ~a:(H5.a_href (Lwd.pure target) :: a) content
+
+let url ?a t u = link ?a ~target:u (t u)
 
 let button ?(a = []) ~action k =
   H.button
     ~a:(H5.a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false)) :: a)
     k
-
-let classes l = H5.a_class (Lwd.pure l)
 
 let onclick_action action =
   H5.a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; true))
@@ -132,7 +146,7 @@ module Bootstrap = struct
   module Navigation_bar = struct
     (* https://getbootstrap.com/docs/4.5/components/navbar/#toggler *)
     let item ?(active = Lwd.pure true) ?fragment c ~action =
-      `Item (c, action, active, fragment)
+      `Item (c, (action : unit -> unit), active, (fragment : string option))
 
     let make ?(aria_label = "Show/Hide Navigation") ?id ~brand items =
       let open H5 in
