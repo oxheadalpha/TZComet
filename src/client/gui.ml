@@ -64,6 +64,12 @@ let about_page state =
       % url ct
           "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-16/tzip-16.md"
       % t "." )
+  % bind_var state.dev_mode ~f:(function
+      | false -> empty ()
+      | true ->
+          h2 (t "Dev-mode Junk:")
+          % p (t "This is also a test/experiment in UI writing …")
+          % Meta_html.Example.e1 ())
 
 let root_document () =
   let open Meta_html in
@@ -77,23 +83,3 @@ let root_document () =
             | Explorer -> t "Welcome/explorer page TODO"
             | Settings -> t "Settings page"
             | About -> about_page state) )
-
-(*
-let open Tyxml_lwd in
-  Html.div
-    [ Meta_html.Example.e1 ()
-    ; Html.p
-        [ Meta_html.Example.e0 (); Html.txt (Lwd.pure "; ")
-        ; Html.span
-            ~a:
-              [ Html.a_onclick
-                  (Lwdom.attr (fun _ ->
-                       let open State.Page in
-                       ( match Lwd.peek state.State.page with
-                       | Welcome -> Lwd.set state.State.page Settings
-                       | Settings -> Lwd.set state.State.page Welcome ) ;
-                       true)) ]
-            [Html.txt (Lwd.get state.State.page |> Lwd.map State.Page.to_string)]
-        ] ]
-
-      *)
