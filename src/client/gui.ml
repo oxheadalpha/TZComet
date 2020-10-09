@@ -8,6 +8,8 @@ module State = struct
       | Explorer -> "Explorer"
       | Settings -> "Settings"
       | About -> "About"
+
+    let all_in_order = [Explorer; Settings; About]
   end
 
   open Page
@@ -16,8 +18,28 @@ module State = struct
     {page: Page.t Lwd.var; version_string: string option; dev_mode: bool Lwd.var}
 
   let create () =
-    {page= Lwd.var Explorer; version_string= None; dev_mode= Lwd.var true}
+    let start_page =
+      let fragment = Js_of_ocaml.Url.Current.get_fragment () in
+      List.find all_in_order ~f:(fun page ->
+          String.equal
+            (String.lowercase (Page.to_string page))
+            ( String.chop_prefix_if_exists fragment ~prefix:"#"
+            |> String.lowercase ))
+      |> Option.value ~default:Explorer in
+    let dev_mode =
+      match
+        List.Assoc.find ~equal:String.equal Js_of_ocaml.Url.Current.arguments
+          "dev"
+      with
+      | Some "true" -> true
+      | _ -> false in
+    {page= Lwd.var start_page; version_string= None; dev_mode= Lwd.var dev_mode}
+
 end
+
+let tzcomet_link () =
+  let open Meta_html in
+  link ~target:"https://github.com/tqtezos/TZComet" (t "TZComet")
 
 let navigation_menu state =
   let open State in
@@ -27,12 +49,17 @@ let navigation_menu state =
   let act p () = Lwd.set state.page p in
   Bootstrap.Navigation_bar.(
     make
-      ~brand:(Bootstrap.label `Dark (t "TZComet"))
+      ~brand:
+        (Bootstrap.label `Dark
+           ( tzcomet_link ()
+           %% bind_var state.dev_mode ~f:(function
+                | true -> it "(dev)"
+                | false -> empty ()) ))
       (let of_page p =
          let fragment = Page.to_string p in
          item (bt fragment) ~active:(current_is_not p) ~action:(act p) ~fragment
        in
-       List.map ~f:of_page [Explorer; Settings; About]))
+       List.map ~f:of_page all_in_order))
 
 let about_page state =
   let open Meta_html in
@@ -40,8 +67,7 @@ let about_page state =
   let p = p_lead in
   h2 (t "TZComet")
   % p
-      ( t "This is"
-      %% link ~target:"https://github.com/tqtezos/TZComet" (t "TZComet")
+      ( t "This is" %% tzcomet_link ()
       %% ( match state.version_string with
          | None -> it "unknown version"
          | Some vs ->
@@ -71,9 +97,20 @@ let about_page state =
           % p (t "This is also a test/experiment in UI writing …")
           % Meta_html.Example.e1 ())
 
-let root_document () =
+let settings_page state =
   let open Meta_html in
-  let state = State.create () in
+  let open State in
+  h2 (t "Settings")
+  % Bootstrap.Form.(
+      make
+        [ check_box state.dev_mode (t "Dev-mode enabled")
+            ~help:
+              (t
+                 "Shows things that regular users should not see and \
+                  artificially slows down the application.") ])
+
+let root_document state =
+  let open Meta_html in
   Bootstrap.container ~suffix:"-fluid"
     ( navigation_menu state
     % bind_var state.page
@@ -81,5 +118,5 @@ let root_document () =
           State.Page.(
             function
             | Explorer -> t "Welcome/explorer page TODO"
-            | Settings -> t "Settings page"
+            | Settings -> settings_page state
             | About -> about_page state) )
