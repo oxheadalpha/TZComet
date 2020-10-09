@@ -940,7 +940,8 @@ let metadata_explorer state_handle =
                                                                  c ;
                                                                Var.set
                                                                  call_result
-                                                                 `In_progress ;
+                                                                 (`In_progress
+                                                                   []) ;
                                                                Lwt.async
                                                                  Lwt.(
                                                                    fun () ->
@@ -955,6 +956,28 @@ let metadata_explorer state_handle =
                                                                          michview
                                                                        ~parameter:
                                                                          node
+                                                                       ~log:(fun
+                                                                              line
+                                                                            ->
+                                                                         Var.set
+                                                                           call_result
+                                                                           (`In_progress
+                                                                             ( line
+                                                                             ::
+                                                                             ( match
+                                                                                Var
+                                                                                .value
+                                                                                call_result
+                                                                               with
+                                                                             | `In_progress
+                                                                                lines
+                                                                               ->
+                                                                                lines
+                                                                             | _
+                                                                               ->
+                                                                                []
+                                                                             )
+                                                                             )))
                                                                      >>= fun res ->
                                                                      Var.set
                                                                        call_result
@@ -978,13 +1001,31 @@ let metadata_explorer state_handle =
                                 ; Reactive.div
                                     (Var.map_to_list call_result ~f:(function
                                       | `None -> []
-                                      | `In_progress ->
-                                          [txt "Working on it …"]
-                                      | `Done (Ok mich) ->
-                                          [ Fmt.kstr txt "Done: %a"
-                                              Tezos_contract_metadata
-                                              .Contract_storage
-                                              .pp_arbitrary_micheline mich ]
+                                      | `In_progress lines ->
+                                          [ txt "Working on it …"
+                                          ; pre
+                                              [code (List.rev_map lines ~f:txt)]
+                                          ]
+                                      | `Done (Ok (mich_result, mich_storage))
+                                        ->
+                                          [ txt "OK, done:"
+                                          ; ul
+                                              [ li
+                                                  [ txt "Result: "
+                                                  ; code
+                                                      [ Fmt.kstr txt "%a"
+                                                          Tezos_contract_metadata
+                                                          .Contract_storage
+                                                          .pp_arbitrary_micheline
+                                                          mich_result ] ]
+                                              ; li
+                                                  [ txt "Current storage: "
+                                                  ; code
+                                                      [ Fmt.kstr txt "%a"
+                                                          Tezos_contract_metadata
+                                                          .Contract_storage
+                                                          .pp_arbitrary_micheline
+                                                          mich_storage ] ] ] ]
                                       | `Done (Error s) ->
                                           [Fmt.kstr txt "Error: %s" s])) ] )
                       | Rest_api_query _ -> div [txt "TODO: REST API form"]
