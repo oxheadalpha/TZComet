@@ -16,6 +16,7 @@ module H = struct
   let code ?a l = singletize H5.code ?a l
   let button ?a l = singletize H5.button ?a l
   let span ?a l = singletize H5.span ?a l
+  let small ?a l = singletize H5.span ?a l
   let a ?a l = singletize H5.a ?a l
   let div ?a l = singletize H5.div ?a l
   let h1 ?a l = singletize H5.h1 ?a l
@@ -146,7 +147,8 @@ module Bootstrap = struct
   module Navigation_bar = struct
     (* https://getbootstrap.com/docs/4.5/components/navbar/#toggler *)
     let item ?(active = Lwd.pure true) ?fragment c ~action =
-      `Item (c, (action : unit -> unit), active, (fragment : string option))
+      `Item
+        (c, (action : unit -> unit), active, (fragment : string Lwd.t option))
 
     let make ?(aria_label = "Show/Hide Navigation") ?id ~brand items =
       let open H5 in
@@ -182,11 +184,13 @@ module Bootstrap = struct
                              ~a:[classes ["nav-item"; "active"]]
                              [ a
                                  ~a:
-                                   [ classes ["nav-link"]
-                                   ; a_href
-                                       (Fmt.kstr Lwd.pure "#%a"
-                                          Fmt.(option string)
-                                          fragment); onclick_action action ]
+                                   ( [ classes ["nav-link"]
+                                     ; onclick_action action ]
+                                   @
+                                   match fragment with
+                                   | None -> []
+                                   | Some frg ->
+                                       [a_href (Lwd.map (Fmt.str "#%s") frg)] )
                                  [content] ]
                        | false ->
                            li
@@ -339,7 +343,7 @@ module Example = struct
               ~brand:(it "Examples of Meta_html")
               [ item (t "One")
                   ~action:(fun () -> dbgf "one from nav bar")
-                  ~fragment:"page-one"
+                  ~fragment:(Lwd.pure "page-one")
               ; item ~active:(Lwd.pure false) (t "One-inactive")
                   ~action:(fun () -> assert false) ])
         %

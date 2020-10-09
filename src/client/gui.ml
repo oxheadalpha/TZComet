@@ -17,24 +17,51 @@ module State = struct
   type t =
     {page: Page.t Lwd.var; version_string: string option; dev_mode: bool Lwd.var}
 
-  let create () =
-    let start_page =
-      let fragment = Js_of_ocaml.Url.Current.get_fragment () in
-      List.find all_in_order ~f:(fun page ->
-          String.equal
-            (String.lowercase (Page.to_string page))
-            ( String.chop_prefix_if_exists fragment ~prefix:"#"
-            |> String.lowercase ))
-      |> Option.value ~default:Explorer in
-    let dev_mode =
-      match
-        List.Assoc.find ~equal:String.equal Js_of_ocaml.Url.Current.arguments
-          "dev"
-      with
-      | Some "true" -> true
-      | _ -> false in
-    {page= Lwd.var start_page; version_string= None; dev_mode= Lwd.var dev_mode}
+  module Fragment = struct
+    type parsed = {page: Page.t; dev_mode: bool}
 
+    let make {page; dev_mode} =
+      let query = if not dev_mode then [] else [("dev", ["true"])] in
+      Uri.make ()
+        ~path:(Fmt.str "/%s" (Page.to_string page |> String.lowercase))
+        ~query
+      |> Uri.to_string
+
+    let parse fragment =
+      let uri = Uri.of_string (Uri.pct_decode fragment) in
+      let pagename = Uri.path uri |> String.chop_prefix_if_exists ~prefix:"/" in
+      let page =
+        List.find all_in_order ~f:(fun page ->
+            String.equal
+              (String.lowercase (Page.to_string page))
+              (pagename |> String.lowercase))
+        |> Option.value ~default:Explorer in
+      let query = Uri.query uri in
+      let dev_mode =
+        match List.Assoc.find ~equal:String.equal query "dev" with
+        | Some ["true"] -> true
+        | _ -> false in
+      {page; dev_mode}
+  end
+
+  let create () =
+    let {Fragment.page; dev_mode} =
+      let fragment = Js_of_ocaml.Url.Current.get_fragment () in
+      Fragment.parse fragment in
+    {page= Lwd.var page; version_string= None; dev_mode= Lwd.var dev_mode}
+
+  let make_fragment state =
+    (* WARNING: for now it is important for this to be attached "somewhere"
+       in the DOM. *)
+    let open Js_of_ocaml.Url in
+    let dev = Lwd.get state.dev_mode in
+    let page = Lwd.get state.page in
+    Lwd.map2' dev page (fun dev_mode page ->
+        let current = Js_of_ocaml.Url.Current.get_fragment () in
+        let now = Fragment.(make {page; dev_mode}) in
+        dbgf "Updating %S → %S" current now ;
+        Current.set_fragment now ;
+        now)
 end
 
 let tzcomet_link () =
@@ -52,13 +79,17 @@ let navigation_menu state =
       ~brand:
         (Bootstrap.label `Dark
            ( tzcomet_link ()
+           %% small
+                (Lwd.bind (make_fragment state) (fun f ->
+                     link (t "ʘ") ~target:("#" ^ f)))
            %% bind_var state.dev_mode ~f:(function
                 | true -> it "(dev)"
                 | false -> empty ()) ))
       (let of_page p =
-         let fragment = Page.to_string p in
-         item (bt fragment) ~active:(current_is_not p) ~action:(act p) ~fragment
-       in
+         let fragment = make_fragment state in
+         item
+           (bt (Page.to_string p))
+           ~active:(current_is_not p) ~action:(act p) ~fragment in
        List.map ~f:of_page all_in_order))
 
 let about_page state =

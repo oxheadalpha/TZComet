@@ -1452,6 +1452,7 @@ let lwd_onload _ =
   let doc = Gui.root_document state in
   let root = Lwd.observe doc in
   Lwd.set_on_invalidate root (fun _ ->
+      dbgf "invalidate doc" ;
       ignore
         (Dom_html.window##requestAnimationFrame
            (Js.wrap_callback (fun _ -> ignore (Lwd.quick_sample root))))) ;
