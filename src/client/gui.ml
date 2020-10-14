@@ -15,7 +15,13 @@ module State = struct
   open Page
 
   type t =
-    {page: Page.t Lwd.var; version_string: string option; dev_mode: bool Lwd.var}
+    { page: Page.t Reactive.var
+    ; version_string: string option
+    ; dev_mode: bool Reactive.var }
+
+  (* type 'a context = 'a Context.t constraint 'a = < gui: t ; .. > *)
+
+  let get (state : < gui: t ; .. > Context.t) = state#gui
 
   module Fragment = struct
     type parsed = {page: Page.t; dev_mode: bool}
@@ -48,15 +54,30 @@ module State = struct
     let {Fragment.page; dev_mode} =
       let fragment = Js_of_ocaml.Url.Current.get_fragment () in
       Fragment.parse fragment in
-    {page= Lwd.var page; version_string= None; dev_mode= Lwd.var dev_mode}
+    { page= Reactive.var page
+    ; version_string= None
+    ; dev_mode= Reactive.var dev_mode }
+
+  let version_string state = (get state).version_string
+  let set_page state p () = Reactive.set (get state).page p
+  let page state = (get state).page |> Reactive.get
+
+  let current_page_is_not state p =
+    Reactive.get (get state).page |> Reactive.map ~f:Poly.(( <> ) p)
+
+  let dev_mode state = (get state).dev_mode |> Reactive.get
+
+  let dev_mode_bidirectional state =
+    (get state).dev_mode |> Reactive.Bidirectrional.of_var
 
   let make_fragment state =
     (* WARNING: for now it is important for this to be attached "somewhere"
        in the DOM. *)
     let open Js_of_ocaml.Url in
-    let dev = Lwd.get state.dev_mode in
-    let page = Lwd.get state.page in
-    Lwd.map2' dev page (fun dev_mode page ->
+    let state = get state in
+    let dev = Reactive.get state.dev_mode in
+    let page = Reactive.get state.page in
+    Reactive.map2' dev page (fun dev_mode page ->
         let current = Js_of_ocaml.Url.Current.get_fragment () in
         let now = Fragment.(make {page; dev_mode}) in
         dbgf "Updating %S → %S" current now ;
@@ -72,24 +93,23 @@ let navigation_menu state =
   let open State in
   let open Page in
   let open Meta_html in
-  let current_is_not p = Lwd.get state.page |> Lwd.map Poly.(( <> ) p) in
-  let act p () = Lwd.set state.page p in
   Bootstrap.Navigation_bar.(
     make
       ~brand:
         (Bootstrap.label `Dark
            ( tzcomet_link ()
            %% small
-                (Lwd.bind (make_fragment state) (fun f ->
+                (Reactive.bind (make_fragment state) (fun f ->
                      link (t "ʘ") ~target:("#" ^ f)))
-           %% bind_var state.dev_mode ~f:(function
+           %% Reactive.bind (State.dev_mode state) (function
                 | true -> it "(dev)"
                 | false -> empty ()) ))
       (let of_page p =
          let fragment = make_fragment state in
          item
            (bt (Page.to_string p))
-           ~active:(current_is_not p) ~action:(act p) ~fragment in
+           ~active:(State.current_page_is_not state p)
+           ~action:(State.set_page state p) ~fragment in
        List.map ~f:of_page all_in_order))
 
 let about_page state =
@@ -99,7 +119,7 @@ let about_page state =
   h2 (t "TZComet")
   % p
       ( t "This is" %% tzcomet_link ()
-      %% ( match state.version_string with
+      %% ( match State.version_string state with
          | None -> it "unknown version"
          | Some vs ->
              t "version "
@@ -107,7 +127,7 @@ let about_page state =
                   ~target:
                     (Fmt.str "https://github.com/tqtezos/TZComet/commit/%s" vs)
                   (it vs) )
-      % bind_var state.State.dev_mode ~f:(function
+      % Reactive.bind (State.dev_mode state) (function
           | true -> t " (in “dev” mode)."
           | false -> t ".") )
   % p (t "An explorer/editor/validator/visualizer for Tezos contract metadata.")
@@ -121,7 +141,7 @@ let about_page state =
       % url ct
           "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-16/tzip-16.md"
       % t "." )
-  % bind_var state.dev_mode ~f:(function
+  % Reactive.bind (State.dev_mode state) (function
       | false -> empty ()
       | true ->
           h2 (t "Dev-mode Junk:")
@@ -134,7 +154,9 @@ let settings_page state =
   h2 (t "Settings")
   % Bootstrap.Form.(
       make
-        [ check_box state.dev_mode (t "Dev-mode enabled")
+        [ check_box
+            ~checked:(State.dev_mode_bidirectional state)
+            (t "Dev-mode enabled")
             ~help:
               (t
                  "Shows things that regular users should not see and \
@@ -144,10 +166,9 @@ let root_document state =
   let open Meta_html in
   Bootstrap.container ~suffix:"-fluid"
     ( navigation_menu state
-    % bind_var state.page
-        ~f:
-          State.Page.(
-            function
-            | Explorer -> t "Welcome/explorer page TODO"
-            | Settings -> settings_page state
-            | About -> about_page state) )
+    % Reactive.bind (State.page state)
+        State.Page.(
+          function
+          | Explorer -> t "Welcome/explorer page TODO"
+          | Settings -> settings_page state
+          | About -> about_page state) )

@@ -48,8 +48,8 @@ let button ?(a = []) ~action k =
 let onclick_action action =
   H5.a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; true))
 
-let bind_var : 'a Lwd.var -> f:('a -> 'b t) -> 'b t =
- fun v ~f -> Lwd.bind (Lwd.get v) f
+let bind_var : 'a Reactive.var -> f:('a -> 'b t) -> 'b t =
+ fun v ~f -> Reactive.bind (Reactive.get v) f
 
 let itemize ?(numbered = false) ?a_ul ?a_li l =
   (if numbered then H5.ul else H5.ol)
@@ -116,39 +116,44 @@ module Bootstrap = struct
           | `Menu_item (content, action) ->
               button
                 ~a:
-                  [ a_class (Lwd.pure ["dropdown-item"])
+                  [ a_class (Reactive.pure ["dropdown-item"])
                   ; a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; true))
                   ]
                 [content]
           | `Menu_header content ->
-              h6 ~a:[a_class (Lwd.pure ["dropdown-header"])] [content]) in
+              h6 ~a:[a_class (Reactive.pure ["dropdown-header"])] [content])
+      in
       H5.(
         let open Tyxml_lwd.Lwdom in
         div
-          ~a:[a_class (Lwd.pure ["dropdown"])]
+          ~a:[a_class (Reactive.pure ["dropdown"])]
           [ button
               ~a:
                 [ a_class
-                    (Lwd.pure
+                    (Reactive.pure
                        [ "btn"; Fmt.str "btn-%s" (Label_kind.to_string kind)
                        ; "dropdown-toggle" ])
-                  (* ; a_type (Lwd.pure `Button) *); a_id (Lwd.pure id)
-                ; a_user_data "toggle" (Lwd.pure "dropdown")
-                ; a_aria "haspopup" (Lwd.pure ["true"])
-                ; a_aria "expanded" (Lwd.pure ["false"]) ]
+                  (* ; a_type (Reactive.pure `Button) *)
+                ; a_id (Reactive.pure id)
+                ; a_user_data "toggle" (Reactive.pure "dropdown")
+                ; a_aria "haspopup" (Reactive.pure ["true"])
+                ; a_aria "expanded" (Reactive.pure ["false"]) ]
               [content]
           ; div
               ~a:
-                [ a_class (Lwd.pure ["dropdown-menu"])
-                ; a_aria "labelledby" (Lwd.pure [id]) ]
+                [ a_class (Reactive.pure ["dropdown-menu"])
+                ; a_aria "labelledby" (Reactive.pure [id]) ]
               div_items ])
   end
 
   module Navigation_bar = struct
     (* https://getbootstrap.com/docs/4.5/components/navbar/#toggler *)
-    let item ?(active = Lwd.pure true) ?fragment c ~action =
+    let item ?(active = Reactive.pure true) ?fragment c ~action =
       `Item
-        (c, (action : unit -> unit), active, (fragment : string Lwd.t option))
+        ( c
+        , (action : unit -> unit)
+        , active
+        , (fragment : string Reactive.t option) )
 
     let make ?(aria_label = "Show/Hide Navigation") ?id ~brand items =
       let open H5 in
@@ -157,28 +162,28 @@ module Bootstrap = struct
         [ button
             ~a:
               [ classes ["navbar-toggler"]
-              ; a_user_data "toggle" (Lwd.pure "collapse")
-              ; a_user_data "target" (Fmt.kstr Lwd.pure "#%s" toggler_id)
-              ; a_aria "controls" (Lwd.pure [toggler_id])
-              ; a_aria "expanded" (Lwd.pure ["false"])
-              ; a_aria "label" (Lwd.pure [aria_label]) ]
+              ; a_user_data "toggle" (Reactive.pure "collapse")
+              ; a_user_data "target" (Fmt.kstr Reactive.pure "#%s" toggler_id)
+              ; a_aria "controls" (Reactive.pure [toggler_id])
+              ; a_aria "expanded" (Reactive.pure ["false"])
+              ; a_aria "label" (Reactive.pure [aria_label]) ]
             [span ~a:[classes ["navbar-toggler-icon"]] []]
         ; a ~a:[classes ["navbar-brand"]] [brand]
         ; div
             ~a:
               [ classes ["collapse"; "navbar-collapse"]
-              ; a_id (Lwd.pure toggler_id) ]
+              ; a_id (Reactive.pure toggler_id) ]
             [ ul
                 ~a:[classes ["navbar-nav"; "mr-auto"; "mt-2"; "mt-lg-0"]]
                 (List.map items ~f:(function
                      | `Item (content, action, active, fragment) ->
                      (* a_class
-                           (Lwd.map
+                           (Reactive.map
                               (function
                                 | true -> ["nav-item"; "active"]
                                 | false -> ["nav-item"])
                               active) *)
-                     Lwd.bind active (function
+                     Reactive.bind active (function
                        | true ->
                            li
                              ~a:[classes ["nav-item"; "active"]]
@@ -190,7 +195,9 @@ module Bootstrap = struct
                                    match fragment with
                                    | None -> []
                                    | Some frg ->
-                                       [a_href (Lwd.map (Fmt.str "#%s") frg)] )
+                                       [ a_href
+                                           (Reactive.map ~f:(Fmt.str "#%s") frg)
+                                       ] )
                                  [content] ]
                        | false ->
                            li
@@ -209,8 +216,8 @@ module Bootstrap = struct
         ; help: Html_types.small_content_fun H5.elt option }
 
       type t =
-        | Input of {input: input; content: string Lwd.var}
-        | Check_box of {input: input; checked: bool Lwd.var}
+        | Input of {input: input; content: string Reactive.Bidirectrional.t}
+        | Check_box of {input: input; checked: bool Reactive.Bidirectrional.t}
         | Button of
             {label: Html_types.button_content_fun H5.elt; action: unit -> unit}
 
@@ -235,14 +242,16 @@ module Bootstrap = struct
                       [ ( match kind with
                         | `Text -> "form-control"
                         | `Checkbox -> "form-check-input" ) ]
-                  ; a_id (Lwd.pure the_id)
-                  ; a_aria "describedBy" (Lwd.pure [help_id])
-                  ; a_input_type (Lwd.pure kind) ]
+                  ; a_id (Reactive.pure the_id)
+                  ; a_aria "describedBy" (Reactive.pure [help_id])
+                  ; a_input_type (Reactive.pure kind) ]
                 @ more_a )
               () in
           let full_help =
             small
-              ~a:[a_id (Lwd.pure help_id); classes ["form-text"; "text-muted"]]
+              ~a:
+                [ a_id (Reactive.pure help_id)
+                ; classes ["form-text"; "text-muted"] ]
               (match help with None -> [] | Some h -> [h]) in
           let div_content =
             match kind with
@@ -254,7 +263,7 @@ module Bootstrap = struct
         function
         | Input {input= {label= lbl; id; help}; content} ->
             generic_input ?id ?help ~kind:`Text lbl
-              [ a_value (Lwd.get content)
+              [ a_value (Reactive.Bidirectrional.get content)
               ; a_oninput
                   (Tyxml_lwd.Lwdom.attr
                      Js_of_ocaml.(
@@ -265,26 +274,32 @@ module Bootstrap = struct
                                  let v = input##.value |> Js.to_string in
                                  dbgf "TA inputs: %d bytes: %S"
                                    (String.length v) v ;
-                                 Lwd.set content v)) ;
+                                 Reactive.Bidirectrional.set content v)) ;
                          true)) ]
         | Check_box {input= {label= lbl; id; help}; checked} ->
-            let initstatus = if Lwd.peek checked then [a_checked ()] else [] in
-            generic_input ?id ?help ~kind:`Checkbox lbl
-              ( initstatus
-              @ [ a_onclick
-                    (Tyxml_lwd.Lwdom.attr
-                       Js_of_ocaml.(
-                         fun ev ->
-                           Js.Opt.iter ev##.target (fun input ->
-                               Js.Opt.iter (Dom_html.CoerceTo.input input)
-                                 (fun input ->
-                                   let v = input##.checked |> Js.to_bool in
-                                   dbgf "checkbox → %b" v ; Lwd.set checked v)) ;
-                           true)) ] )
+            Reactive.Bidirectrional.get checked
+            |> Reactive.bind ~f:(fun init_checked ->
+                   let initstatus =
+                     if init_checked then [a_checked ()] else [] in
+                   generic_input ?id ?help ~kind:`Checkbox lbl
+                     ( initstatus
+                     @ [ a_onclick
+                           (Tyxml_lwd.Lwdom.attr
+                              Js_of_ocaml.(
+                                fun ev ->
+                                  Js.Opt.iter ev##.target (fun input ->
+                                      Js.Opt.iter
+                                        (Dom_html.CoerceTo.input input)
+                                        (fun input ->
+                                          let v =
+                                            input##.checked |> Js.to_bool in
+                                          dbgf "checkbox → %b" v ;
+                                          Reactive.Bidirectrional.set checked v)) ;
+                                  true)) ] ))
         | Button {label= lbl; action} ->
             button
               ~a:
-                [ a_button_type (Lwd.pure `Submit)
+                [ a_button_type (Reactive.pure `Submit)
                 ; classes ["btn"; "btn-primary"]
                 ; a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false))
                 ]
@@ -295,7 +310,7 @@ module Bootstrap = struct
 
     let input ?id ?help content label = Input {input= {label; id; help}; content}
 
-    let check_box ?id ?help checked label =
+    let check_box ?id ?help label ~checked =
       Check_box {input= {label; id; help}; checked}
 
     let submit_button label action = Button {action; label}
@@ -310,14 +325,14 @@ module Example = struct
   let e0 () = t "Hello" %% it "World"
 
   let e1 () =
-    let button_calls = Lwd.var 0 in
+    let button_calls = Reactive.var 0 in
     p (e0 ())
     % Bootstrap.container_fluid
         ( p (t "This is in a bootstrap" %% ct "container-fluid.")
         % p
             (Bootstrap.button ~kind:`Primary
                ~action:(fun () ->
-                 Lwd.set button_calls (Lwd.peek button_calls + 1))
+                 Reactive.set button_calls (Reactive.peek button_calls + 1))
                (bind_var button_calls ~f:(fun count ->
                     H5.span
                       [ Fmt.kstr
@@ -343,22 +358,23 @@ module Example = struct
               ~brand:(it "Examples of Meta_html")
               [ item (t "One")
                   ~action:(fun () -> dbgf "one from nav bar")
-                  ~fragment:(Lwd.pure "page-one")
-              ; item ~active:(Lwd.pure false) (t "One-inactive")
+                  ~fragment:(Reactive.pure "page-one")
+              ; item ~active:(Reactive.pure false) (t "One-inactive")
                   ~action:(fun () -> assert false) ])
         %
-        let hello = Lwd.var "is it me …" in
-        let checkboxed = Lwd.var false in
-        let submissions = Lwd.var [] in
+        let hello = Reactive.var "is it me …" in
+        let checkboxed = Reactive.var false in
+        let submissions = Reactive.var [] in
         p (t "And now some forms")
         % Bootstrap.Form.(
             make
-              [ input hello (t "Say Hello")
-              ; check_box checkboxed (t "Check this box")
+              [ input (Reactive.Bidirectrional.of_var hello) (t "Say Hello")
+              ; check_box (t "Check this box")
+                  ~checked:(Reactive.Bidirectrional.of_var checkboxed)
               ; submit_button (t "Submit This!") (fun () ->
-                    Lwd.set submissions
-                      ( (Lwd.peek hello, Lwd.peek checkboxed)
-                      :: Lwd.peek submissions )) ])
+                    Reactive.set submissions
+                      ( (Reactive.peek hello, Reactive.peek checkboxed)
+                      :: Reactive.peek submissions )) ])
         % p
             ( t "Form results:"
             %% bind_var hello ~f:(fun v -> t "Hello:" %% ct v)
@@ -377,13 +393,14 @@ module Example = struct
                             t "Submission:" %% ct h % t ","
                             %% if c then it "checked" else it "unchecked"))) ]
         %
-        let content = Lwd.var "content" in
+        let content = Reactive.var "content" in
         H5.div
           [ ( p (t "more input experiemnt" %% bind_var content ~f:ct)
             %% H5.(
                  input
                    ~a:
-                     [ a_input_type (Lwd.pure `Text); a_value (Lwd.pure "hello")
+                     [ a_input_type (Reactive.pure `Text)
+                     ; a_value (Reactive.pure "hello")
                      ; a_oninput
                          (Tyxml_lwd.Lwdom.attr
                             Js_of_ocaml.(
@@ -394,7 +411,7 @@ module Example = struct
                                         let v = input##.value |> Js.to_string in
                                         dbgf "TA inputs: %d bytes: %S"
                                           (String.length v) v ;
-                                        Lwd.set content v)) ;
+                                        Reactive.set content v)) ;
                                 false)) ]
                    ()) ) ] )
 end

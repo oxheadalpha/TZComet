@@ -1448,7 +1448,11 @@ let lwd_onload _ =
   let open Js_of_ocaml in
   let base_div = Dom_html.getElementById "attach-ui" in
   base_div##.innerHTML := Js.string "" ;
-  let state = Gui.State.create () in
+  let state =
+    let gui = Gui.State.create () in
+    object
+      method gui = gui
+    end in
   let doc = Gui.root_document state in
   let root = Lwd.observe doc in
   Lwd.set_on_invalidate root (fun _ ->

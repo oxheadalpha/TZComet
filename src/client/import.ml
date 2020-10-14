@@ -42,3 +42,21 @@ module RD = struct
     let div_of_var v ~f = Var.map_to_list v ~f |> div
   end
 end
+
+module Context = struct type 'a t = 'a constraint 'a = < .. > end
+
+module Reactive = struct
+  include Lwd
+
+  let map x ~f = map f x
+  let bind x ~f = bind x f
+
+  module Bidirectrional = struct
+    type 'a t = {lwd: 'a Lwd.t; set: 'a -> unit}
+
+    let make lwd set = {lwd; set}
+    let of_var v = make (Lwd.get v) (Lwd.set v)
+    let get v = v.lwd
+    let set v x = v.set x
+  end
+end
