@@ -117,8 +117,8 @@ module Bootstrap = struct
               button
                 ~a:
                   [ a_class (Reactive.pure ["dropdown-item"])
-                  ; a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; true))
-                  ]
+                  ; a_onclick
+                      (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false)) ]
                 [content]
           | `Menu_header content ->
               h6 ~a:[a_class (Reactive.pure ["dropdown-header"])] [content])
@@ -211,30 +211,36 @@ module Bootstrap = struct
   module Form = struct
     module Item = struct
       type input =
-        { label: Html_types.label_content_fun H5.elt
+        { label: Html_types.label_content_fun H5.elt option
         ; id: string option
         ; help: Html_types.small_content_fun H5.elt option }
 
       type t =
-        | Input of {input: input; content: string Reactive.Bidirectrional.t}
+        | Row of (int * t) list
+        | Any of Html_types.div_content_fun H5.elt
+        | Input of
+            { input: input
+            ; placeholder: string Reactive.t option
+            ; content: string Reactive.Bidirectrional.t }
         | Check_box of {input: input; checked: bool Reactive.Bidirectrional.t}
         | Button of
             {label: Html_types.button_content_fun H5.elt; action: unit -> unit}
 
-      let to_div =
+      let rec to_div ?cols =
         let open H5 in
-        let generic_input ?id ?help ~kind lbl more_a =
+        let generic_input ?id ?help ?placeholder ~kind lbl more_a =
           let the_id = Fresh_id.of_option "input-item" id in
           let help_id = the_id ^ "Help" in
           let full_label =
-            label
-              ~a:
-                [ (* shoud be for="<id>" *)
-                  classes
-                    ( match kind with
-                    | `Text -> []
-                    | `Checkbox -> ["form-check-label"] ) ]
-              [lbl] in
+            Option.value_map ~default:(empty ()) lbl ~f:(fun lbl ->
+                label
+                  ~a:
+                    [ (* shoud be for="<id>" *)
+                      classes
+                        ( match kind with
+                        | `Text -> []
+                        | `Checkbox -> ["form-check-label"] ) ]
+                  [lbl]) in
           let full_input =
             input
               ~a:
@@ -245,6 +251,8 @@ module Bootstrap = struct
                   ; a_id (Reactive.pure the_id)
                   ; a_aria "describedBy" (Reactive.pure [help_id])
                   ; a_input_type (Reactive.pure kind) ]
+                @ Option.value_map placeholder ~default:[] ~f:(fun plc ->
+                      [a_placeholder plc])
                 @ more_a )
               () in
           let full_help =
@@ -257,12 +265,23 @@ module Bootstrap = struct
             match kind with
             | `Text -> [full_label; full_input; full_help]
             | `Checkbox -> [full_input; full_label; full_help] in
+          let cols_class =
+            match cols with
+            | None -> []
+            | Some n when 1 <= n && n <= 12 -> [Fmt.str "col-md-%d" n]
+            | Some _ -> assert false in
           let div_classes =
-            match kind with `Text -> [] | `Checkbox -> ["form-check"] in
+            match kind with
+            | `Text -> cols_class
+            | `Checkbox -> "form-check" :: cols_class in
           div ~a:[classes ("form-group" :: div_classes)] div_content in
         function
-        | Input {input= {label= lbl; id; help}; content} ->
-            generic_input ?id ?help ~kind:`Text lbl
+        | Row l ->
+            div
+              ~a:[classes ["form-row"]]
+              (List.map l ~f:(fun (cols, item) -> to_div ~cols item))
+        | Input {input= {label= lbl; id; help}; placeholder; content} ->
+            generic_input ?id ?help ~kind:`Text lbl ?placeholder
               [ a_value (Reactive.Bidirectrional.get content)
               ; a_oninput
                   (Tyxml_lwd.Lwdom.attr
@@ -297,23 +316,40 @@ module Bootstrap = struct
                                           Reactive.Bidirectrional.set checked v)) ;
                                   true)) ] ))
         | Button {label= lbl; action} ->
+            let btn = ["btn"; "btn-primary"] in
+            let cls =
+              match cols with
+              | None -> Fn.id
+              | Some n -> fun x -> div ~a:[classes [Fmt.str "col-md-%d" n]] [x]
+            in
             button
               ~a:
-                [ a_button_type (Reactive.pure `Submit)
-                ; classes ["btn"; "btn-primary"]
+                [ a_button_type (Reactive.pure `Submit); classes btn
                 ; a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false))
                 ]
               [lbl]
+            |> cls
+        | Any the_div ->
+            let cls =
+              let base = ["form-group"] in
+              match cols with
+              | None -> base
+              | Some n -> Fmt.str "col-md-%d" n :: base in
+            div ~a:[classes cls] [the_div]
     end
 
     open Item
 
-    let input ?id ?help content label = Input {input= {label; id; help}; content}
+    let input ?id ?placeholder ?help ?label content =
+      Input {input= {label; id; help}; placeholder; content}
 
-    let check_box ?id ?help label ~checked =
+    let check_box ?id ?help ?label checked =
       Check_box {input= {label; id; help}; checked}
 
     let submit_button label action = Button {action; label}
+    let cell i item = (i, item)
+    let row l = Row l
+    let magic d = Any d
 
     let make items =
       let div_items = List.map ~f:Item.to_div items in
@@ -368,9 +404,11 @@ module Example = struct
         p (t "And now some forms")
         % Bootstrap.Form.(
             make
-              [ input (Reactive.Bidirectrional.of_var hello) (t "Say Hello")
-              ; check_box (t "Check this box")
-                  ~checked:(Reactive.Bidirectrional.of_var checkboxed)
+              [ input
+                  (Reactive.Bidirectrional.of_var hello)
+                  ~label:(t "Say Hello")
+              ; check_box ~label:(t "Check this box")
+                  (Reactive.Bidirectrional.of_var checkboxed)
               ; submit_button (t "Submit This!") (fun () ->
                     Reactive.set submissions
                       ( (Reactive.peek hello, Reactive.peek checkboxed)
