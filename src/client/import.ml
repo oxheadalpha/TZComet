@@ -50,6 +50,8 @@ module Reactive = struct
 
   let map x ~f = map f x
   let bind x ~f = bind x f
+  let ( ** ) = pair
+  let split_var v = (get v, set v)
 
   module Bidirectrional = struct
     type 'a t = {lwd: 'a Lwd.t; set: 'a -> unit}

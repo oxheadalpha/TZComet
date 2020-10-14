@@ -84,6 +84,13 @@ module Bootstrap = struct
       ~a:[classes ["alert"; Fmt.str "alert-%s" (Label_kind.to_string kind)]]
       [content]
 
+  let color kind content =
+    H5.span
+      ~a:[classes [Fmt.str "text-%s" (Label_kind.to_string kind)]]
+      [content]
+
+  let monospace content = H5.span ~a:[classes ["text-monospace"]] [content]
+
   let button ?(kind = `Light) content ~action =
     button ~action
       ~a:[classes ["btn"; Fmt.str "btn-%s" (Label_kind.to_string kind)]]
@@ -141,7 +148,8 @@ module Bootstrap = struct
               [content]
           ; div
               ~a:
-                [ a_class (Reactive.pure ["dropdown-menu"])
+                [ a_class
+                    (Reactive.pure ["dropdown-menu"; "dropdown-menu-lg-right"])
                 ; a_aria "labelledby" (Reactive.pure [id]) ]
               div_items ])
   end
@@ -224,9 +232,11 @@ module Bootstrap = struct
             ; content: string Reactive.Bidirectrional.t }
         | Check_box of {input: input; checked: bool Reactive.Bidirectrional.t}
         | Button of
-            {label: Html_types.button_content_fun H5.elt; action: unit -> unit}
+            { label: Html_types.button_content_fun H5.elt
+            ; active: bool Reactive.t
+            ; action: unit -> unit }
 
-      let rec to_div ?cols =
+      let rec to_div ?(enter_action = fun () -> ()) ?cols =
         let open H5 in
         let generic_input ?id ?help ?placeholder ~kind lbl more_a =
           let the_id = Fresh_id.of_option "input-item" id in
@@ -250,7 +260,14 @@ module Bootstrap = struct
                         | `Checkbox -> "form-check-input" ) ]
                   ; a_id (Reactive.pure the_id)
                   ; a_aria "describedBy" (Reactive.pure [help_id])
-                  ; a_input_type (Reactive.pure kind) ]
+                  ; a_onkeydown
+                      (Tyxml_lwd.Lwdom.attr (fun ev ->
+                           dbgf "keycode: %d" ev##.keyCode ;
+                           match ev##.keyCode with
+                           | 13 when not (Js_of_ocaml.Js.to_bool ev##.shiftKey)
+                             ->
+                               enter_action () ; false
+                           | _ -> true)); a_input_type (Reactive.pure kind) ]
                 @ Option.value_map placeholder ~default:[] ~f:(fun plc ->
                       [a_placeholder plc])
                 @ more_a )
@@ -279,7 +296,8 @@ module Bootstrap = struct
         | Row l ->
             div
               ~a:[classes ["form-row"]]
-              (List.map l ~f:(fun (cols, item) -> to_div ~cols item))
+              (List.map l ~f:(fun (cols, item) ->
+                   to_div ~enter_action ~cols item))
         | Input {input= {label= lbl; id; help}; placeholder; content} ->
             generic_input ?id ?help ~kind:`Text lbl ?placeholder
               [ a_value (Reactive.Bidirectrional.get content)
@@ -315,20 +333,24 @@ module Bootstrap = struct
                                           dbgf "checkbox → %b" v ;
                                           Reactive.Bidirectrional.set checked v)) ;
                                   true)) ] ))
-        | Button {label= lbl; action} ->
+        | Button {label= lbl; active; action} ->
             let btn = ["btn"; "btn-primary"] in
             let cls =
               match cols with
               | None -> Fn.id
               | Some n -> fun x -> div ~a:[classes [Fmt.str "col-md-%d" n]] [x]
             in
-            button
-              ~a:
-                [ a_button_type (Reactive.pure `Submit); classes btn
-                ; a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false))
-                ]
-              [lbl]
-            |> cls
+            Reactive.bind active ~f:(fun is_active ->
+                let a =
+                  let base =
+                    [a_button_type (Reactive.pure `Submit); classes btn] in
+                  match is_active with
+                  | true ->
+                      a_onclick
+                        (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false))
+                      :: base
+                  | false -> a_disabled () :: base in
+                button ~a [lbl] |> cls)
         | Any the_div ->
             let cls =
               let base = ["form-group"] in
@@ -346,13 +368,15 @@ module Bootstrap = struct
     let check_box ?id ?help ?label checked =
       Check_box {input= {label; id; help}; checked}
 
-    let submit_button label action = Button {action; label}
+    let submit_button ?(active = Reactive.pure true) label action =
+      Button {action; active; label}
+
     let cell i item = (i, item)
     let row l = Row l
     let magic d = Any d
 
-    let make items =
-      let div_items = List.map ~f:Item.to_div items in
+    let make ?enter_action items =
+      let div_items = List.map ~f:(Item.to_div ?enter_action) items in
       H5.form div_items
   end
 end

@@ -1,6 +1,25 @@
 open Import
 
 module Uri = struct
+  let validate uri_code =
+    let open Tezos_contract_metadata.Metadata_uri in
+    let errors = ref [] in
+    let error w src e = errors := (w, src, e) :: !errors in
+    let validate_kt1_address s =
+      ( try ignore (B58_hashes.check_b58_kt1_hash s) with
+      | Failure f -> error `Address s f
+      | e -> Fmt.kstr (error `Address s) "%a" Exn.pp e ) ;
+      Ok () in
+    let validate_network = function
+      | "mainnet" | "carthagenet" | "delphinet" | "dalphanet" | "zeronet" ->
+          Ok ()
+      | s ->
+          ( try ignore (B58_hashes.check_b58_chain_id_hash s) with
+          | Failure f -> error `Network s f
+          | e -> Fmt.kstr (error `Network s) "%a" Exn.pp e ) ;
+          Ok () in
+    Uri.of_string uri_code |> of_uri ~validate_kt1_address ~validate_network
+
   let rec to_html uri =
     let open RD in
     let open Tezos_contract_metadata.Metadata_uri in

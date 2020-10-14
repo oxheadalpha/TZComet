@@ -17,17 +17,22 @@ module State = struct
   type t =
     { page: Page.t Reactive.var
     ; version_string: string option
-    ; dev_mode: bool Reactive.var }
+    ; dev_mode: bool Reactive.var
+    ; explorer_input: string Reactive.var }
 
   (* type 'a context = 'a Context.t constraint 'a = < gui: t ; .. > *)
 
   let get (state : < gui: t ; .. > Context.t) = state#gui
 
   module Fragment = struct
-    type parsed = {page: Page.t; dev_mode: bool}
+    type parsed = {page: Page.t; dev_mode: bool; explorer_input: string}
 
-    let make {page; dev_mode} =
-      let query = if not dev_mode then [] else [("dev", ["true"])] in
+    let make {page; dev_mode; explorer_input} =
+      let query =
+        match explorer_input with
+        | "" -> []
+        | more -> [("explorer-input", [more])] in
+      let query = if not dev_mode then query else ("dev", ["true"]) :: query in
       Uri.make ()
         ~path:(Fmt.str "/%s" (Page.to_string page |> String.lowercase))
         ~query
@@ -43,20 +48,22 @@ module State = struct
               (pagename |> String.lowercase))
         |> Option.value ~default:Explorer in
       let query = Uri.query uri in
+      let in_query = List.Assoc.find ~equal:String.equal query in
       let dev_mode =
-        match List.Assoc.find ~equal:String.equal query "dev" with
-        | Some ["true"] -> true
-        | _ -> false in
-      {page; dev_mode}
+        match in_query "dev" with Some ["true"] -> true | _ -> false in
+      let explorer_input =
+        match in_query "explorer-input" with Some [one] -> one | _ -> "" in
+      {page; dev_mode; explorer_input}
   end
 
   let create () =
-    let {Fragment.page; dev_mode} =
+    let {Fragment.page; dev_mode; explorer_input} =
       let fragment = Js_of_ocaml.Url.Current.get_fragment () in
       Fragment.parse fragment in
     { page= Reactive.var page
     ; version_string= None
-    ; dev_mode= Reactive.var dev_mode }
+    ; dev_mode= Reactive.var dev_mode
+    ; explorer_input= Reactive.var explorer_input }
 
   let version_string state = (get state).version_string
   let set_page state p () = Reactive.set (get state).page p
@@ -70,6 +77,13 @@ module State = struct
   let dev_mode_bidirectional state =
     (get state).dev_mode |> Reactive.Bidirectrional.of_var
 
+  let explorer_input state = (get state).explorer_input |> Reactive.get
+  let explorer_input_value state = (get state).explorer_input |> Reactive.peek
+  let set_explorer_input state = (get state).explorer_input |> Reactive.set
+
+  let explorer_input_bidirectional state =
+    (get state).explorer_input |> Reactive.Bidirectrional.of_var
+
   let make_fragment state =
     (* WARNING: for now it is important for this to be attached "somewhere"
        in the DOM. *)
@@ -77,12 +91,14 @@ module State = struct
     let state = get state in
     let dev = Reactive.get state.dev_mode in
     let page = Reactive.get state.page in
-    Reactive.map2' dev page (fun dev_mode page ->
-        let current = Js_of_ocaml.Url.Current.get_fragment () in
-        let now = Fragment.(make {page; dev_mode}) in
-        dbgf "Updating %S → %S" current now ;
-        Current.set_fragment now ;
-        now)
+    let explorer_input = Reactive.get state.explorer_input in
+    Reactive.(dev ** page ** explorer_input)
+    |> Reactive.map ~f:(fun (dev_mode, (page, explorer_input)) ->
+           let current = Js_of_ocaml.Url.Current.get_fragment () in
+           let now = Fragment.(make {page; dev_mode; explorer_input}) in
+           dbgf "Updating %S → %S" current now ;
+           Current.set_fragment now ;
+           now)
 end
 
 let tzcomet_link () =
@@ -162,44 +178,76 @@ let settings_page state =
                  "Shows things that regular users should not see and \
                   artificially slows down the application.") ])
 
-let explorer_page state =
-  let open Meta_html in
-  let explorer_input = Reactive.var "" in
-  let contract_examples =
-    [ ( "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
-      , "Contract with metadata on Carthagenet." )
-    ; ("KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2", "Should not exist any where.") ]
-  in
-  let uri_examples =
-    [ ( "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9/here"
-      , "An on-chain pointer to metadata." )
-    ; ( "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
-      , "An IPFS URI to metadata JSON." ) ] in
-  h2 (t "Contract Metadata Explorer")
-  % Bootstrap.Form.(
-      make
-        [ row
-            [ cell 6
-                (input
-                   ~placeholder:
-                     (Reactive.pure
-                        "Enter a contract address or a metadata URI")
-                   (Reactive.Bidirectrional.of_var explorer_input)
-                   ~help:(t "Can be a metadata URI or a contract address."))
-            ; cell 2
-                (magic
-                   Bootstrap.Dropdown_menu.(
-                     let example (v, msg) =
-                       item
-                         (ct v %% t "→" %% it msg)
-                         ~action:(fun () -> Reactive.set explorer_input v) in
-                     button (t "Or pick an example")
-                       ( [header (t "KT1 Contracts")]
-                       @ List.map contract_examples ~f:example
-                       @ [header (t "TZIP-16 URIs")]
-                       @ List.map uri_examples ~f:example ))) ]
-        ; submit_button (t "Go!") (fun () ->
-              dbgf "Form submitted with %s" (Reactive.peek explorer_input)) ])
+module Explorer = struct
+  let input_valid state =
+    Reactive.map (State.explorer_input state) ~f:(fun input_value ->
+        match B58_hashes.check_b58_kt1_hash input_value with
+        | _ -> `KT1 input_value
+        | exception _ -> (
+          match Contract_metadata.Uri.validate input_value with
+          | Ok uri -> `Uri (input_value, uri)
+          | Error e -> `Error (input_value, e) ))
+
+  let input_validation_status state =
+    let open Meta_html in
+    let cct txt = Bootstrap.monospace (Fmt.kstr t "‘%s’" txt) in
+    Reactive.bind (input_valid state) ~f:(function
+      | `KT1 k ->
+          cct k %% t "is a valid KT1 address" |> Bootstrap.color `Success
+      | `Uri (txt, _) ->
+          cct txt %% t "is a valid TZIP-16 URI" |> Bootstrap.color `Success
+      | `Error ("", _) -> t "Can be a metadata URI or a contract address."
+      | `Error (txt, _) ->
+          cct txt %% t "is a not a valid address nor a TZIP-16 URI"
+          |> Bootstrap.color `Danger)
+
+  let page state =
+    let open Meta_html in
+    let contract_examples =
+      [ ( "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
+        , "Contract with metadata on Carthagenet." )
+      ; ("KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2", "Should not exist any where.")
+      ] in
+    let uri_examples =
+      [ ( "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9/here"
+        , "An on-chain pointer to metadata." )
+      ; ( "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
+        , "An IPFS URI to metadata JSON." ) ] in
+    h2 (t "Contract Metadata Explorer")
+    % Bootstrap.Form.(
+        let enter_action () =
+          dbgf "Form submitted with %s" (State.explorer_input_value state) in
+        make
+          [ row
+              [ cell 2
+                  (magic
+                     Bootstrap.Dropdown_menu.(
+                       let example (v, msg) =
+                         item
+                           (ct v %% t "→" %% it msg)
+                           ~action:(fun () -> State.set_explorer_input state v)
+                       in
+                       button (t "Examples 💡 ")
+                         ( [header (t "KT1 Contracts")]
+                         @ List.map contract_examples ~f:example
+                         @ [header (t "TZIP-16 URIs")]
+                         @ List.map uri_examples ~f:example )))
+              ; cell 8
+                  (input
+                     ~placeholder:
+                       (Reactive.pure
+                          "Enter a contract address or a metadata URI")
+                     (State.explorer_input_bidirectional state)
+                     ~help:(input_validation_status state))
+              ; cell 2
+                  (submit_button (t "Go!")
+                     ~active:
+                       ( input_valid state
+                       |> Reactive.map ~f:(function
+                            | `Error _ -> false
+                            | _ -> true) )
+                     enter_action) ] ])
+end
 
 let root_document state =
   let open Meta_html in
@@ -208,6 +256,6 @@ let root_document state =
     % Reactive.bind (State.page state)
         State.Page.(
           function
-          | Explorer -> explorer_page state
+          | Explorer -> Explorer.page state
           | Settings -> settings_page state
           | About -> about_page state) )
