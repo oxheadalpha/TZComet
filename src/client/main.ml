@@ -1,97 +1,5 @@
 open Import
 
-module State = struct
-  module View = struct
-    type t =
-      | Welcome
-      | Metadata_json_editor
-      | Metadata_uri_editor
-      | Michelson_bytes_parser
-      | Metadata_explorer
-
-    let to_string = function
-      | Welcome -> "Welcome"
-      | Metadata_json_editor -> "Metadata_json_editor"
-      | Metadata_uri_editor -> "Metadata_uri_editor"
-      | Michelson_bytes_parser -> "Michelson_bytes_parser"
-      | Metadata_explorer -> "Metadata_explorer"
-
-    let of_string = function
-      | "Welcome" -> Welcome
-      | "Metadata_json_editor" -> Metadata_json_editor
-      | "Metadata_uri_editor" -> Metadata_uri_editor
-      | "Michelson_bytes_parser" -> Michelson_bytes_parser
-      | "Metadata_explorer" -> Metadata_explorer
-      | other -> Fmt.failwith "View.of_string: %S" other
-  end
-
-  type t =
-    { dev_mode: bool
-    ; current_view: View.t Var.t
-    ; explorer_address_input: string Var.t
-    ; start_fetching_address: bool Var.t
-    ; explorer_uri_input: string Var.t
-    ; start_fetching_uri: bool Var.t }
-
-  let kt1_with_metadata = "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
-
-  let init ~arguments () =
-    let arg s = List.Assoc.find arguments ~equal:String.equal s in
-    let is_true s =
-      let ( = ) = Option.equal String.equal in
-      arg s = Some "true" in
-    let dev_mode = is_true "dev" in
-    let fetch_uri = is_true "fetch_uri" in
-    let fetch_address = is_true "fetch_address" in
-    let initial_view =
-      match arg "tab" with
-      | Some s -> (
-        try View.of_string s
-        with e ->
-          dbgf "Wrong view name: %a" Exn.pp e ;
-          View.Welcome )
-      | None -> View.Welcome in
-    let initial_explorer_address =
-      arg "explorer_address" |> Option.value ~default:kt1_with_metadata in
-    let initial_explorer_uri =
-      arg "explorer_uri"
-      |> Option.value ~default:"https://example.com/my_contract/metadata.json"
-    in
-    let explorer_address_input =
-      Var.create "explorer_address_input" initial_explorer_address in
-    let explorer_uri_input =
-      Var.create "explorer_uri_input" initial_explorer_uri in
-    { current_view= Var.create "current-view" initial_view
-    ; dev_mode
-    ; explorer_address_input
-    ; explorer_uri_input
-    ; start_fetching_uri= Var.create "start_fetching_uri" fetch_uri
-    ; start_fetching_address= Var.create "start_fetching_address" fetch_address
-    }
-
-  let go_to_explorer state ?uri ?address () =
-    Option.iter address ~f:(fun a ->
-        Var.set state.explorer_address_input a ;
-        Var.set state.start_fetching_address true) ;
-    Option.iter uri ~f:(fun u ->
-        Var.set state.explorer_uri_input u ;
-        Var.set state.start_fetching_uri true) ;
-    Var.set state.current_view View.Metadata_explorer
-
-  let should_start_fetching_address state =
-    let should_i = Var.value state.start_fetching_address in
-    Var.set state.start_fetching_address false ;
-    should_i
-
-  let should_start_fetching_uri state =
-    let should_i = Var.value state.start_fetching_uri in
-    Var.set state.start_fetching_uri false ;
-    should_i
-
-  let slow_step s =
-    if s.dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5 else Lwt.return ()
-end
-
 module Menu = struct
   type item =
     { message: Html_types.flow5_without_interactive RD.elt
@@ -147,130 +55,6 @@ module Menu = struct
              ( try dbgf "active: %b" (Var.value active)
                with _ -> dbgf "so, it's “active”" ) ;
              li [txt "error"]))
-end
-
-module B58_hashes = struct
-  module B58_crypto = struct
-    let sha256 s = Digestif.SHA256.(to_raw_string (digest_string s))
-  end
-
-  let script_expr_hash =
-    (* Taken from src/proto_006_PsCARTHA/lib_protocol/script_expr_hash.ml *)
-    (* expr(54) *)
-    "\013\044\064\027"
-
-  let contract_hash =
-    (* src/proto_006_PsCARTHA/lib_protocol/contract_hash.ml KT1(36) *)
-    "\002\090\121"
-
-  let chain_id = (* src/lib_crypto/base58.ml *) "\087\082\000"
-  let protocol_hash = "\002\170" (* P(51) *)
-
-  let blake2b32 = Digestif.blake2b 32
-
-  let blake2b x =
-    Digestif.digest_string blake2b32 x |> Digestif.to_raw_string blake2b32
-
-  let b58 s = Base58.of_bytes (module B58_crypto) s |> Base58.to_string
-
-  let unb58 s =
-    Base58.of_string_exn (module B58_crypto) s
-    |> Base58.to_bytes (module B58_crypto)
-
-  let b58_script_id_hash s = b58 (script_expr_hash ^ blake2b s)
-
-  let check_b58_hash ~prefix ~size s =
-    let ppstring ppf s =
-      let open Fmt in
-      pf ppf "[%d→0x%a]" (String.length s) Hex.pp (Hex.of_string s) in
-    let optry o k =
-      Fmt.kstr
-        (fun message ->
-          match o () with
-          | Some s -> s
-          | None -> Fmt.failwith "%s" message
-          | exception e -> Fmt.failwith "%s (%a)" message Exn.pp e)
-        k in
-    String.mapi s ~f:(fun idx c ->
-        let bitcoin =
-          "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
-        if String.mem bitcoin c then '\x00'
-        else
-          Fmt.failwith
-            "Invalid character '%c' at position %d in supposedly base-58 %S" c
-            idx s)
-    |> ignore ;
-    let b58 =
-      optry
-        (fun () -> Base58.of_string (module B58_crypto) s)
-        "Cannot decode base58 from %S" s in
-    dbgf "base58: %a" Base58.pp b58 ;
-    let data =
-      optry
-        (fun () -> Base58.to_bytes (module B58_crypto) b58)
-        "Cannot get data from base58 %a" Base58.pp b58 in
-    dbgf "data: %a" ppstring data ;
-    dbgf "prefix: %a" ppstring prefix ;
-    if not (String.is_prefix data ~prefix) then
-      Fmt.failwith "Wrong prefix for data 0x%a, expecting 0x%a" Hex.pp
-        (Hex.of_string data) Hex.pp (Hex.of_string prefix) ;
-    let hashpart =
-      optry
-        (fun () -> String.chop_prefix data ~prefix)
-        "Wrong refix AGAIN??? %S %S" data prefix in
-    dbgf "hash: %a" ppstring hashpart ;
-    optry
-      (fun () -> Digestif.of_raw_string_opt (Digestif.blake2b size) hashpart)
-      "This is not a blake2b hash: %a" ppstring hashpart
-
-  let check_b58_kt1_hash s = check_b58_hash ~prefix:contract_hash ~size:20 s
-  let check_b58_chain_id_hash s = check_b58_hash ~prefix:chain_id ~size:4 s
-
-  let check_b58_protocol_hash s =
-    check_b58_hash ~prefix:protocol_hash ~size:32 s
-
-  let b58_script_id_hash_of_michelson_string s =
-    b58_script_id_hash ("\x05" ^ Michelson_bytes.encode_michelson_string s)
-
-  let crypto_test () =
-    dbgf "TRYING BLAKE2B: %s"
-      (let dgst = Digestif.digest_string (Digestif.blake2b 32) "" in
-       Digestif.to_hex (Digestif.blake2b 32) dgst) ;
-    dbgf "TRYING base58: %a %S"
-      Fmt.(Dump.option Base58.pp)
-      (Base58.of_string
-         (module B58_crypto)
-         "expru5X1yxJG6ezR2uHMotwMLNmSzQyh5t1vUnhjx4cS6Pv9qE1Sdo")
-      ( Base58.of_string_exn
-          (module B58_crypto)
-          "expru5X1yxJG6ezR2uHMotwMLNmSzQyh5t1vUnhjx4cS6Pv9qE1Sdo"
-      |> Base58.to_bytes (module B58_crypto)
-      |> Option.value_map ~default:"EEEERRRROR" ~f:(fun x ->
-             let (`Hex h) = Hex.of_string x in
-             h) ) ;
-    let michelson_string_expr_hash s =
-      dbgf "mseh: %S" s ;
-      let bytes = Michelson_bytes.encode_michelson_string s in
-      let ppb ppf b =
-        let (`Hex hx) = Hex.of_string b in
-        Fmt.pf ppf "0x%s" hx in
-      dbgf "bytes: %a" ppb bytes ;
-      let dgst x =
-        Digestif.digest_string (Digestif.blake2b 32) x
-        |> Digestif.to_raw_string (Digestif.blake2b 32) in
-      let b58 s = Base58.of_bytes (module B58_crypto) s |> Base58.to_string in
-      dbgf "digest raw: %a -> %s (%s)" ppb (dgst bytes)
-        (b58 (dgst bytes))
-        (Base58.raw_encode (dgst bytes)) ;
-      let with05 = "\x05" ^ bytes in
-      dbgf "digest-05: %a → %s [%s]" ppb (dgst with05)
-        (b58 (dgst with05))
-        (Base58.raw_encode (dgst with05)) ;
-      dbgf "digest-pfx: %a → %s" ppb (dgst with05)
-        (b58 (script_expr_hash ^ dgst with05)) in
-    michelson_string_expr_hash "" ;
-    michelson_string_expr_hash "foo" ;
-    ()
 end
 
 let sizing_table sizes =
@@ -383,10 +167,15 @@ let welcome_page ?version_string state ~menu_welcome =
     ; p
         [ txt
             "The Contract Metadata standard, a.k.a. TZIP-16, is currently \
-             being drafted in the merge-request: "
+             currently work-in-progress: "
         ; a
-            ~a:[a_href "https://gitlab.com/tzip/tzip/-/merge_requests/76"]
-            [txt "tzip/tzip!76"]; txt "." ] ]
+            ~a:
+              [ a_href
+                  "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-16/tzip-16.md"
+              ]
+            [ txt
+                "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-16/tzip-16.md"
+            ]; txt "." ] ]
 
 let rec show_tezos_error =
   let open RD in
@@ -489,7 +278,7 @@ let metadata_uri_editor_page state ~metadata_uri_editor ~metadata_uri_code =
     let hash_of_https_ok =
       (* `sha256sum data/metadata_example0.json` → Achtung, the URL
          above takes about 5 minutes to be up to date with `master` *)
-      "7baf4143a2afbd2682395cda14c9d29e78dee2b5cf7bb544bb434a6a4ac31794" in
+      "7d961916f05d72afc765389a695458a9b451954419b41fa3cdd5fa816128b744" in
     let ex name u = (name, Uri.to_string u) in
     [ ex "In KT1 Storage"
         (Uri.make ~scheme:"tezos-storage" ~host:State.kt1_with_metadata
@@ -751,270 +540,6 @@ let michelson_bytes_editor_page _state ~michelson_bytes_editor
             [ big_answer `Error [txt "There were parsing/validation errors:"]
             ; pre [code [txt s]] ]) in
   [editor_with_preview michelson_bytes_editor ~examples result_div]
-
-module Tezos_nodes = struct
-  module Node_status = struct
-    type t = Uninitialized | Non_responsive of string | Ready of string
-  end
-
-  open Node_status
-
-  module Node = struct
-    type t =
-      {name: string; prefix: string; status: (float * Node_status.t) Var.t}
-
-    let create name prefix =
-      {name; prefix; status= Var.create "node-status" (0., Uninitialized)}
-
-    let rpc_get node path =
-      let open Lwt in
-      let uri = Fmt.str "%s/%s" node.prefix path in
-      Js_of_ocaml_lwt.XmlHttpRequest.(
-        get uri
-        >>= fun frame ->
-        dbgf "%s %s code: %d" node.prefix path frame.code ;
-        match frame.code with
-        | 200 -> return frame.content
-        | other -> Fmt.failwith "Getting %S returned code: %d" path other)
-
-    let ping node =
-      let open Lwt in
-      Js_of_ocaml_lwt.XmlHttpRequest.(
-        Fmt.kstr get "%s/chains/main/blocks/head/metadata" node.prefix
-        >>= fun frame ->
-        dbgf "%s metadata code: %d" node.name frame.code ;
-        let new_status =
-          match frame.code with
-          | 200 ->
-              dbgf "%s metadata content: %s" node.name frame.content ;
-              Ready frame.content
-          | other -> Non_responsive (Fmt.str "Return-code: %d" other) in
-        return new_status)
-
-    let micheline_of_json s =
-      let json =
-        match Ezjsonm.value_from_string s with
-        | `O (("code", code) :: _) -> code
-        | other -> other in
-      let enc =
-        Tezos_micheline.Micheline.canonical_encoding ~variant:"custom"
-          Data_encoding.string in
-      let mich = Data_encoding.Json.destruct enc json in
-      Tezos_micheline.Micheline.root mich
-
-    let metadata_big_map state_handle node ~address ~log =
-      let open Lwt in
-      let get = rpc_get node in
-      let log fmt = Fmt.kstr log fmt in
-      Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/storage"
-        address
-      >>= fun storage_string ->
-      log "Got raw storage: %s" storage_string ;
-      let mich_storage = micheline_of_json storage_string in
-      log "As concrete: %a"
-        Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
-        mich_storage ;
-      State.slow_step state_handle
-      >>= fun () ->
-      Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/script"
-        address
-      >>= fun script_string ->
-      log "Got raw script: %s…" (String.prefix script_string 30) ;
-      let mich_storage_type =
-        micheline_of_json script_string
-        |> Tezos_micheline.Micheline.strip_locations
-        |> Tezos_contract_metadata.Contract_storage.get_storage_type_exn in
-      log "Storage type: %a"
-        Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
-        mich_storage_type ;
-      State.slow_step state_handle
-      >>= fun () ->
-      let bgs =
-        Tezos_contract_metadata.Contract_storage.find_metadata_big_maps
-          ~storage_node:mich_storage ~type_node:mich_storage_type in
-      match bgs with
-      | [] -> Fmt.failwith "Contract has no valid %%metadata big-map!"
-      | _ :: _ :: _ ->
-          Fmt.failwith "Contract has too many %%metadata big-maps: %s"
-            ( oxfordize_list bgs ~map:Z.to_string
-                ~sep:(fun () -> ",")
-                ~last_sep:(fun () -> ", and ")
-            |> String.concat ~sep:"" )
-      | [one] -> return one
-
-    let bytes_value_of_big_map_at_string node ~big_map_id ~key ~log =
-      let open Lwt in
-      let hash_string = B58_hashes.b58_script_id_hash_of_michelson_string key in
-      Fmt.kstr (rpc_get node) "/chains/main/blocks/head/context/big_maps/%s/%s"
-        (Z.to_string big_map_id) hash_string
-      >>= fun bytes_raw_value ->
-      Fmt.kstr log "bytes raw value: %s" bytes_raw_value ;
-      let content =
-        match Ezjsonm.value_from_string bytes_raw_value with
-        | `O [("bytes", `String b)] -> Hex.to_string (`Hex b)
-        | _ -> Fmt.failwith "Cannot find bytes in %s" bytes_raw_value in
-      return content
-  end
-
-  type t =
-    { nodes: Node.t list Var.t
-    ; wake_up_call: unit Lwt_condition.t
-    ; loop_started: bool Var.t
-    ; loop_interval: float Var.t }
-
-  let create nodes =
-    { nodes=
-        Var.create "list-of-nodes" nodes
-          ~eq:(List.equal Node.(fun na nb -> String.equal na.prefix nb.prefix))
-    ; wake_up_call= Lwt_condition.create ()
-    ; loop_started= Var.create "loop-started" false
-    ; loop_interval= Var.create "loop-interval" 10. }
-
-  let nodes t = t.nodes
-
-  let _global =
-    create
-      [ Node.create "Carthagenet-GigaNode" "https://testnet-tezos.giganode.io"
-      ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
-      ; Node.create "Dalphanet-GigaNode" "https://dalphanet-tezos.giganode.io"
-      ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
-      ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
-      ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io" ]
-
-  let wake_up_update_loop t = Lwt_condition.broadcast t.wake_up_call ()
-
-  let start_update_loop t =
-    let open Lwt in
-    ignore_result
-      (let rec loop count =
-         let sleep_time = Var.value t.loop_interval in
-         dbgf "update-loop %d (%f s)" count sleep_time ;
-         Var.value t.nodes
-         |> List.fold ~init:return_unit ~f:(fun prevm nod ->
-                prevm
-                >>= fun () ->
-                catch
-                  (fun () ->
-                    pick
-                      [ ( Js_of_ocaml_lwt.Lwt_js.sleep 5.
-                        >>= fun () ->
-                        dbgf "%s timeout in start_update_loop" nod.Node.name ;
-                        return (Non_responsive "Time-out while getting status")
-                        )
-                      ; ( Node.ping nod
-                        >>= fun res ->
-                        dbgf "%s returned to start_update_loop" nod.name ;
-                        return res ) ])
-                  (fun e ->
-                    return (Non_responsive (Fmt.str "Error: %a" Exn.pp e)))
-                >>= fun new_status ->
-                dbgf "got status for %s" nod.name ;
-                let now = (new%js Js_of_ocaml.Js.date_now)##valueOf in
-                Var.set nod.status (now, new_status) ;
-                return ())
-         >>= fun () ->
-         pick
-           [ Js_of_ocaml_lwt.Lwt_js.sleep sleep_time
-           ; Lwt_condition.wait t.wake_up_call ]
-         >>= fun () ->
-         Var.set t.loop_interval (Float.min (sleep_time *. 1.4) 90.) ;
-         loop (count + 1) in
-       loop 0)
-
-  let ensure_update_loop t =
-    match Var.value t.loop_started with
-    | true -> ()
-    | false ->
-        start_update_loop t ;
-        Var.set t.loop_started true
-
-  let find_node_with_contract node_list addr =
-    let open Lwt in
-    catch
-      (fun () ->
-        Lwt_list.find_s
-          (fun node ->
-            catch
-              (fun () ->
-                Fmt.kstr (Node.rpc_get node)
-                  "/chains/main/blocks/head/context/contracts/%s/storage" addr
-                >>= fun _ -> return_true)
-              (fun _ -> return_false))
-          (nodes node_list |> Var.value))
-      (fun _ -> Fmt.failwith "Cannot find a node that knows about %S" addr)
-
-  let metadata_value state_handle nodes ~address ~key ~log =
-    let open Lwt in
-    let logf f = Fmt.kstr log f in
-    find_node_with_contract nodes address
-    >>= fun node ->
-    logf "Found contract with node %S" node.name ;
-    Node.metadata_big_map state_handle node ~address ~log
-    >>= fun big_map_id ->
-    logf "Metadata big-map: %s" (Z.to_string big_map_id) ;
-    Node.bytes_value_of_big_map_at_string node ~big_map_id ~key ~log
-
-  let table_of_statuses node_list =
-    let open RD in
-    let node_status node =
-      let node_metadata _date json =
-        let open Ezjsonm in
-        try
-          let j = value_from_string json in
-          let field f j =
-            try List.Assoc.find_exn ~equal:String.equal (get_dict j) f
-            with _ ->
-              Fmt.failwith "Cannot find %S in %s" f
-                (value_to_string ~minify:true j) in
-          code ~a:[ (* Fmt.kstr a_ "%.03f" date *) ]
-            [ Fmt.kstr txt "Level: %d"
-                (field "level" j |> field "level" |> get_int) ]
-        with e ->
-          code [Fmt.kstr txt "Failed to parse the Metadata JSON: %a" Exn.pp e]
-      in
-      Reactive.div
-        (Var.map_to_list node.Node.status
-           ~f:
-             Node_status.(
-               fun (date, status) ->
-                 let show s = [code [s]] in
-                 match status with
-                 | Uninitialized -> show (txt "Uninitialized")
-                 | Non_responsive reason ->
-                     show (Fmt.kstr txt "Non-responsive: %s" reason)
-                 | Ready metadata -> [node_metadata date metadata])) in
-    tablex
-      ~a:[a_class ["table"; "table-bordered"; "table-hover"]]
-      ~thead:
-        (thead
-           [ tr
-               [ th [txt "Name"]; th [txt "URI-prefix"]; th [txt "Status"]
-               ; th [txt "Latest Ping"] ] ])
-      [ Reactive.tbody
-          (Var.map_to_list (nodes node_list) ~f:(fun nodes ->
-               List.map nodes ~f:(fun node ->
-                   let open Node in
-                   let open Node_status in
-                   tr ~a:[a_style "height: 3em"]
-                     [ td
-                         ~a:
-                           [ Reactive.a_class
-                               ( Var.signal node.status
-                               |> React.S.map (function
-                                    | _, Uninitialized -> ["bg-warning"]
-                                    | _, Non_responsive _ -> ["bg-danger"]
-                                    | _, Ready _ -> ["bg-success"]) ) ]
-                         [em [txt node.name]]; td [code [txt node.prefix]]
-                     ; td [node_status node]
-                     ; td
-                         [ Reactive.code
-                             (Var.map_to_list node.status ~f:(fun (date, _) ->
-                                  let date_string =
-                                    (new%js Js_of_ocaml.Js.date_fromTimeValue
-                                       date)##toISOString
-                                    |> Js_of_ocaml__Js.to_string in
-                                  [txt date_string])) ] ]))) ]
-end
 
 let metadata_explorer state_handle =
   let open RD in
@@ -1331,7 +856,202 @@ let metadata_explorer state_handle =
                     ~a:[a_style "color: #999; font-size: 140%"]
                     [ txt (String.concat ~sep:"\n" log)
                     ; span ~a:[a_style "color: #900"] [txt ("\n" ^ msg)] ] ]))
-      ] ]
+      ]
+  ; div
+      [ h3 [txt "Call Off-Chain-Views"]
+      ; Reactive.div
+          (Var.map_to_list metadata_result ~f:(function
+            | `Done_metadata (json, _) -> (
+                let open Tezos_contract_metadata.Metadata_contents in
+                match of_json json with
+                | Error _ | Ok {views= []; _} ->
+                    [ big_answer `Error
+                        [txt "This piece of metadata does not have any views."]
+                    ]
+                | Ok ex ->
+                    let implementation_form impl =
+                      let open Tezos_contract_metadata.Metadata_contents.View
+                               .Implementation in
+                      match impl with
+                      | Michelson_storage michview -> (
+                          let call_result = Var.create "view-result" `None in
+                          let open Tezos_contract_metadata.Metadata_contents
+                                   .View
+                                   .Implementation
+                                   .Michelson_storage in
+                          match michview.parameter with
+                          | None ->
+                              div [txt "TODO: Michelson parameter-less form"]
+                          | Some (Micheline m) ->
+                              let parameter = Var.create "view-param" "" in
+                              div
+                                [ txt "Please, provide the parameter of type "
+                                ; code
+                                    [ Fmt.kstr txt "%a"
+                                        Tezos_contract_metadata.Contract_storage
+                                        .pp_arbitrary_micheline
+                                        (Tezos_micheline.Micheline.root m)
+                                    ; txt ": "
+                                    ; input
+                                        ~a:
+                                          [ a_input_type `Text; a_value ""
+                                          ; a_oninput
+                                              Js_of_ocaml.(
+                                                fun ev ->
+                                                  Js.Opt.iter ev##.target
+                                                    (fun input ->
+                                                      Js.Opt.iter
+                                                        (Dom_html.CoerceTo.input
+                                                           input) (fun input ->
+                                                          let v =
+                                                            input##.value
+                                                            |> Js.to_string
+                                                          in
+                                                          dbgf
+                                                            "TA inputs: %d \
+                                                             bytes: %S"
+                                                            (String.length v) v ;
+                                                          Var.set parameter v)) ;
+                                                  false) ]
+                                        ()
+                                    ; Reactive.span
+                                        (Var.map_to_list parameter ~f:(fun c ->
+                                             match
+                                               Tezos_micheline.Micheline_parser
+                                               .tokenize c
+                                             with
+                                             | tokens, [] -> (
+                                               match
+                                                 Tezos_micheline
+                                                 .Micheline_parser
+                                                 .parse_expression tokens
+                                               with
+                                               | node, [] ->
+                                                   [ button
+                                                       ~a:
+                                                         [ a_class
+                                                             [ "btn"
+                                                             ; "btn-primary" ]
+                                                         ; a_onclick (fun _ ->
+                                                               dbgf
+                                                                 "Call \
+                                                                  off-chain \
+                                                                  view: %s"
+                                                                 c ;
+                                                               Var.set
+                                                                 call_result
+                                                                 (`In_progress
+                                                                   []) ;
+                                                               Lwt.async
+                                                                 Lwt.(
+                                                                   fun () ->
+                                                                     Tezos_nodes
+                                                                     .call_off_chain_view
+                                                                       nodes
+                                                                       ~address:
+                                                                         (Var
+                                                                          .value
+                                                                            contract_address)
+                                                                       ~view:
+                                                                         michview
+                                                                       ~parameter:
+                                                                         node
+                                                                       ~log:(fun
+                                                                              line
+                                                                            ->
+                                                                         Var.set
+                                                                           call_result
+                                                                           (`In_progress
+                                                                             ( line
+                                                                             ::
+                                                                             ( match
+                                                                                Var
+                                                                                .value
+                                                                                call_result
+                                                                               with
+                                                                             | `In_progress
+                                                                                lines
+                                                                               ->
+                                                                                lines
+                                                                             | _
+                                                                               ->
+                                                                                []
+                                                                             )
+                                                                             )))
+                                                                     >>= fun res ->
+                                                                     Var.set
+                                                                       call_result
+                                                                       (`Done
+                                                                         res) ;
+                                                                     return ()) ;
+                                                               true) ]
+                                                       [txt "OK Go!"] ]
+                                               | _, errs ->
+                                                   [ Fmt.kstr txt
+                                                       "errors parsing: %a"
+                                                       Tezos_error_monad
+                                                       .Error_monad
+                                                       .pp_print_error errs ] )
+                                             | _, errs ->
+                                                 [ Fmt.kstr txt
+                                                     "errors tokenizing: %a"
+                                                     Tezos_error_monad
+                                                     .Error_monad
+                                                     .pp_print_error errs ])) ]
+                                ; Reactive.div
+                                    (Var.map_to_list call_result ~f:(function
+                                      | `None -> []
+                                      | `In_progress lines ->
+                                          [ txt "Working on it …"
+                                          ; pre
+                                              [code (List.rev_map lines ~f:txt)]
+                                          ]
+                                      | `Done (Ok (mich_result, mich_storage))
+                                        ->
+                                          [ txt "OK, done:"
+                                          ; ul
+                                              [ li
+                                                  [ txt "Result: "
+                                                  ; code
+                                                      [ Fmt.kstr txt "%a"
+                                                          Tezos_contract_metadata
+                                                          .Contract_storage
+                                                          .pp_arbitrary_micheline
+                                                          mich_result ] ]
+                                              ; li
+                                                  [ txt "Current storage: "
+                                                  ; code
+                                                      [ Fmt.kstr txt "%a"
+                                                          Tezos_contract_metadata
+                                                          .Contract_storage
+                                                          .pp_arbitrary_micheline
+                                                          mich_storage ] ] ] ]
+                                      | `Done (Error s) ->
+                                          [Fmt.kstr txt "Error: %s" s])) ] )
+                      | Rest_api_query _ -> div [txt "TODO: REST API form"]
+                    in
+                    let view_list =
+                      List.map ex.views ~f:(fun v ->
+                          let open Tezos_contract_metadata.Metadata_contents
+                                   .View in
+                          div
+                            [ code [txt v.name]; txt ": "
+                            ; em
+                                [ txt
+                                    (Option.value ex.description
+                                       ~default:"No description available …")
+                                ]
+                            ; div
+                                (List.map v.implementations implementation_form)
+                            ]) in
+                    [ h4
+                        [ Fmt.kstr txt "%d Views Available"
+                            (List.length ex.views) ]; div view_list ] )
+            | _ ->
+                [ div
+                    [ txt
+                        "You need to fetch some metadata above for this to \
+                         work!" ] ])) ] ]
 
 let gui ?version_string state =
   RD.(
