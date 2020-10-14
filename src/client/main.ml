@@ -1044,8 +1044,9 @@ let metadata_explorer state_handle =
                             ; div
                                 (List.map v.implementations implementation_form)
                             ]) in
-                    [ h4 [Fmt.kstr txt "TODO: %d views" (List.length ex.views)]
-                    ; div view_list ] )
+                    [ h4
+                        [ Fmt.kstr txt "%d Views Available"
+                            (List.length ex.views) ]; div view_list ] )
             | _ ->
                 [ div
                     [ txt
