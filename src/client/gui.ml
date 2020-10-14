@@ -155,12 +155,51 @@ let settings_page state =
   % Bootstrap.Form.(
       make
         [ check_box
-            ~checked:(State.dev_mode_bidirectional state)
-            (t "Dev-mode enabled")
+            (State.dev_mode_bidirectional state)
+            ~label:(t "Dev-mode enabled")
             ~help:
               (t
                  "Shows things that regular users should not see and \
                   artificially slows down the application.") ])
+
+let explorer_page state =
+  let open Meta_html in
+  let explorer_input = Reactive.var "" in
+  let contract_examples =
+    [ ( "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
+      , "Contract with metadata on Carthagenet." )
+    ; ("KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2", "Should not exist any where.") ]
+  in
+  let uri_examples =
+    [ ( "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9/here"
+      , "An on-chain pointer to metadata." )
+    ; ( "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
+      , "An IPFS URI to metadata JSON." ) ] in
+  h2 (t "Contract Metadata Explorer")
+  % Bootstrap.Form.(
+      make
+        [ row
+            [ cell 6
+                (input
+                   ~placeholder:
+                     (Reactive.pure
+                        "Enter a contract address or a metadata URI")
+                   (Reactive.Bidirectrional.of_var explorer_input)
+                   ~help:(t "Can be a metadata URI or a contract address."))
+            ; cell 2
+                (magic
+                   Bootstrap.Dropdown_menu.(
+                     let example (v, msg) =
+                       item
+                         (ct v %% t "→" %% it msg)
+                         ~action:(fun () -> Reactive.set explorer_input v) in
+                     button (t "Or pick an example")
+                       ( [header (t "KT1 Contracts")]
+                       @ List.map contract_examples ~f:example
+                       @ [header (t "TZIP-16 URIs")]
+                       @ List.map uri_examples ~f:example ))) ]
+        ; submit_button (t "Go!") (fun () ->
+              dbgf "Form submitted with %s" (Reactive.peek explorer_input)) ])
 
 let root_document state =
   let open Meta_html in
@@ -169,6 +208,6 @@ let root_document state =
     % Reactive.bind (State.page state)
         State.Page.(
           function
-          | Explorer -> t "Welcome/explorer page TODO"
+          | Explorer -> explorer_page state
           | Settings -> settings_page state
           | About -> about_page state) )
