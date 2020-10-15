@@ -99,6 +99,47 @@ module State = struct
            dbgf "Updating %S → %S" current now ;
            Current.set_fragment now ;
            now)
+
+  let examples state =
+    let https_ok =
+      "https://raw.githubusercontent.com/tqtezos/TZComet/master/data/metadata_example0.json"
+    in
+    let hash_of_https_ok =
+      (* `sha256sum data/metadata_example0.json` → Achtung, the URL
+         above takes about 5 minutes to be up to date with `master` *)
+      "7d961916f05d72afc765389a695458a9b451954419b41fa3cdd5fa816128b744" in
+    let sha256_https_ok =
+      Fmt.str "sha256://0x%s/%s" hash_of_https_ok (Uri.pct_encode https_ok)
+    in
+    let sha256_https_ko =
+      Fmt.str "sha256://0x%s/%s"
+        (String.tr hash_of_https_ok ~target:'9' ~replacement:'1')
+        (Uri.pct_encode https_ok) in
+    (get state).dev_mode |> Reactive.get
+    |> Reactive.map ~f:(fun dev ->
+           let contracts = ref [] in
+           let uris = ref [] in
+           let kt1 v desc = contracts := (v, desc) :: !contracts in
+           let kt1_dev v desc = if dev then kt1 v desc in
+           let uri v desc = uris := (v, desc) :: !uris in
+           let uri_dev v desc = if dev then uri v desc in
+           kt1 "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
+             "Contract with metadata on Carthagenet." ;
+           kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
+             "Should not exist any where." ;
+           uri https_ok "A valid HTTPS URI." ;
+           uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
+           uri_dev sha256_https_ko
+             "A valid SHA256+HTTPS URI but the hash is not right." ;
+           uri "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9/here"
+             "An on-chain pointer to metadata." ;
+           uri_dev
+             "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9.NetXrtZMmJmZSeb/here"
+             "An on-chain pointer to metadata with chain-id." ;
+           uri "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
+             "An IPFS URI to metadata JSON." ;
+           uri_dev "ipfs://ldisejdse-dlseidje" "An invalid IPFS URI." ;
+           (`Contracts (List.rev !contracts), `Uris (List.rev !uris)))
 end
 
 let tzcomet_link () =
@@ -203,16 +244,6 @@ module Explorer = struct
 
   let page state =
     let open Meta_html in
-    let contract_examples =
-      [ ( "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
-        , "Contract with metadata on Carthagenet." )
-      ; ("KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2", "Should not exist any where.")
-      ] in
-    let uri_examples =
-      [ ( "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9/here"
-        , "An on-chain pointer to metadata." )
-      ; ( "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
-        , "An IPFS URI to metadata JSON." ) ] in
     h2 (t "Contract Metadata Explorer")
     % Bootstrap.Form.(
         let enter_action () =
@@ -223,15 +254,24 @@ module Explorer = struct
                   (magic
                      Bootstrap.Dropdown_menu.(
                        let example (v, msg) =
+                         let cct v =
+                           if String.length v > 22 then
+                             abbreviation v
+                               (ct (String.sub v ~pos:0 ~len:21 ^ "…"))
+                           else ct v in
                          item
-                           (ct v %% t "→" %% it msg)
+                           (cct v %% t "→" %% it msg)
                            ~action:(fun () -> State.set_explorer_input state v)
                        in
-                       button (t "Examples 💡 ")
-                         ( [header (t "KT1 Contracts")]
-                         @ List.map contract_examples ~f:example
-                         @ [header (t "TZIP-16 URIs")]
-                         @ List.map uri_examples ~f:example )))
+                       Reactive.bind (State.examples state)
+                         ~f:(fun
+                              (`Contracts contract_examples, `Uris uri_examples)
+                            ->
+                           button (t "Examples 💡 ")
+                             ( [header (t "KT1 Contracts")]
+                             @ List.map contract_examples ~f:example
+                             @ [header (t "TZIP-16 URIs")]
+                             @ List.map uri_examples ~f:example ))))
               ; cell 8
                   (input
                      ~placeholder:

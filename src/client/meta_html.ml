@@ -17,6 +17,7 @@ module H = struct
   let button ?a l = singletize H5.button ?a l
   let span ?a l = singletize H5.span ?a l
   let small ?a l = singletize H5.span ?a l
+  let abbr ?a l = singletize H5.abbr ?a l
   let a ?a l = singletize H5.a ?a l
   let div ?a l = singletize H5.div ?a l
   let h1 ?a l = singletize H5.h1 ?a l
@@ -39,6 +40,7 @@ let link ~target ?(a = []) content =
   H.a ~a:(H5.a_href (Lwd.pure target) :: a) content
 
 let url ?a t u = link ?a ~target:u (t u)
+let abbreviation title c = H5.abbr ~a:[H5.a_title (Lwd.pure title)] [c]
 
 let button ?(a = []) ~action k =
   H.button
