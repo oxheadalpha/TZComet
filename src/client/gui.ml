@@ -11,6 +11,10 @@ module Work_status = struct
   let ok t o = Reactive.set t.status (Done (Ok o))
   let error t o = Reactive.set t.status (Done (Error o))
 
+  let busy {status; _} =
+    Reactive.(
+      get status |> map ~f:(function Work_in_progress -> true | _ -> false))
+
   let async_catch wip f =
     let open Lwt in
     async (fun () ->
@@ -37,7 +41,7 @@ module Work_status = struct
            else [logs] )) in
     Reactive.bind_var work_status.status ~f:(function
       | Empty -> empty ()
-      | Work_in_progress -> show_logs ~wip:true ()
+      | Work_in_progress -> Bootstrap.alert ~kind:`Info (show_logs ~wip:true ())
       | Done (Ok x) -> p (t "Success") % f x
       | Done (Error e) ->
           let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
@@ -327,12 +331,12 @@ module Explorer = struct
           Work_status.async_catch result
             Lwt.(
               fun () ->
-                Js_of_ocaml_lwt.Lwt_js.sleep 2.
+                Js_of_ocaml_lwt.Lwt_js.sleep 1.
                 >>= fun () ->
-                Work_status.log result (t "Slept 2 seconds") ;
-                Js_of_ocaml_lwt.Lwt_js.sleep 2.
+                Work_status.log result (t "Slept 1 second") ;
+                Js_of_ocaml_lwt.Lwt_js.sleep 1.
                 >>= fun () ->
-                Work_status.log result (t "Slept 2 more seconds") ;
+                Work_status.log result (t "Slept 1 more second") ;
                 Fmt.kstr fail_with "Not implemented :/") in
         State.if_explorer_should_go state enter_action ;
         make
@@ -369,10 +373,13 @@ module Explorer = struct
               ; cell 2
                   (submit_button (t "Go!")
                      ~active:
-                       ( input_valid state
-                       |> Reactive.map ~f:(function
-                            | `Error _ -> false
-                            | _ -> true) )
+                       Reactive.(
+                         map
+                           (input_valid state ** Work_status.busy result)
+                           ~f:(function
+                             | `Error _, _ -> false
+                             | _, true -> false
+                             | _ -> true))
                      enter_action) ] ])
     % Work_status.render result ~f:Fn.id
 end
