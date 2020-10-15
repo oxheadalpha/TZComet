@@ -1,5 +1,53 @@
 open Import
 
+module Work_status = struct
+  type log_item = Html_types.div_content_fun Meta_html.H5.elt
+  type 'a status = Empty | Work_in_progress | Done of ('a, log_item) Result.t
+  type 'a t = {logs: log_item Reactive.Table.t; status: 'a status Reactive.var}
+
+  let empty () = {logs= Reactive.Table.make (); status= Reactive.var Empty}
+  let log t item = Reactive.Table.append' t.logs item
+  let wip t = Reactive.set t.status Work_in_progress
+  let ok t o = Reactive.set t.status (Done (Ok o))
+  let error t o = Reactive.set t.status (Done (Error o))
+
+  let async_catch wip f =
+    let open Lwt in
+    async (fun () ->
+        catch f
+          Meta_html.(
+            function
+            | Failure s ->
+                error wip (t "Failure: " %% ct s) ;
+                return ()
+            | exn ->
+                error wip (t "Exception: " %% ct (Exn.to_string exn)) ;
+                return ()))
+
+  let render work_status ~f =
+    let open Meta_html in
+    let show_logs ?(wip = false) () =
+      let make_logs_map _ x = H5.li [x] in
+      let logs = Reactive.Table.concat_map ~map:make_logs_map work_status.logs in
+      div
+        ~a:[classes ["bg-dark"; "text-white"]]
+        (H5.ul
+           ( if wip then
+             [logs; H5.li [Bootstrap.spinner ~kind:`Info (t "Working …")]]
+           else [logs] )) in
+    Reactive.bind_var work_status.status ~f:(function
+      | Empty -> empty ()
+      | Work_in_progress -> show_logs ~wip:true ()
+      | Done (Ok x) -> p (t "Success") % f x
+      | Done (Error e) ->
+          let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
+          Bootstrap.alert ~kind:`Danger
+            ( h4 (t "Errror:")
+            % div ~a:[classes ["lead"]] e
+            %% collapse#button (t "Show logs")
+            % collapse#div (show_logs ~wip:false ()) ))
+end
+
 module State = struct
   module Page = struct
     type t = Explorer | Settings | About
@@ -244,10 +292,24 @@ module Explorer = struct
 
   let page state =
     let open Meta_html in
+    let result = Work_status.empty () in
     h2 (t "Contract Metadata Explorer")
     % Bootstrap.Form.(
         let enter_action () =
-          dbgf "Form submitted with %s" (State.explorer_input_value state) in
+          dbgf "Form submitted with %s" (State.explorer_input_value state) ;
+          Work_status.wip result ;
+          Work_status.log result
+            (t "Starting with: " %% ct (State.explorer_input_value state)) ;
+          Work_status.async_catch result
+            Lwt.(
+              fun () ->
+                Js_of_ocaml_lwt.Lwt_js.sleep 2.
+                >>= fun () ->
+                Work_status.log result (t "Slept 2 seconds") ;
+                Js_of_ocaml_lwt.Lwt_js.sleep 2.
+                >>= fun () ->
+                Work_status.log result (t "Slept 2 more seconds") ;
+                Fmt.kstr fail_with "Not implemented :/") in
         make
           [ row
               [ cell 2
@@ -287,6 +349,7 @@ module Explorer = struct
                             | `Error _ -> false
                             | _ -> true) )
                      enter_action) ] ])
+    % Work_status.render result ~f:Fn.id
 end
 
 let root_document state =

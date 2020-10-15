@@ -20,6 +20,7 @@ module H = struct
   let abbr ?a l = singletize H5.abbr ?a l
   let a ?a l = singletize H5.a ?a l
   let div ?a l = singletize H5.div ?a l
+  let pre ?a l = singletize H5.pre ?a l
   let h1 ?a l = singletize H5.h1 ?a l
   let h2 ?a l = singletize H5.h2 ?a l
   let h3 ?a l = singletize H5.h3 ?a l
@@ -49,9 +50,6 @@ let button ?(a = []) ~action k =
 
 let onclick_action action =
   H5.a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; true))
-
-let bind_var : 'a Reactive.var -> f:('a -> 'b t) -> 'b t =
- fun v ~f -> Reactive.bind (Reactive.get v) f
 
 let itemize ?(numbered = false) ?a_ul ?a_li l =
   (if numbered then H5.ul else H5.ol)
@@ -89,6 +87,18 @@ module Bootstrap = struct
   let color kind content =
     H5.span
       ~a:[classes [Fmt.str "text-%s" (Label_kind.to_string kind)]]
+      [content]
+
+  let spinner ?(kind = `Primary) content =
+    H5.div
+      ~a:[classes ["spinner-border"]; H5.a_role (Lwd.pure ["status"])]
+      [H5.span ~a:[classes ["sr-only"]] [content]]
+
+  let alert ?(kind = `Primary) content =
+    H5.div
+      ~a:
+        [ classes ["alert"; Fmt.str "alert-%s" (Label_kind.to_string kind)]
+        ; H5.a_role (Lwd.pure ["alert"]) ]
       [content]
 
   let monospace content = H5.span ~a:[classes ["text-monospace"]] [content]
@@ -381,6 +391,28 @@ module Bootstrap = struct
       let div_items = List.map ~f:(Item.to_div ?enter_action) items in
       H5.form div_items
   end
+
+  module Collapse = struct
+    let make ?(button_kind = `Primary) ?id () =
+      let open H5 in
+      let the_id = Fresh_id.of_option "collapse" id in
+      let make_button =
+        button
+          ~a:
+            [ classes
+                [ "btn"; "btn-sm"
+                ; Fmt.str "btn-outline-%s" (Label_kind.to_string button_kind) ]
+            ; a_user_data "toggle" (Lwd.pure "collapse")
+            ; a_user_data "target" (Lwd.pure (Fmt.str "#%s" the_id))
+            ; a_aria "expanded" (Lwd.pure ["false"])
+            ; a_aria "controls" (Lwd.pure [the_id]) ] in
+      object
+        method button content = make_button [content]
+
+        method div content =
+          div ~a:[classes ["collapse"]; a_id (Lwd.pure the_id)] [content]
+      end
+  end
 end
 
 module Example = struct
@@ -395,14 +427,14 @@ module Example = struct
             (Bootstrap.button ~kind:`Primary
                ~action:(fun () ->
                  Reactive.set button_calls (Reactive.peek button_calls + 1))
-               (bind_var button_calls ~f:(fun count ->
+               (Reactive.bind_var button_calls ~f:(fun count ->
                     H5.span
                       [ Fmt.kstr
                           (if Stdlib.( mod ) count 2 = 0 then it else bt)
                           "Click %d" count ])))
         % p
             (Bootstrap.label `Danger
-               (bind_var button_calls ~f:(fun count ->
+               (Reactive.bind_var button_calls ~f:(fun count ->
                     Fmt.kstr t "Button above clicked %d time%s." count
                       (if count = 1 then "" else "s"))))
         % p (t "A dropdown menu:")
@@ -441,9 +473,9 @@ module Example = struct
                       :: Reactive.peek submissions )) ])
         % p
             ( t "Form results:"
-            %% bind_var hello ~f:(fun v -> t "Hello:" %% ct v)
+            %% Reactive.bind_var hello ~f:(fun v -> t "Hello:" %% ct v)
             % t ", checkbox is "
-            %% bind_var checkboxed ~f:(function
+            %% Reactive.bind_var checkboxed ~f:(function
                  | false -> bt "not"
                  | true -> empty ())
             %% t "checked." )
@@ -451,7 +483,7 @@ module Example = struct
             [ t "Some item"; t "Some other item"
             ; t "truc" %% it "bidule" %% bt "chouette"
             ; t "Form submissions:"
-              %% bind_var submissions ~f:(fun subs ->
+              %% Reactive.bind_var submissions ~f:(fun subs ->
                      itemize ~numbered:true
                        (List.rev_map subs ~f:(fun (h, c) ->
                             t "Submission:" %% ct h % t ","
@@ -459,7 +491,7 @@ module Example = struct
         %
         let content = Reactive.var "content" in
         H5.div
-          [ ( p (t "more input experiemnt" %% bind_var content ~f:ct)
+          [ ( p (t "more input experiemnt" %% Reactive.bind_var content ~f:ct)
             %% H5.(
                  input
                    ~a:

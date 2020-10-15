@@ -52,6 +52,7 @@ module Reactive = struct
   let bind x ~f = bind x f
   let ( ** ) = pair
   let split_var v = (get v, set v)
+  let bind_var : 'a var -> f:('a -> 'b t) -> 'b t = fun v ~f -> bind ~f (get v)
 
   module Bidirectrional = struct
     type 'a t = {lwd: 'a Lwd.t; set: 'a -> unit}
@@ -61,4 +62,14 @@ module Reactive = struct
     let get v = v.lwd
     let set v x = v.set x
   end
+
+  module Table = struct
+    include Lwd_table
+
+    let append = append'
+
+    let concat_map ~map table =
+      Lwd.join (Lwd_table.map_reduce map Lwd_seq.lwd_monoid table)
+  end
+  module Sequence = Lwd_seq
 end
