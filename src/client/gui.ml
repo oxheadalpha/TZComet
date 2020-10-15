@@ -6,6 +6,11 @@ module Work_status = struct
   type 'a t = {logs: log_item Reactive.Table.t; status: 'a status Reactive.var}
 
   let empty () = {logs= Reactive.Table.make (); status= Reactive.var Empty}
+
+  let reinit s =
+    Reactive.Table.clear s.logs ;
+    Reactive.set s.status Empty
+
   let log t item = Reactive.Table.append' t.logs item
   let wip t = Reactive.set t.status Work_in_progress
   let ok t o = Reactive.set t.status (Done (Ok o))
@@ -41,7 +46,8 @@ module Work_status = struct
            else [logs] )) in
     Reactive.bind_var work_status.status ~f:(function
       | Empty -> empty ()
-      | Work_in_progress -> Bootstrap.alert ~kind:`Info (show_logs ~wip:true ())
+      | Work_in_progress ->
+          Bootstrap.alert ~kind:`Secondary (show_logs ~wip:true ())
       | Done (Ok x) -> p (t "Success") % f x
       | Done (Error e) ->
           let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
@@ -325,6 +331,7 @@ module Explorer = struct
     % Bootstrap.Form.(
         let enter_action () =
           dbgf "Form submitted with %s" (State.explorer_input_value state) ;
+          Work_status.reinit result ;
           Work_status.wip result ;
           Work_status.log result
             (t "Starting with: " %% ct (State.explorer_input_value state)) ;
