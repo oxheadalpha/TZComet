@@ -66,21 +66,22 @@ module State = struct
     { page: Page.t Reactive.var
     ; version_string: string option
     ; dev_mode: bool Reactive.var
-    ; explorer_input: string Reactive.var }
+    ; explorer_input: string Reactive.var
+    ; explorer_go: bool Reactive.var
+    ; explorer_went: bool Reactive.var }
 
   (* type 'a context = 'a Context.t constraint 'a = < gui: t ; .. > *)
 
   let get (state : < gui: t ; .. > Context.t) = state#gui
 
   module Fragment = struct
-    type parsed = {page: Page.t; dev_mode: bool; explorer_input: string}
-
-    let make {page; dev_mode; explorer_input} =
+    let make ~page ~dev_mode ~explorer_input ~explorer_go =
       let query =
         match explorer_input with
         | "" -> []
         | more -> [("explorer-input", [more])] in
       let query = if not dev_mode then query else ("dev", ["true"]) :: query in
+      let query = if not explorer_go then query else ("go", ["true"]) :: query in
       Uri.make ()
         ~path:(Fmt.str "/%s" (Page.to_string page |> String.lowercase))
         ~query
@@ -97,21 +98,33 @@ module State = struct
         |> Option.value ~default:Explorer in
       let query = Uri.query uri in
       let in_query = List.Assoc.find ~equal:String.equal query in
-      let dev_mode =
-        match in_query "dev" with Some ["true"] -> true | _ -> false in
+      let true_in_query q =
+        match in_query q with Some ["true"] -> true | _ -> false in
+      let dev_mode = true_in_query "dev" in
       let explorer_input =
         match in_query "explorer-input" with Some [one] -> one | _ -> "" in
-      {page; dev_mode; explorer_input}
+      let explorer_go = true_in_query "go" in
+      { page= Reactive.var page
+      ; version_string= None
+      ; dev_mode= Reactive.var dev_mode
+      ; explorer_input= Reactive.var explorer_input
+      ; explorer_go= Reactive.var explorer_go
+      ; explorer_went=
+          (* If page is not the explorer we will ignore the command =
+             assume it aready happened. *)
+          Reactive.var Poly.(page <> Page.Explorer) }
   end
 
   let create () =
-    let {Fragment.page; dev_mode; explorer_input} =
-      let fragment = Js_of_ocaml.Url.Current.get_fragment () in
-      Fragment.parse fragment in
-    { page= Reactive.var page
-    ; version_string= None
-    ; dev_mode= Reactive.var dev_mode
-    ; explorer_input= Reactive.var explorer_input }
+    (*   let {Fragment.page; dev_mode; explorer_input} = *)
+    let fragment = Js_of_ocaml.Url.Current.get_fragment () in
+    Fragment.parse fragment
+
+  (* in
+     { page= Reactive.var page
+     ; version_string= None
+     ; dev_mode= Reactive.var dev_mode
+     ; explorer_input= Reactive.var explorer_input } *)
 
   let version_string state = (get state).version_string
   let set_page state p () = Reactive.set (get state).page p
@@ -140,13 +153,24 @@ module State = struct
     let dev = Reactive.get state.dev_mode in
     let page = Reactive.get state.page in
     let explorer_input = Reactive.get state.explorer_input in
-    Reactive.(dev ** page ** explorer_input)
-    |> Reactive.map ~f:(fun (dev_mode, (page, explorer_input)) ->
+    let explorer_go = Reactive.get state.explorer_go in
+    Reactive.(dev ** page ** explorer_input ** explorer_go)
+    |> Reactive.map ~f:(fun (dev_mode, (page, (explorer_input, explorer_go))) ->
            let current = Js_of_ocaml.Url.Current.get_fragment () in
-           let now = Fragment.(make {page; dev_mode; explorer_input}) in
+           let now =
+             Fragment.(make ~page ~dev_mode ~explorer_input ~explorer_go) in
            dbgf "Updating %S → %S" current now ;
            Current.set_fragment now ;
            now)
+
+  let if_explorer_should_go state f =
+    if
+      (get state).explorer_go |> Lwd.peek
+      && not ((get state).explorer_went |> Lwd.peek)
+    then (
+      Lwd.set (get state).explorer_went true ;
+      f () )
+    else ()
 
   let examples state =
     let https_ok =
@@ -310,6 +334,7 @@ module Explorer = struct
                 >>= fun () ->
                 Work_status.log result (t "Slept 2 more seconds") ;
                 Fmt.kstr fail_with "Not implemented :/") in
+        State.if_explorer_should_go state enter_action ;
         make
           [ row
               [ cell 2
