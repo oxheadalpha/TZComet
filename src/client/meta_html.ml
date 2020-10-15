@@ -9,10 +9,15 @@ let ( % ) a b : _ t = Lwd.map2 Lwd_seq.concat a b
 let ( %% ) a b : _ t = a % t " " % b
 let singletize f ?a x = f ?a [x]
 
+let list = function
+  | [] -> empty ()
+  | one :: more -> List.fold more ~init:one ~f:( % )
+
 module H = struct
   let p ?a l = singletize H5.p ?a l
   let i ?a l = singletize H5.i ?a l
   let b ?a l = singletize H5.b ?a l
+  let em ?a l = singletize H5.em ?a l
   let code ?a l = singletize H5.code ?a l
   let button ?a l = singletize H5.button ?a l
   let span ?a l = singletize H5.span ?a l
@@ -52,7 +57,7 @@ let onclick_action action =
   H5.a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; true))
 
 let itemize ?(numbered = false) ?a_ul ?a_li l =
-  (if numbered then H5.ul else H5.ol)
+  (if not numbered then H5.ul else H5.ol)
     ?a:a_ul
     (List.map l ~f:(fun item -> H5.li ?a:a_li [item]))
 

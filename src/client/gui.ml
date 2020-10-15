@@ -22,10 +22,13 @@ module Work_status = struct
 
   let async_catch wip f =
     let open Lwt in
+    let exception Work_failed of log_item in
     async (fun () ->
-        catch f
+        catch
+          (fun () -> f ~fail:(fun x -> raise (Work_failed x)) ())
           Meta_html.(
             function
+            | Work_failed l -> error wip l ; return ()
             | Failure s ->
                 error wip (t "Failure: " %% ct s) ;
                 return ()
@@ -301,15 +304,113 @@ let settings_page state =
                  "Shows things that regular users should not see and \
                   artificially slows down the application.") ])
 
+module Tezos_html = struct
+  let uri_parsing_error err =
+    let open Meta_html in
+    let open Tezos_contract_metadata.Metadata_uri.Parsing_error in
+    let details =
+      let sha256_host_advice =
+        t "The host should look like:"
+        %% ct
+             "0x5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+        % t "." in
+      let scheme_advice =
+        t "The URI should start with one of:"
+        %% list
+             (oxfordize_list
+                ["tezos-storage"; "http"; "https"; "sha256"; "ipfs"]
+                ~map:(fun sch -> Fmt.kstr ct "%s:" sch)
+                ~sep:(fun () -> t ", ")
+                ~last_sep:(fun () -> t ", or "))
+        % t "." in
+      match err.error_kind with
+      | Wrong_scheme None -> t "Missing URI scheme. " % scheme_advice
+      | Wrong_scheme (Some scheme) ->
+          t "Unknown URI scheme: " % ct scheme % t "." %% scheme_advice
+      | Missing_cid_for_ipfs ->
+          t "Missing content identifier in IPFS URI, it should be the host."
+      | Wrong_tezos_storage_host str ->
+          t "Cannot parse the “host” part of the URI: "
+          %% ct str % t ", should look like " %% ct "<network>.<address>"
+          % t " or just" %% ct "<address>"
+      | Forbidden_slash_in_tezos_storage_path path ->
+          t "For " %% ct "tezos-storage"
+          % t " URIs, the “path” cannot contain any "
+          % ct "/"
+          % t " (“slash”) character: "
+          % ct path
+      | Missing_host_for_hash_uri `Sha256 ->
+          t "Missing “host” in " % ct "sha256://" % t " URI. "
+          %% sha256_host_advice
+      | Wrong_hex_format_for_hash {hash= `Sha256; host; message} ->
+          t "Failed to parse the “host” "
+          %% ct host % t " in this " %% ct "sha256://" % t " URI: " % t message
+          % t " → " %% sha256_host_advice in
+    let exploded_uri =
+      let u = Uri.of_string err.input in
+      let item name opt =
+        it name % t ": " % match opt with None -> t "<empty>" | Some s -> ct s
+      in
+      let item_some name s = item name (Some s) in
+      t "The URI is understood this way: "
+      % itemize
+          [ item "Scheme" (Uri.scheme u); item "Host" (Uri.host u)
+          ; item "User-info" (Uri.userinfo u)
+          ; item "Port" (Uri.port u |> Option.map ~f:Int.to_string)
+          ; item_some "Path" (Uri.path u); item "Query" (Uri.verbatim_query u)
+          ; item "Fragment" (Uri.fragment u) ] in
+    t "Failed to parse URI:" %% ct err.input % t ":"
+    % itemize [details; exploded_uri]
+
+  let one_error =
+    let open Meta_html in
+    let open Tezos_error_monad.Error_monad in
+    function
+    | Exn (Ezjsonm.Parse_error (json_value, msg)) ->
+        Fmt.kstr t "JSON Parsing Error: %s, JSON:" msg
+        % pre (code (t (Ezjsonm.value_to_string ~minify:false json_value)))
+    | Exn (Failure text) -> Fmt.kstr t "Failure: %a" Fmt.text text
+    | Exn other_exn ->
+        Fmt.kstr ct "Exception: %a"
+          (Json_encoding.print_error ~print_unknown:Exn.pp)
+          other_exn
+    | Tezos_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
+        parsing_error ->
+        uri_parsing_error parsing_error
+    | other ->
+        pre
+          (code
+             (Fmt.kstr t "%a" Tezos_error_monad.Error_monad.pp_print_error
+                [other]))
+
+  let error_trace =
+    let open Meta_html in
+    function
+    | [] ->
+        Bootstrap.alert ~kind:`Danger (t "Empty trace from Tezos-error-monad")
+    | [h] -> one_error h
+    | h :: tl ->
+        one_error h
+        % div
+            ( t "Trace:"
+            %% List.fold tl ~init:(empty ()) ~f:(fun p e -> p %% one_error e) )
+end
+
 module Explorer = struct
+  let validate_intput input_value =
+    match B58_hashes.check_b58_kt1_hash input_value with
+    | _ -> `KT1 input_value
+    | exception _ when String.is_prefix input_value ~prefix:"KT" ->
+        `Error
+          ( input_value
+          , [Tezos_error_monad.Error_monad.failure "Invalid KT1 address"] )
+    | exception _ -> (
+      match Contract_metadata.Uri.validate input_value with
+      | Ok uri -> `Uri (input_value, uri)
+      | Error e -> `Error (input_value, e) )
+
   let input_valid state =
-    Reactive.map (State.explorer_input state) ~f:(fun input_value ->
-        match B58_hashes.check_b58_kt1_hash input_value with
-        | _ -> `KT1 input_value
-        | exception _ -> (
-          match Contract_metadata.Uri.validate input_value with
-          | Ok uri -> `Uri (input_value, uri)
-          | Error e -> `Error (input_value, e) ))
+    Reactive.map (State.explorer_input state) ~f:validate_intput
 
   let input_validation_status state =
     let open Meta_html in
@@ -327,24 +428,29 @@ module Explorer = struct
   let page state =
     let open Meta_html in
     let result = Work_status.empty () in
+    let nodes = Tezos_nodes._global in
+    Tezos_nodes.ensure_update_loop nodes ;
     h2 (t "Contract Metadata Explorer")
     % Bootstrap.Form.(
         let enter_action () =
-          dbgf "Form submitted with %s" (State.explorer_input_value state) ;
+          let input_value = State.explorer_input_value state in
+          dbgf "Form submitted with %s" input_value ;
           Work_status.reinit result ;
           Work_status.wip result ;
-          Work_status.log result
-            (t "Starting with: " %% ct (State.explorer_input_value state)) ;
+          Work_status.log result (t "Starting with: " %% ct input_value) ;
           Work_status.async_catch result
             Lwt.(
-              fun () ->
-                Js_of_ocaml_lwt.Lwt_js.sleep 1.
-                >>= fun () ->
-                Work_status.log result (t "Slept 1 second") ;
-                Js_of_ocaml_lwt.Lwt_js.sleep 1.
-                >>= fun () ->
-                Work_status.log result (t "Slept 1 more second") ;
-                Fmt.kstr fail_with "Not implemented :/") in
+              fun ~fail () ->
+                match validate_intput input_value with
+                | `KT1 _ | `Uri _ ->
+                    Js_of_ocaml_lwt.Lwt_js.sleep 1.
+                    >>= fun () ->
+                    Work_status.log result (t "Slept 1 second") ;
+                    Js_of_ocaml_lwt.Lwt_js.sleep 1.
+                    >>= fun () ->
+                    Work_status.log result (t "Slept 1 more second") ;
+                    Fmt.kstr fail_with "Not implemented :/"
+                | `Error (_, el) -> fail (Tezos_html.error_trace el)) in
         State.if_explorer_should_go state enter_action ;
         make
           [ row
