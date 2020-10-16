@@ -88,6 +88,12 @@ module State = struct
   let get (state : < gui: t ; .. > Context.t) = state#gui
 
   module Fragment = struct
+    let to_string = Uri.to_string
+    let pp = Uri.pp
+
+    let page_to_path page =
+      Fmt.str "/%s" (Page.to_string page |> String.lowercase)
+
     let make ~page ~dev_mode ~explorer_input ~explorer_go =
       let query =
         match explorer_input with
@@ -95,10 +101,9 @@ module State = struct
         | more -> [("explorer-input", [more])] in
       let query = if not dev_mode then query else ("dev", ["true"]) :: query in
       let query = if not explorer_go then query else ("go", ["true"]) :: query in
-      Uri.make ()
-        ~path:(Fmt.str "/%s" (Page.to_string page |> String.lowercase))
-        ~query
-      |> Uri.to_string
+      Uri.make () ~path:(page_to_path page) ~query
+
+    let change_for_page t page = Uri.with_path t (page_to_path page)
 
     let parse fragment =
       let uri = Uri.of_string (Uri.pct_decode fragment) in
@@ -175,11 +180,10 @@ module State = struct
            let current = Js_of_ocaml.Url.Current.get_fragment () in
            let now =
              Fragment.(make ~page ~dev_mode ~explorer_input ~explorer_go) in
-           dbgf "Updating fragment %S → %S" current now ;
-           Current.set_fragment now ;
+           dbgf "Updating fragment %S → %a" current Fragment.pp now ;
+           Current.set_fragment (Fragment.to_string now) ;
            System.set_dev_mode ctxt dev_mode ;
            now)
-    |> Reactive.map ~f:(fun s -> dbgf "Second map %S" s ; s)
 
   let if_explorer_should_go state f =
     if
@@ -241,13 +245,18 @@ let navigation_menu state =
   let open Page in
   let open Meta_html in
   let fragment = make_fragment state in
+  let fragment_self = Reactive.map ~f:Fragment.to_string fragment in
+  let fragment_page p =
+    Reactive.map
+      ~f:(fun frg -> Fragment.(to_string (change_for_page frg p)))
+      fragment in
   Bootstrap.Navigation_bar.(
     make
       ~brand:
         (Bootstrap.label `Dark
            ( tzcomet_link ()
            %% small
-                (Reactive.bind fragment (fun f ->
+                (Reactive.bind fragment_self (fun f ->
                      link (t "ʘ") ~target:("#" ^ f)))
            %% Reactive.bind (State.dev_mode state) (function
                 | true -> it "(dev)"
@@ -256,7 +265,7 @@ let navigation_menu state =
          item
            (bt (Page.to_string p))
            ~active:(State.current_page_is_not state p)
-           ~action:(State.set_page state p) ~fragment in
+           ~action:(State.set_page state p) ~fragment:(fragment_page p) in
        List.map ~f:of_page all_in_order))
 
 let about_page state =
