@@ -63,14 +63,15 @@ end
 
 module State = struct
   module Page = struct
-    type t = Explorer | Settings | About
+    type t = Explorer | Settings | About | Editor
 
     let to_string = function
       | Explorer -> "Explorer"
+      | Editor -> "Editor"
       | Settings -> "Settings"
       | About -> "About"
 
-    let all_in_order = [Explorer; Settings; About]
+    let all_in_order = [Explorer; Editor; Settings; About]
   end
 
   open Page
@@ -410,6 +411,17 @@ module Tezos_html = struct
             %% List.fold tl ~init:(empty ()) ~f:(fun p e -> p %% one_error e) )
 end
 
+module Editor = struct
+  let page state =
+    let open Meta_html in
+    H5.(
+      textarea
+        (txt (Lwd.pure "Enter code here"))
+        ~a:
+          [ a_style (Lwd.pure "font-family: monospace"); a_rows (Lwd.pure 30)
+          ; a_cols (Lwd.pure 80) ])
+end
+
 module Explorer = struct
   let validate_intput input_value =
     match B58_hashes.check_b58_kt1_hash input_value with
@@ -519,5 +531,6 @@ let root_document state =
         State.Page.(
           function
           | Explorer -> Explorer.page state
+          | Editor -> Editor.page state
           | Settings -> settings_page state
           | About -> about_page state) )
