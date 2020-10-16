@@ -82,7 +82,8 @@ module State = struct
     ; dev_mode: bool Reactive.var
     ; explorer_input: string Reactive.var
     ; explorer_go: bool Reactive.var
-    ; explorer_went: bool Reactive.var }
+    ; explorer_went: bool Reactive.var
+    ; explorer_result: Work_status.log_item Work_status.t }
 
   (* type 'a context = 'a Context.t constraint 'a = < gui: t ; .. > *)
 
@@ -131,7 +132,8 @@ module State = struct
       ; explorer_went=
           (* If page is not the explorer we will ignore the command =
              assume it aready happened. *)
-          Reactive.var Poly.(page <> Page.Explorer) }
+          Reactive.var Poly.(page <> Page.Explorer)
+      ; explorer_result= Work_status.empty () }
   end
 
   let create () =
@@ -148,6 +150,7 @@ module State = struct
   let version_string state = (get state).version_string
   let set_page state p () = Reactive.set (get state).page p
   let page state = (get state).page |> Reactive.get
+  let explorer_result ctxt = (get ctxt).explorer_result
 
   let current_page_is_not state p =
     Reactive.get (get state).page |> Reactive.map ~f:Poly.(( <> ) p)
@@ -451,33 +454,48 @@ module Explorer = struct
           cct txt %% t "is a not a valid address nor a TZIP-16 URI"
           |> Bootstrap.color `Danger)
 
-  let page state =
+  let go_action ctxt =
     let open Meta_html in
-    let result = Work_status.empty () in
-    let nodes = Tezos_nodes._global in
-    Tezos_nodes.ensure_update_loop nodes ;
+    let result = State.explorer_result ctxt in
+    let input_value = State.explorer_input_value ctxt in
+    dbgf "Form submitted with %s" input_value ;
+    Work_status.reinit result ;
+    Work_status.wip result ;
+    Work_status.log result (t "Starting with: " %% ct input_value) ;
+    Work_status.async_catch result
+      Lwt.Infix.(
+        fun ~fail () ->
+          let logs prefix s =
+            Work_status.log result (it prefix %% t "→" %% t s) in
+          match validate_intput input_value with
+          | `KT1 address -> (
+              Query_nodes.metadata_value ctxt ~address ~key:""
+                ~log:(logs "Getting URI")
+              >>= fun metadata_uri ->
+              Work_status.log result (t "Now going for: " %% ct metadata_uri) ;
+              match Contract_metadata.Uri.validate metadata_uri with
+              | Ok uri ->
+                  Fmt.kstr Lwt.fail_with "Found the metadata URI: %a"
+                    Tezos_contract_metadata.Metadata_uri.pp uri
+              | Error e -> fail (Tezos_html.error_trace e) )
+          | `Uri _ ->
+              Js_of_ocaml_lwt.Lwt_js.sleep 1.
+              >>= fun () ->
+              Work_status.log result (t "Slept 1 second") ;
+              Js_of_ocaml_lwt.Lwt_js.sleep 1.
+              >>= fun () ->
+              Work_status.log result (t "Slept 1 more second") ;
+              Fmt.kstr Lwt.fail_with "Not implemented :/"
+          | `Error (_, el) -> fail (Tezos_html.error_trace el))
+
+  let page ctxt =
+    let open Meta_html in
+    let result = State.explorer_result ctxt in
+    Query_nodes.Update_status_loop.ensure ctxt ;
     h2 (t "Contract Metadata Explorer")
     % Bootstrap.Form.(
-        let enter_action () =
-          let input_value = State.explorer_input_value state in
-          dbgf "Form submitted with %s" input_value ;
-          Work_status.reinit result ;
-          Work_status.wip result ;
-          Work_status.log result (t "Starting with: " %% ct input_value) ;
-          Work_status.async_catch result
-            Lwt.(
-              fun ~fail () ->
-                match validate_intput input_value with
-                | `KT1 _ | `Uri _ ->
-                    Js_of_ocaml_lwt.Lwt_js.sleep 1.
-                    >>= fun () ->
-                    Work_status.log result (t "Slept 1 second") ;
-                    Js_of_ocaml_lwt.Lwt_js.sleep 1.
-                    >>= fun () ->
-                    Work_status.log result (t "Slept 1 more second") ;
-                    Fmt.kstr fail_with "Not implemented :/"
-                | `Error (_, el) -> fail (Tezos_html.error_trace el)) in
-        State.if_explorer_should_go state enter_action ;
+        let enter_action () = go_action ctxt in
+        State.if_explorer_should_go ctxt enter_action ;
         make
           [ row
               [ cell 2
@@ -491,9 +509,9 @@ module Explorer = struct
                            else ct v in
                          item
                            (cct v %% t "→" %% it msg)
-                           ~action:(fun () -> State.set_explorer_input state v)
+                           ~action:(fun () -> State.set_explorer_input ctxt v)
                        in
-                       Reactive.bind (State.examples state)
+                       Reactive.bind (State.examples ctxt)
                          ~f:(fun
                               (`Contracts contract_examples, `Uris uri_examples)
                             ->
@@ -507,14 +525,14 @@ module Explorer = struct
                      ~placeholder:
                        (Reactive.pure
                           "Enter a contract address or a metadata URI")
-                     (State.explorer_input_bidirectional state)
-                     ~help:(input_validation_status state))
+                     (State.explorer_input_bidirectional ctxt)
+                     ~help:(input_validation_status ctxt))
               ; cell 2
                   (submit_button (t "Go!")
                      ~active:
                        Reactive.(
                          map
-                           (input_valid state ** Work_status.busy result)
+                           (input_valid ctxt ** Work_status.busy result)
                            ~f:(function
                              | `Error _, _ -> false
                              | _, true -> false

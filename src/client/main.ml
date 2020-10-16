@@ -1175,11 +1175,15 @@ let lwd_onload _ =
   base_div##.innerHTML := Js.string "" ;
   let state =
     let gui = Gui.State.create () in
+    let nodes = Query_nodes.create () in
     object
       method system = System.{dev_mode= false}
 
       method gui = gui
+
+      method nodes = nodes
     end in
+  Query_nodes.add_default_nodes state ;
   let doc = Gui.root_document state in
   let root = Lwd.observe doc in
   Lwd.set_on_invalidate root (fun _ ->

@@ -84,6 +84,35 @@ module Reactive = struct
 
     let concat_map ~map table =
       Lwd.join (Lwd_table.map_reduce map Lwd_seq.lwd_monoid table)
+
+    let fold t ~init ~f =
+      let rec go acc = function
+        | None -> acc
+        | Some row -> (
+          match get row with None -> acc | Some x -> go (f acc x) (next row) )
+      in
+      go init (first t)
+
+    module Lwt = struct
+      open Lwt.Infix
+
+      let find_map (type a) t ~f =
+        let exception Found of a in
+        Lwt.catch
+          (fun () ->
+            fold t ~init:Lwt.return_none ~f:(fun pnone x ->
+                pnone
+                >>= fun none ->
+                f x
+                >>= function
+                | Some x -> Lwt.fail (Found x) | None -> Lwt.return none))
+          (function Found x -> Lwt.return_some x | e -> Lwt.fail e)
+
+      let find x ~f =
+        find_map x ~f:(fun x ->
+            f x
+            >>= function true -> Lwt.return_some x | false -> Lwt.return_none)
+    end
   end
 
   module Sequence = Lwd_seq
