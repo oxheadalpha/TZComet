@@ -1176,12 +1176,15 @@ let lwd_onload _ =
   let state =
     let gui = Gui.State.create () in
     let nodes = Query_nodes.create () in
+    let fetcher = Contract_metadata.Uri.Fetcher.create () in
     object
       method system = System.{dev_mode= false}
 
       method gui = gui
 
       method nodes = nodes
+
+      method fetcher = fetcher
     end in
   Query_nodes.add_default_nodes state ;
   let doc = Gui.root_document state in

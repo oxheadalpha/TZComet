@@ -51,7 +51,13 @@ module Work_status = struct
       | Empty -> empty ()
       | Work_in_progress ->
           Bootstrap.alert ~kind:`Secondary (show_logs ~wip:true ())
-      | Done (Ok x) -> p (t "Success") % f x
+      | Done (Ok x) ->
+          let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
+          Bootstrap.alert ~kind:`Success
+            ( h4 (t "Success:")
+            % div (f x)
+            %% collapse#button (t "Show logs")
+            % collapse#div (show_logs ~wip:false ()) )
       | Done (Error e) ->
           let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
           Bootstrap.alert ~kind:`Danger
@@ -83,9 +89,8 @@ module State = struct
     ; explorer_input: string Reactive.var
     ; explorer_go: bool Reactive.var
     ; explorer_went: bool Reactive.var
-    ; explorer_result: Work_status.log_item Work_status.t }
-
-  (* type 'a context = 'a Context.t constraint 'a = < gui: t ; .. > *)
+    ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Work_status.t
+    }
 
   let get (state : < gui: t ; .. > Context.t) = state#gui
 
@@ -454,6 +459,23 @@ module Explorer = struct
           cct txt %% t "is a not a valid address nor a TZIP-16 URI"
           |> Bootstrap.color `Danger)
 
+  let uri_and_metadata_result ctxt ~uri ~metadata =
+    let open Meta_html in
+    Fmt.kstr ct "Done: %a %a" Tezos_contract_metadata.Metadata_uri.pp uri
+      Tezos_contract_metadata.Metadata_contents.pp metadata
+
+  let uri_ok_but_metadata_failure ctxt ~uri ~metadata_json ~error =
+    let open Meta_html in
+    Fmt.kstr ct "Partially failed: %a" Tezos_contract_metadata.Metadata_uri.pp
+      uri
+    %% pre (ct metadata_json)
+    %% Tezos_html.error_trace error
+
+  let uri_there_but_wrong ctxt ~uri_string ~error =
+    let open Meta_html in
+    Fmt.kstr ct "Failed to parse URI: %S" uri_string
+    %% Tezos_html.error_trace error
+
   let go_action ctxt =
     let open Meta_html in
     let result = State.explorer_result ctxt in
@@ -466,26 +488,34 @@ module Explorer = struct
       Lwt.Infix.(
         fun ~fail () ->
           let logs prefix s =
-            Work_status.log result (it prefix %% t "→" %% t s) in
+            Work_status.log result
+              (it prefix %% t "→" %% Bootstrap.monospace (t s)) in
+          let on_uri ctxt uri =
+            Contract_metadata.Uri.fetch ctxt uri ~log:(logs "Fetching Metadata")
+            >>= fun json_code ->
+            let open Tezos_contract_metadata.Metadata_contents in
+            match of_json json_code with
+            | Ok metadata ->
+                Work_status.ok result
+                  (uri_and_metadata_result ctxt ~uri ~metadata) ;
+                Lwt.return ()
+            | Error error ->
+                fail
+                  (uri_ok_but_metadata_failure ctxt ~uri
+                     ~metadata_json:json_code ~error) in
           match validate_intput input_value with
           | `KT1 address -> (
               Query_nodes.metadata_value ctxt ~address ~key:""
                 ~log:(logs "Getting URI")
               >>= fun metadata_uri ->
+              Contract_metadata.Uri.Fetcher.set_current_contract ctxt address ;
               Work_status.log result (t "Now going for: " %% ct metadata_uri) ;
               match Contract_metadata.Uri.validate metadata_uri with
-              | Ok uri ->
-                  Fmt.kstr Lwt.fail_with "Found the metadata URI: %a"
-                    Tezos_contract_metadata.Metadata_uri.pp uri
-              | Error e -> fail (Tezos_html.error_trace e) )
-          | `Uri _ ->
-              Js_of_ocaml_lwt.Lwt_js.sleep 1.
-              >>= fun () ->
-              Work_status.log result (t "Slept 1 second") ;
-              Js_of_ocaml_lwt.Lwt_js.sleep 1.
-              >>= fun () ->
-              Work_status.log result (t "Slept 1 more second") ;
-              Fmt.kstr Lwt.fail_with "Not implemented :/"
+              | Ok uri -> on_uri ctxt uri
+              | Error error ->
+                  fail
+                    (uri_there_but_wrong ctxt ~uri_string:metadata_uri ~error) )
+          | `Uri (_, uri) -> System.slow_step ctxt >>= fun () -> on_uri ctxt uri
           | `Error (_, el) -> fail (Tezos_html.error_trace el))
 
   let page ctxt =
