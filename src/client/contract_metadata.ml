@@ -34,6 +34,13 @@ module Uri = struct
       Reactive.set (get ctxt).current_contract None
   end
 
+  let rec needs_context_address =
+    let open Tezos_contract_metadata.Metadata_uri in
+    function
+    | Storage {address= None; _} -> true
+    | Web _ | Storage _ | Ipfs _ -> false
+    | Hash {target; _} -> needs_context_address target
+
   let fetch ?(log = dbgf "Uri.fetch.log: %s") ctxt uri =
     let open Lwt.Infix in
     let logf fmt = Fmt.kstr log fmt in

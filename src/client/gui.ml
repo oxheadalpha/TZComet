@@ -239,6 +239,8 @@ module State = struct
            uri_dev
              "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9.NetXrtZMmJmZSeb/here"
              "An on-chain pointer to metadata with chain-id." ;
+           uri_dev "tezos-storage:/here"
+             "An on-chain pointer that requires a KT1 in context." ;
            uri "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
              "An IPFS URI to metadata JSON." ;
            uri_dev "ipfs://ldisejdse-dlseidje" "An invalid IPFS URI." ;
@@ -515,7 +517,11 @@ module Explorer = struct
               | Error error ->
                   fail
                     (uri_there_but_wrong ctxt ~uri_string:metadata_uri ~error) )
-          | `Uri (_, uri) -> System.slow_step ctxt >>= fun () -> on_uri ctxt uri
+          | `Uri (_, uri) ->
+              if Contract_metadata.Uri.needs_context_address uri then
+                Work_status.log result
+                  (bt "This URI requires a context KT1 address …") ;
+              System.slow_step ctxt >>= fun () -> on_uri ctxt uri
           | `Error (_, el) -> fail (Tezos_html.error_trace el))
 
   let page ctxt =
