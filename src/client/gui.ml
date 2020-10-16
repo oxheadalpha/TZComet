@@ -240,19 +240,19 @@ let navigation_menu state =
   let open State in
   let open Page in
   let open Meta_html in
+  let fragment = make_fragment state in
   Bootstrap.Navigation_bar.(
     make
       ~brand:
         (Bootstrap.label `Dark
            ( tzcomet_link ()
            %% small
-                (Reactive.bind (make_fragment state) (fun f ->
+                (Reactive.bind fragment (fun f ->
                      link (t "ʘ") ~target:("#" ^ f)))
            %% Reactive.bind (State.dev_mode state) (function
                 | true -> it "(dev)"
                 | false -> empty ()) ))
       (let of_page p =
-         let fragment = make_fragment state in
          item
            (bt (Page.to_string p))
            ~active:(State.current_page_is_not state p)
