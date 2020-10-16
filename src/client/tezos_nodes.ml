@@ -71,7 +71,7 @@ module Node = struct
     log "As concrete: %a"
       Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
       mich_storage ;
-    State.slow_step state_handle
+    System.slow_step state_handle
     >>= fun () ->
     Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/script" address
     >>= fun script_string ->
@@ -83,7 +83,7 @@ module Node = struct
     log "Storage type: %a"
       Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
       mich_storage_type ;
-    State.slow_step state_handle
+    System.slow_step state_handle
     >>= fun () ->
     let bgs =
       Tezos_contract_metadata.Contract_storage.find_metadata_big_maps

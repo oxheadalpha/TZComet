@@ -543,6 +543,10 @@ let michelson_bytes_editor_page _state ~michelson_bytes_editor
 
 let metadata_explorer state_handle =
   let open RD in
+  let _state_handle =
+    object
+      method system = System.{dev_mode= false}
+    end in
   let nodes = Tezos_nodes._global in
   Tezos_nodes.ensure_update_loop nodes ;
   let contract_address = state_handle.State.explorer_address_input in
@@ -558,7 +562,8 @@ let metadata_explorer state_handle =
     let addr = Var.value contract_address in
     catch
       (fun () ->
-        Tezos_nodes.metadata_value state_handle nodes ~address:addr ~key:"" ~log
+        Tezos_nodes.metadata_value _state_handle nodes ~address:addr ~key:""
+          ~log
         >>= fun uri ->
         logf "URI: `%s`" uri ;
         match
@@ -637,7 +642,7 @@ let metadata_explorer state_handle =
                     | Some s -> s
                     | None -> Var.value contract_address in
                   logf "Using address %S (key = %S)" addr key ;
-                  Tezos_nodes.metadata_value state_handle nodes ~address:addr
+                  Tezos_nodes.metadata_value _state_handle nodes ~address:addr
                     ~key ~log
               | Storage {network= Some network; address; key} ->
                   logf "storage %s %a %S" network
@@ -1171,6 +1176,8 @@ let lwd_onload _ =
   let state =
     let gui = Gui.State.create () in
     object
+      method system = System.{dev_mode= false}
+
       method gui = gui
     end in
   let doc = Gui.root_document state in

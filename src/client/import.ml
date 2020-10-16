@@ -45,6 +45,20 @@ end
 
 module Context = struct type 'a t = 'a constraint 'a = < .. > end
 
+module System = struct
+  type t = {mutable dev_mode: bool}
+
+  let get (state : < system: t ; .. > Context.t) = state#system
+
+  let set_dev_mode c v =
+    dbgf "system: setting dev_mode to %b" v ;
+    (get c).dev_mode <- v
+
+  let slow_step ctxt =
+    if (get ctxt).dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5
+    else Lwt.return ()
+end
+
 module Reactive = struct
   include Lwd
 
@@ -71,5 +85,6 @@ module Reactive = struct
     let concat_map ~map table =
       Lwd.join (Lwd_table.map_reduce map Lwd_seq.lwd_monoid table)
   end
+
   module Sequence = Lwd_seq
 end

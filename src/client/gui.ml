@@ -158,11 +158,14 @@ module State = struct
   let explorer_input_bidirectional state =
     (get state).explorer_input |> Reactive.Bidirectrional.of_var
 
-  let make_fragment state =
+  let make_fragment ctxt =
     (* WARNING: for now it is important for this to be attached "somewhere"
-       in the DOM. *)
+       in the DOM.
+       WARNING-2: this function is used for side effects unrelated to the
+       fragment too (system.dev_mode).
+    *)
     let open Js_of_ocaml.Url in
-    let state = get state in
+    let state = get ctxt in
     let dev = Reactive.get state.dev_mode in
     let page = Reactive.get state.page in
     let explorer_input = Reactive.get state.explorer_input in
@@ -172,9 +175,11 @@ module State = struct
            let current = Js_of_ocaml.Url.Current.get_fragment () in
            let now =
              Fragment.(make ~page ~dev_mode ~explorer_input ~explorer_go) in
-           dbgf "Updating %S → %S" current now ;
+           dbgf "Updating fragment %S → %S" current now ;
            Current.set_fragment now ;
+           System.set_dev_mode ctxt dev_mode ;
            now)
+    |> Reactive.map ~f:(fun s -> dbgf "Second map %S" s ; s)
 
   let if_explorer_should_go state f =
     if
