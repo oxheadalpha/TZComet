@@ -98,8 +98,13 @@ module Micheline_views = struct
                         | Some s -> [("version", string s)] ) ) ] ] ) ] )
 end
 
-let all ?(just_one_actually = false) ~logfile () =
+let all ?only ~logfile () =
   let id = ref 0 in
+  let originate ~description ~logfile ~name ~source ~init () =
+    match only with
+    | Some l when not (List.mem l name ~equal:String.equal) -> ()
+    | None | Some _ -> originate ~description ~logfile ~name ~source ~init ()
+  in
   let simple description ?(the_nat = 7) bm =
     let name = Caml.incr id ; Fmt.str "de%d" !id in
     let source = contract () in
@@ -132,7 +137,7 @@ let all ?(just_one_actually = false) ~logfile () =
     Ezjsonm.
       [ ( "license"
         , dict [("name", string "MIT"); ("details", string "The MIT License")]
-        ); ("homepage", string "https://gitlab.com/tqtezos/TZComet") ] in
+        ); ("homepage", string "https://github.com/tqtezos/TZComet") ] in
   let failwith_01 =
     view_with_code
       ~parameter:(prim "pair" ~annotations:["%arg_zero"] [nat; mutez])
@@ -152,12 +157,9 @@ let all ?(just_one_actually = false) ~logfile () =
     view_with_code "get-contract-address" code ~return_type:(prim "address" [])
   in
   let basics_and_views l = Ezjsonm.(basics @ [("views", list Fn.id l)]) in
-  let one () =
-    self_describe "This contract has a couple of off-chain-views."
-      (basics_and_views
-         [failwith_01; multiply_the_nat; call_balance; call_self_address]) in
   let many () =
-    originate ~logfile ~name:"de0" ~source:(contract ()) ~init:"(Pair 2 {})" () ;
+    originate ~logfile ~description:"Empty contract" ~name:"de0"
+      ~source:(contract ()) ~init:"(Pair 2 {})" () ;
     simple "The *empty* one." [] ;
     simple "Has a URI that points nowhere." [root "tezos-storage:onekey"] ;
     self_host "" Ezjsonm.(dict []) ;
@@ -168,20 +170,19 @@ let all ?(just_one_actually = false) ~logfile () =
       (basics_and_views
          [failwith_01; multiply_the_nat; call_balance; call_self_address]) ;
     () in
-  if just_one_actually then one () else many () ;
-  ()
+  many () ; ()
 
 let () =
   let usage () = Fmt.epr "usage: %s <TODO>\n%!" Caml.Sys.argv.(0) in
   let logfile = "/tmp/originations.md" in
-  match Caml.Sys.argv.(1) with
-  | "all" -> all () ~logfile
-  | "one" -> all () ~logfile ~just_one_actually:true
-  | other ->
+  match Array.to_list Caml.Sys.argv |> List.tl_exn with
+  | ["all"] -> all () ~logfile
+  | "only" :: these -> all () ~logfile ~only:these
+  | other :: _ ->
       Fmt.epr "Unknown command: %S!\n%!" other ;
       usage () ;
       Caml.exit 2
-  | exception _ ->
+  | [] ->
       Fmt.epr "Missing command\n%!" ;
       usage () ;
       Caml.exit 2
