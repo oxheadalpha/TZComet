@@ -230,6 +230,10 @@ module State = struct
              "Contract with metadata on Carthagenet." ;
            kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
              "Should not exist any where." ;
+           kt1_dev "KT1Su4bveK3P3PFonoCzPgefQriwBtN1KAgJ"
+             "Just a version string." ;
+           kt1 "KT1AtHTLvsBVy2yGPw9LWGMnhG2vL5ucm7ak"
+             "Quite a few off-chain-view tests." ;
            uri https_ok "A valid HTTPS URI." ;
            uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
            uri_dev sha256_https_ko

@@ -43,8 +43,9 @@ module Uri = struct
 
   let fetch ?(log = dbgf "Uri.fetch.log: %s") ctxt uri =
     let open Lwt.Infix in
-    let logf fmt = Fmt.kstr log fmt in
+    let logf fmt = Fmt.kstr (fun s -> dbgf "Uri.fetch: %s" s; log s) fmt in
     let ni s = Fmt.failwith "Not Implemented: %s" s in
+    dbgf "FETCCHINGG ============== ";
     System.slow_step ctxt
     >>= fun () ->
     let rec resolve =
