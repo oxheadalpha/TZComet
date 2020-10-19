@@ -500,6 +500,7 @@ module Explorer = struct
             Contract_metadata.Uri.fetch ctxt uri ~log:(logs "Fetching Metadata")
             >>= fun json_code ->
             let open Tezos_contract_metadata.Metadata_contents in
+            dbgf "before of-json" ;
             match of_json json_code with
             | Ok metadata ->
                 Work_status.ok result

@@ -84,9 +84,16 @@ module Node = struct
     >>= fun bytes_raw_value ->
     Fmt.kstr log "bytes raw value: %s" bytes_raw_value ;
     let content =
-      match Ezjsonm.value_from_string bytes_raw_value with
-      | `O [("bytes", `String b)] -> Hex.to_string (`Hex b)
-      | _ -> Fmt.failwith "Cannot find bytes in %s" bytes_raw_value in
+      (* The code below was throwing a stack-overflow: *)
+      (* match Ezjsonm.value_from_string bytes_raw_value with
+         | `O [("bytes", `String b)] -> Hex.to_string (`Hex b)
+         | _ -> Fmt.failwith "Cannot find bytes in %s" bytes_raw_value
+         | exception e -> *)
+      let v =
+        Js_of_ocaml.Json.unsafe_input (Js_of_ocaml.Js.string bytes_raw_value)
+      in
+      dbgf "v: %s" v##.bytes ;
+      Hex.to_string (`Hex v##.bytes) in
     return content
 end
 
