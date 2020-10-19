@@ -20,12 +20,14 @@ module Work_status = struct
     Reactive.(
       get status |> map ~f:(function Work_in_progress -> true | _ -> false))
 
-  let async_catch wip f =
+  let async_catch :
+      type b. 'a t -> (mkexn:(log_item -> exn) -> unit -> unit Lwt.t) -> unit =
+   fun wip f ->
     let open Lwt in
     let exception Work_failed of log_item in
     async (fun () ->
         catch
-          (fun () -> f ~fail:(fun x -> raise (Work_failed x)) ())
+          (fun () -> f ~mkexn:(fun x -> Work_failed x) ())
           Meta_html.(
             function
             | Work_failed l -> error wip l ; return ()
@@ -53,16 +55,14 @@ module Work_status = struct
           Bootstrap.alert ~kind:`Secondary (show_logs ~wip:true ())
       | Done (Ok x) ->
           let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
-          Bootstrap.alert ~kind:`Success
-            ( h4 (t "Success:")
-            % div (f x)
+          Bootstrap.bordered ~kind:`Success
+            ( div (f x)
             %% collapse#button (t "Show logs")
             % collapse#div (show_logs ~wip:false ()) )
       | Done (Error e) ->
           let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
-          Bootstrap.alert ~kind:`Danger
-            ( h4 (t "Errror:")
-            % div ~a:[classes ["lead"]] e
+          Bootstrap.bordered ~kind:`Danger
+            ( div e
             %% collapse#button (t "Show logs")
             % collapse#div (show_logs ~wip:false ()) ))
 end
@@ -232,6 +232,8 @@ module State = struct
              "Should not exist any where." ;
            kt1_dev "KT1Su4bveK3P3PFonoCzPgefQriwBtN1KAgJ"
              "Just a version string." ;
+           kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
+             "Has a URI that points nowhere." ;
            kt1 "KT1AtHTLvsBVy2yGPw9LWGMnhG2vL5ucm7ak"
              "Quite a few off-chain-view tests." ;
            uri https_ok "A valid HTTPS URI." ;
@@ -332,6 +334,23 @@ let settings_page state =
               (t
                  "Shows things that regular users should not see and \
                   artificially slows down the application.") ])
+
+module Errors_html = struct
+  let exception_html ctxt =
+    let open Meta_html in
+    function
+    | Decorate_error.E {message; trace} ->
+        let module M = Decorate_error.Message in
+        let rec msg = function
+          | M.Text s -> t s
+          | M.Inline_code c -> ct c
+          | M.Code_block b -> pre (ct b)
+          | M.List l -> List.fold ~init:(empty ()) ~f:(fun a b -> a % msg b) l
+        in
+        bt "Error:" %% msg message
+    | Failure s -> bt "Failure:" %% t s
+    | e -> bt "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e)
+end
 
 module Tezos_html = struct
   let uri_parsing_error err =
@@ -465,22 +484,47 @@ module Explorer = struct
           cct txt %% t "is a not a valid address nor a TZIP-16 URI"
           |> Bootstrap.color `Danger)
 
-  let uri_and_metadata_result ctxt ~uri ~metadata =
+  let full_input_quick ctxt =
     let open Meta_html in
-    Fmt.kstr ct "Done: %a %a" Tezos_contract_metadata.Metadata_uri.pp uri
-      Tezos_contract_metadata.Metadata_contents.pp metadata
+    function
+    | `KT1 k -> t "Contract" %% ct k
+    | `Uri (u, _) -> t "URI" %% ct u
+    | `Error (m, _) -> t "Erroneous input:" %% Fmt.kstr ct "%S" m
 
-  let uri_ok_but_metadata_failure ctxt ~uri ~metadata_json ~error =
+  let full_input_bloc ctxt full_input =
     let open Meta_html in
-    Fmt.kstr ct "Partially failed: %a" Tezos_contract_metadata.Metadata_uri.pp
-      uri
+    h4 (t "Understood Input") % div (full_input_quick ctxt full_input)
+
+  let uri_and_metadata_result ctxt ~uri ~metadata ~full_input =
+    let open Meta_html in
+    full_input_bloc ctxt full_input
+    % h4 (t "Metadata Location")
+    % Contract_metadata.Uri.render ctxt uri
+    % h4 (t "Metadata Contents")
+    % Contract_metadata.Content.render ctxt metadata
+
+  let uri_ok_but_metadata_failure ctxt ~uri ~metadata_json ~error ~full_input =
+    let open Meta_html in
+    full_input_bloc ctxt full_input
+    % Fmt.kstr ct "Partially failed"
+    (* Tezos_contract_metadata.Metadata_uri.pp uri *)
+    % h4 (t "Metadata Location")
+    % Contract_metadata.Uri.render ctxt uri
     %% pre (ct metadata_json)
     %% Tezos_html.error_trace error
 
-  let uri_there_but_wrong ctxt ~uri_string ~error =
+  let uri_there_but_wrong ctxt ~full_input ~uri_string ~error =
     let open Meta_html in
-    Fmt.kstr ct "Failed to parse URI: %S" uri_string
+    full_input_bloc ctxt full_input
+    % Fmt.kstr ct "Failed to parse URI: %S" uri_string
     %% Tezos_html.error_trace error
+
+  let uri_failed_to_fetch ctxt ~uri ~error ~full_input =
+    let open Meta_html in
+    full_input_bloc ctxt full_input
+    % h4 (t "Metadata Location")
+    % Contract_metadata.Uri.render ctxt uri
+    % Errors_html.exception_html ctxt error
 
   let go_action ctxt =
     let open Meta_html in
@@ -492,25 +536,33 @@ module Explorer = struct
     Work_status.log result (t "Starting with: " %% ct input_value) ;
     Work_status.async_catch result
       Lwt.Infix.(
-        fun ~fail () ->
+        fun ~mkexn () ->
           let logs prefix s =
             Work_status.log result
               (it prefix %% t "→" %% Bootstrap.monospace (t s)) in
+          let full_input = validate_intput input_value in
           let on_uri ctxt uri =
-            Contract_metadata.Uri.fetch ctxt uri ~log:(logs "Fetching Metadata")
+            Lwt.catch
+              (fun () ->
+                Contract_metadata.Uri.fetch ctxt uri
+                  ~log:(logs "Fetching Metadata"))
+              (fun e ->
+                raise
+                  (mkexn (uri_failed_to_fetch ctxt ~full_input ~uri ~error:e)))
             >>= fun json_code ->
             let open Tezos_contract_metadata.Metadata_contents in
             dbgf "before of-json" ;
             match of_json json_code with
             | Ok metadata ->
                 Work_status.ok result
-                  (uri_and_metadata_result ctxt ~uri ~metadata) ;
+                  (uri_and_metadata_result ctxt ~full_input ~uri ~metadata) ;
                 Lwt.return ()
             | Error error ->
-                fail
-                  (uri_ok_but_metadata_failure ctxt ~uri
-                     ~metadata_json:json_code ~error) in
-          match validate_intput input_value with
+                raise
+                  (mkexn
+                     (uri_ok_but_metadata_failure ctxt ~uri ~full_input
+                        ~metadata_json:json_code ~error)) in
+          match full_input with
           | `KT1 address -> (
               Query_nodes.metadata_value ctxt ~address ~key:""
                 ~log:(logs "Getting URI")
@@ -520,14 +572,16 @@ module Explorer = struct
               match Contract_metadata.Uri.validate metadata_uri with
               | Ok uri -> on_uri ctxt uri
               | Error error ->
-                  fail
-                    (uri_there_but_wrong ctxt ~uri_string:metadata_uri ~error) )
+                  raise
+                    (mkexn
+                       (uri_there_but_wrong ctxt ~uri_string:metadata_uri
+                          ~full_input ~error)) )
           | `Uri (_, uri) ->
               if Contract_metadata.Uri.needs_context_address uri then
                 Work_status.log result
                   (bt "This URI requires a context KT1 address …") ;
               System.slow_step ctxt >>= fun () -> on_uri ctxt uri
-          | `Error (_, el) -> fail (Tezos_html.error_trace el))
+          | `Error (_, el) -> raise (mkexn (Tezos_html.error_trace el)))
 
   let page ctxt =
     let open Meta_html in

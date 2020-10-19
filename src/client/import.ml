@@ -10,6 +10,10 @@ let rec oxfordize_list l ~map ~sep ~last_sep =
   | [one; two] -> [map one; last_sep (); map two]
   | one :: more -> map one :: sep () :: oxfordize_list more ~map ~sep ~last_sep
 
+let ellipsize_string ?(ellipsis = " …") s ~max_length =
+  if String.length s <= max_length then s
+  else String.prefix s max_length ^ ellipsis
+
 module Var = struct
   type 'a t =
     {name: string; signal: 'a React.S.t; set: ?step:React.step -> 'a -> unit}
@@ -116,4 +120,26 @@ module Reactive = struct
   end
 
   module Sequence = Lwd_seq
+end
+
+module Decorate_error = struct
+  module Message = struct
+    type t =
+      | Text of string
+      | Inline_code of string
+      | Code_block of string
+      | List of t list
+
+    let t s = Text s
+    let ct s = Inline_code s
+    let code_block s = Code_block s
+    let list l = List l
+    let ( % ) a b = List [a; b]
+    let ( %% ) a b = List [a; t " "; b]
+  end
+
+  exception E of {message: Message.t; trace: exn list}
+
+  let raise ?(trace = []) message = raise (E {message; trace})
+  let reraise message ~f = Lwt.catch f (fun e -> raise message ~trace:[e])
 end

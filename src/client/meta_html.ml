@@ -106,6 +106,14 @@ module Bootstrap = struct
         ; H5.a_role (Lwd.pure ["alert"]) ]
       [content]
 
+  let bordered ?(rounded = `Default) ?(kind = `Primary) content =
+    H5.div
+      ~a:
+        [ classes
+            ( ["border"; Fmt.str "border-%s" (Label_kind.to_string kind)]
+            @ match rounded with `Default -> ["rounded-sm"] | `No -> [] ) ]
+      [content]
+
   let monospace content = H5.span ~a:[classes ["text-monospace"]] [content]
 
   let button ?(kind = `Light) content ~action =

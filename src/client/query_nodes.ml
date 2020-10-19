@@ -79,10 +79,19 @@ module Node = struct
   let bytes_value_of_big_map_at_string node ~big_map_id ~key ~log =
     let open Lwt in
     let hash_string = B58_hashes.b58_script_id_hash_of_michelson_string key in
-    Fmt.kstr (rpc_get node) "/chains/main/blocks/head/context/big_maps/%s/%s"
-      (Z.to_string big_map_id) hash_string
+    Decorate_error.(
+      reraise
+        Message.(
+          t "Cannot find any value in the big-map"
+          %% ct (Z.to_string big_map_id)
+          %% t "at the key" %% ct key %% t "(hash: " % ct hash_string % t ").")
+        ~f:(fun () ->
+          Fmt.kstr (rpc_get node)
+            "/chains/main/blocks/head/context/big_maps/%s/%s"
+            (Z.to_string big_map_id) hash_string))
     >>= fun bytes_raw_value ->
-    Fmt.kstr log "bytes raw value: %s" bytes_raw_value ;
+    Fmt.kstr log "bytes raw value: %s"
+      (ellipsize_string bytes_raw_value ~max_length:30) ;
     let content =
       (* The code below was throwing a stack-overflow: *)
       (* match Ezjsonm.value_from_string bytes_raw_value with
