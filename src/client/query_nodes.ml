@@ -157,7 +157,7 @@ module Update_status_loop = struct
            [Js_of_ocaml_lwt.Lwt_js.sleep sleep_time; wait_for_wake_up ctxt]
          >>= fun () ->
          Reactive.set (get ctxt).loop_interval
-           (Float.min (sleep_time *. 1.4) 90.) ;
+           (Float.min (sleep_time *. 1.4) 120.) ;
          loop (count + 1) in
        loop 0)
 
