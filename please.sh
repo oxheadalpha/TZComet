@@ -86,9 +86,14 @@ build_all () {
     cp data/loading.gif _build/website/
     dune exec src/gen-web/main.exe index "TZComet" > _build/website/index.html
     echo "Done: file://$PWD/_build/website/index.html?lwd=true&dev=true"
+    dune build src/deploy-examples/main.exe
 }
 build_ () {
     build_all
+}
+
+deploy_examples () {
+    dune exec src/deploy-examples/main.exe "$@"
 }
 
 deploy_website () {
