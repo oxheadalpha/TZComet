@@ -582,7 +582,8 @@ module Tezos_html = struct
 
     let rec validity_error = function
       | Nat -> t "Invalid natural number."
-      | _ -> t "Invalid Micheline syntax."
+      | Mutez -> t "Invalid μꜩ value."
+      | Any _ -> t "Invalid Micheline syntax."
 
     let rec to_form_items mf =
       let open Meta_html in
