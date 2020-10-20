@@ -1,5 +1,21 @@
 open Import
 
+module Errors_html = struct
+  let exception_html ctxt =
+    let open Meta_html in
+    function
+    | Decorate_error.E {message; trace} ->
+        let module M = Decorate_error.Message in
+        let rec msg = function
+          | M.Text s -> t s
+          | M.Inline_code c -> ct c
+          | M.Code_block b -> pre (ct b)
+          | M.List l -> List.fold ~init:(empty ()) ~f:(fun a b -> a % msg b) l
+        in
+        bt "Error:" %% msg message
+    | Failure s -> bt "Failure:" %% t s
+    | e -> bt "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e)
+end
 module Work_status = struct
   type log_item = Html_types.div_content_fun Meta_html.H5.elt
   type 'a status = Empty | Work_in_progress | Done of ('a, log_item) Result.t
@@ -20,6 +36,9 @@ module Work_status = struct
     Reactive.(
       get status |> map ~f:(function Work_in_progress -> true | _ -> false))
 
+  let is_empty {status; _} =
+    Reactive.(get status |> map ~f:(function Empty -> true | _ -> false))
+
   let async_catch :
       type b. 'a t -> (mkexn:(log_item -> exn) -> unit -> unit Lwt.t) -> unit =
    fun wip f ->
@@ -31,11 +50,8 @@ module Work_status = struct
           Meta_html.(
             function
             | Work_failed l -> error wip l ; return ()
-            | Failure s ->
-                error wip (t "Failure: " %% ct s) ;
-                return ()
             | exn ->
-                error wip (t "Exception: " %% ct (Exn.to_string exn)) ;
+                error wip (Errors_html.exception_html () exn );
                 return ()))
 
   let render work_status ~f =
@@ -337,22 +353,6 @@ let settings_page state =
                  "Shows things that regular users should not see and \
                   artificially slows down the application.") ])
 
-module Errors_html = struct
-  let exception_html ctxt =
-    let open Meta_html in
-    function
-    | Decorate_error.E {message; trace} ->
-        let module M = Decorate_error.Message in
-        let rec msg = function
-          | M.Text s -> t s
-          | M.Inline_code c -> ct c
-          | M.Code_block b -> pre (ct b)
-          | M.List l -> List.fold ~init:(empty ()) ~f:(fun a b -> a % msg b) l
-        in
-        bt "Error:" %% msg message
-    | Failure s -> bt "Failure:" %% t s
-    | e -> bt "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e)
-end
 
 module Tezos_html = struct
   let uri_parsing_error err =
@@ -451,6 +451,36 @@ module Tezos_html = struct
   let field name content = field_head name %% content
   let monot s = Bootstrap.monospace (t s)
 
+  let option_field name fieldopt f =
+    match fieldopt with None -> [] | Some s -> [field name (f s)]
+
+  let normal_field name x = option_field name (Some ()) (fun () -> x)
+
+  let paragraphs blob =
+    let rec go l acc =
+      match List.split_while l ~f:(function "" -> false | _ -> true) with
+      | ll, [] -> String.concat ~sep:" " ll :: acc
+      | ll, _ :: lr -> go lr (String.concat ~sep:" " ll :: acc) in
+    go (String.split blob ~on:'\n') []
+    |> List.rev_map ~f:(fun x -> div (t x))
+    |> H5.div
+
+  let list_field name field f =
+    option_field name (match field with [] -> None | more -> Some more) f
+
+  let protocol s =
+    let proto s = abbreviation s (ct (String.prefix s 12)) in
+    let known name url =
+      span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
+    match s with
+    | "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSXRLQEb" ->
+        known "Carthage" "http://tezos.gitlab.io/protocols/006_carthage.html"
+    | "PsBabyM1eUXZseaJdmXFApDSBqj8YBfwELoxZHHW77EMcAbbwAS" ->
+        known "Babylon" "http://tezos.gitlab.io/protocols/005_babylon.html"
+    | "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo" ->
+        known "Delphi" "https://blog.nomadic-labs.com/delphi-changelog.html"
+    | s -> proto s
+
   let rec metadata_uri ctxt uri =
     let open Tezos_contract_metadata.Metadata_uri in
     let ct = monot in
@@ -479,6 +509,147 @@ module Tezos_html = struct
             ; field "… should SHA256-hash to"
                 (Fmt.kstr ct "%a" Hex.pp (Hex.of_string value)) ]
 
+  let michelson_view ctxt ~view =
+    let open Tezos_contract_metadata.Metadata_contents in
+    let open View in
+    let open Implementation in
+    let open Michelson_storage in
+    let {parameter; return_type; code; human_annotations; version} = view in
+    let mich (Micheline m) =
+      let open Tezos_micheline in
+      Fmt.str "%a" Micheline_printer.print_expr
+        (Micheline_printer.printable Base.Fn.id m) in
+    let mich_node node =
+      let open Tezos_micheline in
+      Fmt.str "%a" Micheline_printer.print_expr
+        (Micheline_printer.printable Base.Fn.id
+           (Micheline.strip_locations node)) in
+    let call_mode = Reactive.var false in
+    let switch = Bootstrap.button ~kind:`Primary ~outline:true ~size:`Small in
+    field_head "Michelson-storage-view"
+    % Reactive.bind (Reactive.get call_mode) ~f:(function
+        | false ->
+            switch ~action:(fun () -> Reactive.set call_mode true) (t "Call")
+            % itemize
+                ( option_field "Michelson-Version" version protocol
+                @ normal_field "Type"
+                    (Fmt.kstr ct "%s<contract-storage> → %s"
+                       ( match parameter with
+                       | None -> ""
+                       | Some p -> mich p ^ " × " )
+                       (mich return_type))
+                @ normal_field "Code"
+                    (let concrete = mich code in
+                     let lines =
+                       1
+                       + String.count concrete ~f:(function
+                           | '\n' -> true
+                           | _ -> false) in
+                     if lines <= 1 then ct concrete
+                     else
+                       let collapse =
+                         Bootstrap.Collapse.make ~button_kind:`Secondary ()
+                       in
+                       collapse#button (t "Michelson Code")
+                       % collapse#div (pre (ct concrete)))
+                @ list_field "Annotations" human_annotations (fun anns ->
+                      itemize
+                        (List.map anns ~f:(fun (k, v) ->
+                             ct k % t " → " % it v))) )
+        | true ->
+            let address =
+              Reactive.var
+                ( Contract_metadata.Uri.Fetcher.current_contract ctxt
+                |> Reactive.peek |> Option.value ~default:"" ) in
+            let parameter_input =
+              match parameter with
+              | Some p -> Some (p, Reactive.var "")
+              | None -> None in
+            let parse_micheline m =
+              match Tezos_micheline.Micheline_parser.tokenize m with
+              | tokens, [] -> (
+                match
+                  Tezos_micheline.Micheline_parser.parse_expression tokens
+                with
+                | node, [] -> node
+                | _, errs -> Fmt.failwith "parsing" )
+              | _, errs -> Fmt.failwith "tokeninzeing" in
+            let wip = Work_status.empty () in
+            switch ~action:(fun () -> Reactive.set call_mode false) (t "Cancel")
+            % ( Work_status.is_empty wip
+              |> Reactive.bind ~f:(function
+                   | false -> Work_status.render wip ~f:Fn.id
+                   | true ->
+                       let open Bootstrap.Form in
+                       let addr_input =
+                         [ input
+                             ~label:(t "The contract to hit the view with:")
+                             ~placeholder:
+                               (Reactive.pure
+                                  "This requires a contract address …")
+                             ~help:
+                               Reactive.(
+                                 bind
+                                   ( get address
+                                   ** get
+                                        (Contract_metadata.Uri.Fetcher
+                                         .current_contract ctxt) )
+                                   ~f:(function
+                                     | "", _ -> t "Please, we need one."
+                                     | _, None -> t "Thanks, we needed one."
+                                     | a1, Some a2 ->
+                                         if String.equal a1 a2 then
+                                           t
+                                             "This is the “main-address” \
+                                              currently in context."
+                                         else t "Interesting …"))
+                             (Reactive.Bidirectrional.of_var address) ] in
+                       let param_input =
+                         match parameter_input with
+                         | None -> [magic (t "No parameter")]
+                         | Some (p, v) ->
+                             [ input
+                                 ~label:
+                                   ( t "The parameters to use" %% t "("
+                                   % ct (mich p)
+                                   % t ")" )
+                                 ~placeholder:
+                                   (Reactive.pure
+                                      "Some decent Michelson right here")
+                                 (Reactive.Bidirectrional.of_var v) ] in
+                       make
+                         ( addr_input @ param_input
+                         @ [ submit_button (t "Go!") (fun () ->
+                                 Work_status.wip wip ;
+                                 let log s =
+                                   Work_status.log wip
+                                     ( it "Calling view" %% t "→"
+                                     %% Bootstrap.monospace (t s) ) in
+                                 Work_status.async_catch wip
+                                   Lwt.Infix.(
+                                     fun ~mkexn () ->
+                                       let parameter =
+                                         match parameter_input with
+                                         | Some (_, v) ->
+                                             Reactive.peek v |> parse_micheline
+                                         | None -> parse_micheline "Unit" in
+                                       Query_nodes.call_off_chain_view ctxt ~log
+                                         ~address:(Reactive.peek address) ~view
+                                         ~parameter
+                                       >>= function
+                                       | Ok (result, storage) ->
+                                           Work_status.ok wip
+                                             ( t "Result:"
+                                             %% ct (mich_node result)
+                                             %% t "Storage:"
+                                             %% ct (mich_node storage) ) ;
+                                           Lwt.return ()
+                                       | Error s ->
+                                           Work_status.error wip
+                                             (t "Error:" %% ct s) ;
+                                           Lwt.return ()) ;
+                                 dbgf "go view") ] )) ))
+
   let metadata_contents ctxt =
     let open Tezos_contract_metadata.Metadata_contents in
     fun { name
@@ -491,25 +662,11 @@ module Tezos_html = struct
         ; views
         ; unknown } ->
       let ct = monot in
-      let option_field name fieldopt f =
-        match fieldopt with None -> [] | Some s -> [field name (f s)] in
-      let normal_field name x = option_field name (Some ()) (fun () -> x) in
-      let paragraphs blob =
-        let rec go l acc =
-          match List.split_while l ~f:(function "" -> false | _ -> true) with
-          | ll, [] -> String.concat ~sep:" " ll :: acc
-          | ll, _ :: lr -> go lr (String.concat ~sep:" " ll :: acc) in
-        go (String.split blob ~on:'\n') []
-        |> List.rev_map ~f:(fun x -> div (t x))
-        |> H5.div in
       let license_elt l =
         let open License in
         it l.name
         % Option.value_map ~default:(empty ()) l.details ~f:(fun d ->
               Fmt.kstr t " → %s" d) in
-      let list_field name field f =
-        option_field name (match field with [] -> None | more -> Some more) f
-      in
       let authors_elt l =
         oxfordize_list l ~map:ct
           ~sep:(fun () -> t ", ")
@@ -537,19 +694,6 @@ module Tezos_html = struct
           Re.split_full (Re.compile r) s |> List.map ~f:tok |> list in
         List.map l ~f:interface |> List.intersperse ~sep:(t ", ") |> list in
       let _todo l = Fmt.kstr t "todo: %d items" (List.length l) in
-      let protocol s =
-        let proto s = abbreviation s (ct (String.prefix s 12)) in
-        let known name url =
-          span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
-        match s with
-        | "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSXRLQEb" ->
-            known "Carthage"
-              "http://tezos.gitlab.io/protocols/006_carthage.html"
-        | "PsBabyM1eUXZseaJdmXFApDSBqj8YBfwELoxZHHW77EMcAbbwAS" ->
-            known "Babylon" "http://tezos.gitlab.io/protocols/005_babylon.html"
-        | "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo" ->
-            known "Delphi" "https://blog.nomadic-labs.com/delphi-changelog.html"
-        | s -> proto s in
       let views_elt (views : View.t list) =
         let view v =
           let open View in
@@ -560,45 +704,7 @@ module Tezos_html = struct
             let open Implementation in
             itemize
               (List.map impls ~f:(function
-                | Michelson_storage
-                    { parameter
-                    ; return_type
-                    ; code= michcode
-                    ; human_annotations
-                    ; version } ->
-                    let open Michelson_storage in
-                    let mich (Micheline m) =
-                      let open Tezos_micheline in
-                      Fmt.str "%a" Micheline_printer.print_expr
-                        (Micheline_printer.printable Base.Fn.id m) in
-                    field_head "Michelson-storage-view"
-                    % itemize
-                        ( option_field "Michelson-Version" version protocol
-                        @ normal_field "Type"
-                            (Fmt.kstr ct "%s<contract-storage> → %s"
-                               ( match parameter with
-                               | None -> ""
-                               | Some p -> mich p ^ " × " )
-                               (mich return_type))
-                        @ normal_field "Code"
-                            (let concrete = mich michcode in
-                             let lines =
-                               1
-                               + String.count concrete ~f:(function
-                                   | '\n' -> true
-                                   | _ -> false) in
-                             if lines <= 1 then ct concrete
-                             else
-                               let collapse =
-                                 Bootstrap.Collapse.make ~button_kind:`Secondary
-                                   () in
-                               collapse#button (t "Michelson Code")
-                               % collapse#div (pre (ct concrete)))
-                        @ list_field "Annotations" human_annotations
-                            (fun anns ->
-                              itemize
-                                (List.map anns ~f:(fun (k, v) ->
-                                     ct k % t " → " % it v))) )
+                | Michelson_storage view -> michelson_view ctxt ~view
                 | Rest_api_query raq ->
                     field "REST-API Query"
                       (itemize
