@@ -894,7 +894,7 @@ module Explorer = struct
     % Bootstrap.Form.(
         let enter_action () = go_action ctxt in
         State.if_explorer_should_go ctxt enter_action ;
-        make
+        make ~enter_action
           [ row
               [ cell 2
                   (magic
