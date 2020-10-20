@@ -66,36 +66,39 @@ module Micheline_views = struct
   let mutez = prim "mutez" []
   let timestamp = prim "timestamp" []
   let prims = List.map ~f:(fun p -> prim p [])
+  let or_empty opt f = Option.value_map opt ~default:[] ~f
 
-  let view_with_code ?pure ?version ?parameter ?(return_type = nat)
-      ?(annotations = []) name code =
-    let open Ezjsonm in
-    let or_empty opt f = Option.value_map opt ~default:[] ~f in
+  let view ?description ?pure name implementations =
     dict
       ( or_empty pure (fun b -> [("pure", bool b)])
-      @ [ ("name", string name)
-        ; ( "implementations"
-          , `A
-              [ dict
-                  [ ( "michelson-storage-view"
-                    , dict
-                        ( Option.value_map parameter ~default:[] ~f:(fun p ->
-                              [("parameter", p)])
-                        @ [("return-type", return_type); ("code", `A code)]
-                        @ ( match annotations with
-                          | [] -> []
-                          | more ->
-                              [ ( "annotations"
-                                , list
-                                    (fun (k, v) ->
-                                      dict
-                                        [ ("name", string k)
-                                        ; ("description", string v) ])
-                                    more ) ] )
-                        @
-                        match version with
-                        | None -> []
-                        | Some s -> [("version", string s)] ) ) ] ] ) ] )
+      @ [("name", string name)]
+      @ or_empty description (fun d -> [("description", string d)])
+      @ [("implementations", `A implementations)] )
+
+  let storage_view_implementation ?version ?parameter ?(return_type = nat)
+      ?(annotations = []) code =
+    dict
+      [ ( "michelson-storage-view"
+        , dict
+            ( Option.value_map parameter ~default:[] ~f:(fun p ->
+                  [("parameter", p)])
+            @ [("return-type", return_type); ("code", `A code)]
+            @ ( match annotations with
+              | [] -> []
+              | more ->
+                  [ ( "annotations"
+                    , list
+                        (fun (k, v) ->
+                          dict [("name", string k); ("description", string v)])
+                        more ) ] )
+            @ match version with None -> [] | Some s -> [("version", string s)]
+            ) ) ]
+
+  let view_with_code ?description ?pure ?version ?parameter ?(return_type = nat)
+      ?(annotations = []) name code =
+    view ?description ?pure name
+      [ storage_view_implementation ?version ?parameter ~return_type
+          ~annotations code ]
 end
 
 let all ?only ~logfile () =
@@ -138,6 +141,26 @@ let all ?only ~logfile () =
       [ ( "license"
         , dict [("name", string "MIT"); ("details", string "The MIT License")]
         ); ("homepage", string "https://github.com/tqtezos/TZComet") ] in
+  let empty_view_01 =
+    view
+      ~description:
+        "This view has no implementations …\n\nWhich is indeed useless."
+      "an-empty-useless-view" [] in
+  let view_with_too_much_code =
+    view
+      ~description:
+        "This view has a bunch of implementations …\n\n\
+         They are all meaningless."
+      "an-empty-useless-view"
+      [ storage_view_implementation ~return_type:nat
+          ( prims ["DUP"; "DUP"; "DUP"; "DUP"; "DUP"; "DUP"; "PAIR"]
+          @ [prim "DIP" (prims (List.init 50 ~f:(Fn.const "PAIR")))] )
+      ; storage_view_implementation ~return_type:nat
+          ( prims ["DUP"; "DUP"; "DUP"; "DUP"; "DUP"; "DUP"; "PAIR"]
+          @ [ prim "DIP"
+                ( prims (List.init 50 ~f:(Fn.const "PAIR"))
+                @ [prim "DIP" (prims (List.init 50 ~f:(Fn.const "PAIR")))] ) ]
+          ) ] in
   let failwith_01 =
     view_with_code
       ~parameter:(prim "pair" ~annotations:["%arg_zero"] [nat; mutez])
@@ -148,7 +171,9 @@ let all ?only ~logfile () =
     (* let code = prims ["CAR"; "SELF"; "CAR"; "MUL"] in *)
     let code = prims ["CAR"; "DUP"; "CDAR"; "SWAP"; "CAR"; "MUL"] in
     view_with_code ~pure:true ~parameter:nat "multiply-the-nat-in-storage" code
-  in
+      ~description:
+        "This one is pure, it multiplies the natural number given as argument \
+         with the one in storage." in
   let call_balance =
     let code = prims ["DROP"; "BALANCE"] in
     view_with_code "just-call-balance" code in
@@ -168,7 +193,8 @@ let all ?only ~logfile () =
     self_describe "This contract has few more fields." basics ;
     self_describe "This contract has a couple of off-chain-views."
       (basics_and_views
-         [failwith_01; multiply_the_nat; call_balance; call_self_address]) ;
+         [ empty_view_01; failwith_01; multiply_the_nat; call_balance
+         ; view_with_too_much_code; call_self_address ]) ;
     () in
   many () ; ()
 
