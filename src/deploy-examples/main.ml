@@ -169,14 +169,14 @@ let all ?only ~logfile () =
       [prim "FAILWITH" []] in
   let multiply_the_nat =
     (* let code = prims ["CAR"; "SELF"; "CAR"; "MUL"] in *)
-    let code = prims ["CAR"; "DUP"; "CDAR"; "SWAP"; "CAR"; "MUL"] in
+    let code = prims ["CAR"; "DUP"; "CDR"; "CAR"; "SWAP"; "CAR"; "MUL"] in
     view_with_code ~pure:true ~parameter:nat "multiply-the-nat-in-storage" code
       ~description:
         "This one is pure, it multiplies the natural number given as argument \
          with the one in storage." in
   let call_balance =
     let code = prims ["DROP"; "BALANCE"] in
-    view_with_code "just-call-balance" code in
+    view_with_code ~return_type:mutez "just-call-balance" code in
   let call_self_address =
     let code = prims ["DROP"; "SELF"; "ADDRESS"] in
     view_with_code "get-contract-address" code ~return_type:(prim "address" [])
