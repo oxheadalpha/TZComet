@@ -94,10 +94,10 @@ module Micheline_views = struct
             @ match version with None -> [] | Some s -> [("version", string s)]
             ) ) ]
 
-  let view_with_code ?description ?pure ?version ?parameter ?(return_type = nat)
+  let view_with_code ?description ?pure ?version ?parameter ?return_type
       ?(annotations = []) name code =
     view ?description ?pure name
-      [ storage_view_implementation ?version ?parameter ~return_type
+      [ storage_view_implementation ?version ?parameter ?return_type
           ~annotations code ]
 end
 
@@ -163,10 +163,30 @@ let all ?only ~logfile () =
           ) ] in
   let failwith_01 =
     view_with_code
-      ~parameter:(prim "pair" ~annotations:["%arg_zero"] [nat; mutez])
+      ~parameter:
+        (prim "pair"
+           [ prim "nat" ~annotations:["%arg_zero"] []
+           ; prim "mutez" ~annotations:["%arg_one"] [] ])
       "just-call-failwith"
-      ~annotations:[("%arg_zero", "This is obvioulsy ignored.")]
+      ~annotations:
+        [ ("%arg_zero", "This is obvioulsy ignored.")
+        ; ("%arg_one", "This is also ignored, but different.") ]
       [prim "FAILWITH" []] in
+  let identity_01 =
+    let big_type =
+      prim "pair"
+        [ prim "nat" ~annotations:["%arg_zero"] []
+        ; prim "pair"
+            [ prim "string" ~annotations:["%arg_one"] []
+            ; prim "mutez" ~annotations:["%arg_two"] [] ] ] in
+    view_with_code ~parameter:big_type "the-identity" ~return_type:big_type
+      ~annotations:
+        [ ("%arg_zero", "This is obvioulsy ignored.")
+        ; ("%arg_one", "This is also ignored, but different.")
+        ; ( "%arg_two"
+          , "This is also ignored, but with a lot of data\n\
+             Lorem ipsuming and all." ) ]
+      [prim "CAR" []; prim "CAR" []] in
   let multiply_the_nat =
     (* let code = prims ["CAR"; "SELF"; "CAR"; "MUL"] in *)
     let code = prims ["CAR"; "DUP"; "CDR"; "CAR"; "SWAP"; "CAR"; "MUL"] in
@@ -194,7 +214,7 @@ let all ?only ~logfile () =
     self_describe "This contract has a couple of off-chain-views."
       (basics_and_views
          [ empty_view_01; failwith_01; multiply_the_nat; call_balance
-         ; view_with_too_much_code; call_self_address ]) ;
+         ; identity_01; view_with_too_much_code; call_self_address ]) ;
     () in
   many () ; ()
 
