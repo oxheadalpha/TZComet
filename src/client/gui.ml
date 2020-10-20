@@ -410,7 +410,7 @@ module Tezos_html = struct
     t "Failed to parse URI:" %% ct err.input % t ":"
     % itemize [details; exploded_uri]
 
-  let one_error =
+  let single_error ctxt =
     let open Meta_html in
     let open Tezos_error_monad.Error_monad in
     function
@@ -418,10 +418,7 @@ module Tezos_html = struct
         Fmt.kstr t "JSON Parsing Error: %s, JSON:" msg
         % pre (code (t (Ezjsonm.value_to_string ~minify:false json_value)))
     | Exn (Failure text) -> Fmt.kstr t "Failure: %a" Fmt.text text
-    | Exn other_exn ->
-        Fmt.kstr ct "Exception: %a"
-          (Json_encoding.print_error ~print_unknown:Exn.pp)
-          other_exn
+    | Exn other_exn -> Errors_html.exception_html ctxt other_exn
     | Tezos_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
         parsing_error ->
         uri_parsing_error parsing_error
@@ -431,17 +428,193 @@ module Tezos_html = struct
              (Fmt.kstr t "%a" Tezos_error_monad.Error_monad.pp_print_error
                 [other]))
 
-  let error_trace =
+  let error_trace ctxt =
     let open Meta_html in
     function
     | [] ->
         Bootstrap.alert ~kind:`Danger (t "Empty trace from Tezos-error-monad")
-    | [h] -> one_error h
+    | [h] -> single_error ctxt h
     | h :: tl ->
-        one_error h
+        single_error ctxt h
         % div
             ( t "Trace:"
-            %% List.fold tl ~init:(empty ()) ~f:(fun p e -> p %% one_error e) )
+            %% List.fold tl ~init:(empty ()) ~f:(fun p e ->
+                   p %% single_error ctxt e) )
+
+  let rec metadata_uri ctxt uri =
+    let open Meta_html in
+    let open Tezos_contract_metadata.Metadata_uri in
+    let field name content = Fmt.kstr it "%s:" name %% content in
+    match uri with
+    | Web u -> t "Web URL:" %% url ct u
+    | Ipfs {cid; path} ->
+        let gatewayed = Fmt.str "https://gateway.ipfs.io/ipfs/%s%s" cid path in
+        t "IPFS URI:"
+        % itemize
+            [ field "CID" (ct cid); field "Path" (ct path)
+            ; t "(Try " %% url ct gatewayed % t ")" ]
+    | Storage {network; address; key} ->
+        t "In-Contract-Storage:"
+        % itemize
+            [ field "Network"
+                (Option.value_map network
+                   ~default:(t "“Current network”.")
+                   ~f:ct)
+            ; field "Address"
+                (Option.value_map address ~default:(t "“Same contract”.")
+                   ~f:ct); field "Key in the big-map" (Fmt.kstr ct "%S" key) ]
+    | Hash {kind= `Sha256; value; target} ->
+        t "Hash checked URI:"
+        % itemize
+            [ field "Target" (metadata_uri ctxt target)
+            ; field "… should SHA256-hash to"
+                (Fmt.kstr ct "%a" Hex.pp (Hex.of_string value)) ]
+
+  let metadata_contents ctxt =
+    let open Tezos_contract_metadata.Metadata_contents in
+    fun { name
+        ; description
+        ; version
+        ; license
+        ; authors
+        ; homepage
+        ; interfaces
+        ; views
+        ; unknown } ->
+      let open Meta_html in
+      let option_field name field f =
+        match field with None -> [] | Some s -> [Fmt.kstr it "%s: " name % f s]
+      in
+      let normal_field name x = option_field name (Some ()) (fun () -> x) in
+      let paragraphs blob =
+        let rec go l acc =
+          match List.split_while l ~f:(function "" -> false | _ -> true) with
+          | ll, [] -> String.concat ~sep:" " ll :: acc
+          | ll, _ :: lr -> go lr (String.concat ~sep:" " ll :: acc) in
+        go (String.split blob ~on:'\n') []
+        |> List.rev_map ~f:(fun x -> p (t x))
+        |> H5.div in
+      let license_elt l =
+        let open License in
+        it l.name
+        % Option.value_map ~default:(empty ()) l.details ~f:(fun d ->
+              Fmt.kstr t " → %s" d) in
+      let list_field name field f =
+        option_field name (match field with [] -> None | more -> Some more) f
+      in
+      let authors_elt l =
+        oxfordize_list l ~map:ct
+          ~sep:(fun () -> t ", ")
+          ~last_sep:(fun () -> t ", and ")
+        |> list in
+      let interfaces_elt l =
+        let interface s =
+          let r = Re.Posix.re "TZIP-([0-9]+)" in
+          let normal s = it s in
+          let tok = function
+            | `Text s -> normal s
+            | `Delim g -> (
+                let the_text = normal (Re.Group.get g 0) in
+                try
+                  let tzip_nb = Re.Group.get g 1 |> Int.of_string in
+                  link the_text
+                    ~target:
+                      (Fmt.str
+                         "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-%d/tzip-%d.md"
+                         tzip_nb tzip_nb)
+                  (* Fmt.kstr txt "{%a --- %d}" Re.Group.pp g (Re.Group.nb_groups g)] *)
+                with e ->
+                  dbgf "Error in interface html: %a" Exn.pp e ;
+                  the_text ) in
+          Re.split_full (Re.compile r) s |> List.map ~f:tok |> list in
+        List.map l ~f:interface |> List.intersperse ~sep:(t ", ") |> list in
+      let _todo l = Fmt.kstr t "todo: %d items" (List.length l) in
+      let protocol s =
+        let proto s = abbreviation s (ct (String.prefix s 12)) in
+        let known name url =
+          span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
+        match s with
+        | "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSXRLQEb" ->
+            known "Carthage"
+              "http://tezos.gitlab.io/protocols/006_carthage.html"
+        | "PsBabyM1eUXZseaJdmXFApDSBqj8YBfwELoxZHHW77EMcAbbwAS" ->
+            known "Babylon" "http://tezos.gitlab.io/protocols/005_babylon.html"
+        | "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo" ->
+            known "Delphi" "https://blog.nomadic-labs.com/delphi-changelog.html"
+        | s -> proto s in
+      let views_elt (views : View.t list) =
+        let view v =
+          let open View in
+          let purity =
+            if v.is_pure then Bootstrap.color `Success (t "pure")
+            else Bootstrap.color `Warning (t "inpure") in
+          let implementations impls =
+            let open Implementation in
+            itemize
+              (List.map impls ~f:(function
+                | Michelson_storage
+                    { parameter
+                    ; return_type
+                    ; code= michcode
+                    ; human_annotations
+                    ; version } ->
+                    let open Michelson_storage in
+                    let mich (Micheline m) =
+                      let open Tezos_micheline in
+                      Fmt.str "%a" Micheline_printer.print_expr
+                        (Micheline_printer.printable Base.Fn.id m) in
+                    it "Michelson-storage-view:"
+                    % itemize
+                        ( option_field "Michelson-Version" version protocol
+                        @ normal_field "Type"
+                            (Fmt.kstr ct "%s<contract-storage> → %s"
+                               ( match parameter with
+                               | None -> ""
+                               | Some p -> mich p ^ " × " )
+                               (mich return_type))
+                        @ normal_field "Code"
+                            H5.(
+                              details
+                                (summary [txt (Lwd.pure "Expand")])
+                                [pre [code [txt (Lwd.pure (mich michcode))]]])
+                        @ list_field "Annotations" human_annotations
+                            (fun anns ->
+                              itemize
+                                (List.map anns ~f:(fun (k, v) ->
+                                     ct k % t " → " % it v))) )
+                | Rest_api_query raq ->
+                    it "REST-API Query:"
+                    % itemize
+                        ( normal_field "OpenAPI Spec" (ct raq.specification_uri)
+                        @ option_field "Base-URI Override" raq.base_uri ct
+                        @ normal_field "Path" (ct raq.path)
+                        @ normal_field "Method"
+                            (Fmt.kstr ct "%s"
+                               (Cohttp.Code.string_of_method raq.meth)) )))
+          in
+          div
+            ( bt v.name %% t "(" % purity % t "):"
+            % itemize
+                ( option_field "Description" v.description paragraphs
+                @ list_field "Implementation(s)" v.implementations
+                    implementations ) ) in
+        itemize (List.map views ~f:(fun v -> view v)) in
+      let unknown_extras kv =
+        itemize
+          (List.map kv ~f:(fun (k, v) ->
+               ct k %% pre (ct (Ezjsonm.value_to_string ~minify:false v))))
+      in
+      let url_elt u = url t u in
+      itemize
+        ( option_field "Name" name ct
+        @ option_field "Version" version ct
+        @ option_field "Description" description paragraphs
+        @ option_field "License" license license_elt
+        @ option_field "Homepage" homepage url_elt
+        @ list_field "Authors" authors authors_elt
+        @ list_field "Interfaces" interfaces interfaces_elt
+        @ list_field "Views" views views_elt
+        @ list_field "Extra/Unknown" unknown unknown_extras )
 end
 
 module Editor = struct
@@ -499,9 +672,9 @@ module Explorer = struct
     let open Meta_html in
     full_input_bloc ctxt full_input
     % h4 (t "Metadata Location")
-    % Contract_metadata.Uri.render ctxt uri
+    % Tezos_html.metadata_uri ctxt uri
     % h4 (t "Metadata Contents")
-    % Contract_metadata.Content.render ctxt metadata
+    % Tezos_html.metadata_contents ctxt metadata
 
   let uri_ok_but_metadata_failure ctxt ~uri ~metadata_json ~error ~full_input =
     let open Meta_html in
@@ -509,21 +682,21 @@ module Explorer = struct
     % Fmt.kstr ct "Partially failed"
     (* Tezos_contract_metadata.Metadata_uri.pp uri *)
     % h4 (t "Metadata Location")
-    % Contract_metadata.Uri.render ctxt uri
+    % Tezos_html.metadata_uri ctxt uri
     %% pre (ct metadata_json)
-    %% Tezos_html.error_trace error
+    %% Tezos_html.error_trace ctxt error
 
   let uri_there_but_wrong ctxt ~full_input ~uri_string ~error =
     let open Meta_html in
     full_input_bloc ctxt full_input
     % Fmt.kstr ct "Failed to parse URI: %S" uri_string
-    %% Tezos_html.error_trace error
+    %% Tezos_html.error_trace ctxt error
 
   let uri_failed_to_fetch ctxt ~uri ~error ~full_input =
     let open Meta_html in
     full_input_bloc ctxt full_input
     % h4 (t "Metadata Location")
-    % Contract_metadata.Uri.render ctxt uri
+    % Tezos_html.metadata_uri ctxt uri
     % Errors_html.exception_html ctxt error
 
   let go_action ctxt =
@@ -581,7 +754,7 @@ module Explorer = struct
                 Work_status.log result
                   (bt "This URI requires a context KT1 address …") ;
               System.slow_step ctxt >>= fun () -> on_uri ctxt uri
-          | `Error (_, el) -> raise (mkexn (Tezos_html.error_trace el)))
+          | `Error (_, el) -> raise (mkexn (Tezos_html.error_trace ctxt el)))
 
   let page ctxt =
     let open Meta_html in
