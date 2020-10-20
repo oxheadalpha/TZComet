@@ -441,20 +441,27 @@ module Tezos_html = struct
             %% List.fold tl ~init:(empty ()) ~f:(fun p e ->
                    p %% single_error ctxt e) )
 
+  open Meta_html
+
+  let field_head name =
+    Fmt.kstr (fun s -> Bootstrap.color `Info (t s)) "%s:" name
+
+  let field name content = field_head name %% content
+  let monot s = Bootstrap.monospace (t s)
+
   let rec metadata_uri ctxt uri =
-    let open Meta_html in
     let open Tezos_contract_metadata.Metadata_uri in
-    let field name content = Fmt.kstr it "%s:" name %% content in
+    let ct = monot in
     match uri with
     | Web u -> t "Web URL:" %% url ct u
     | Ipfs {cid; path} ->
         let gatewayed = Fmt.str "https://gateway.ipfs.io/ipfs/%s%s" cid path in
-        t "IPFS URI:"
+        field_head "IPFS URI"
         % itemize
             [ field "CID" (ct cid); field "Path" (ct path)
             ; t "(Try " %% url ct gatewayed % t ")" ]
     | Storage {network; address; key} ->
-        t "In-Contract-Storage:"
+        field_head "In-Contract-Storage"
         % itemize
             [ field "Network"
                 (Option.value_map network
@@ -464,7 +471,7 @@ module Tezos_html = struct
                 (Option.value_map address ~default:(t "“Same contract”.")
                    ~f:ct); field "Key in the big-map" (Fmt.kstr ct "%S" key) ]
     | Hash {kind= `Sha256; value; target} ->
-        t "Hash checked URI:"
+        field_head "Hash checked URI"
         % itemize
             [ field "Target" (metadata_uri ctxt target)
             ; field "… should SHA256-hash to"
@@ -481,10 +488,9 @@ module Tezos_html = struct
         ; interfaces
         ; views
         ; unknown } ->
-      let open Meta_html in
-      let option_field name field f =
-        match field with None -> [] | Some s -> [Fmt.kstr it "%s: " name % f s]
-      in
+      let ct = monot in
+      let option_field name fieldopt f =
+        match fieldopt with None -> [] | Some s -> [field name (f s)] in
       let normal_field name x = option_field name (Some ()) (fun () -> x) in
       let paragraphs blob =
         let rec go l acc =
@@ -492,7 +498,7 @@ module Tezos_html = struct
           | ll, [] -> String.concat ~sep:" " ll :: acc
           | ll, _ :: lr -> go lr (String.concat ~sep:" " ll :: acc) in
         go (String.split blob ~on:'\n') []
-        |> List.rev_map ~f:(fun x -> p (t x))
+        |> List.rev_map ~f:(fun x -> div (t x))
         |> H5.div in
       let license_elt l =
         let open License in
@@ -563,7 +569,7 @@ module Tezos_html = struct
                       let open Tezos_micheline in
                       Fmt.str "%a" Micheline_printer.print_expr
                         (Micheline_printer.printable Base.Fn.id m) in
-                    it "Michelson-storage-view:"
+                    field_head "Michelson-storage-view"
                     % itemize
                         ( option_field "Michelson-Version" version protocol
                         @ normal_field "Type"
@@ -592,21 +598,28 @@ module Tezos_html = struct
                                 (List.map anns ~f:(fun (k, v) ->
                                      ct k % t " → " % it v))) )
                 | Rest_api_query raq ->
-                    it "REST-API Query:"
-                    % itemize
-                        ( normal_field "OpenAPI Spec" (ct raq.specification_uri)
-                        @ option_field "Base-URI Override" raq.base_uri ct
-                        @ normal_field "Path" (ct raq.path)
-                        @ normal_field "Method"
-                            (Fmt.kstr ct "%s"
-                               (Cohttp.Code.string_of_method raq.meth)) )))
+                    field "REST-API Query"
+                      (itemize
+                         ( normal_field "OpenAPI Spec" (ct raq.specification_uri)
+                         @ option_field "Base-URI Override" raq.base_uri ct
+                         @ normal_field "Path" (ct raq.path)
+                         @ normal_field "Method"
+                             (Fmt.kstr ct "%s"
+                                (Cohttp.Code.string_of_method raq.meth)) ))))
           in
           div
             ( bt v.name %% t "(" % purity % t "):"
             % itemize
                 ( option_field "Description" v.description paragraphs
-                @ list_field "Implementation(s)" v.implementations
-                    implementations ) ) in
+                @
+                match v.implementations with
+                | [] ->
+                    [Bootstrap.color `Danger (t "There are no implementations.")]
+                | l ->
+                    let name =
+                      Fmt.str "Implementation%s"
+                        (if List.length l = 1 then "" else "s") in
+                    list_field name v.implementations implementations ) ) in
         itemize (List.map views ~f:(fun v -> view v)) in
       let unknown_extras kv =
         itemize
