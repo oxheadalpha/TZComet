@@ -509,6 +509,110 @@ module Tezos_html = struct
             ; field "… should SHA256-hash to"
                 (Fmt.kstr ct "%a" Hex.pp (Hex.of_string value)) ]
 
+  let parse_micheline m =
+    match Tezos_micheline.Micheline_parser.tokenize m with
+    | tokens, [] -> (
+      match Tezos_micheline.Micheline_parser.parse_expression tokens with
+      | node, [] -> node
+      | _, errs -> Fmt.failwith "parsing" )
+    | _, errs -> Fmt.failwith "tokeninzeing"
+
+  (*
+    type michelson =
+      Tezos_contract_metadata__Metadata_contents.View.Implementation.michelson =
+        Micheline of string Tezos_micheline.Micheline.canonical
+  *)
+  module Michelson_form = struct
+    type type_expression =
+      | Any of string Tezos_micheline.Micheline.canonical
+      | Nat
+      | Mutez
+
+    type leaf = string Reactive.var
+
+    type t =
+      | Leaf of
+          {t: type_expression; v: leaf; description: (string * string) option}
+      | Pair of {left: t; right: t}
+
+    open Tezos_contract_metadata.Metadata_contents.View.Implementation
+
+    let of_type ~annotations (Micheline m) =
+      let view_annots = annotations in
+      let open Tezos_micheline.Micheline in
+      let describe annot =
+        List.find view_annots ~f:(fun (k, v) ->
+            List.mem annot k ~equal:String.equal) in
+      let rec go = function
+        | Prim (_, "nat", [], annot) ->
+            Leaf {t= Nat; v= Reactive.var ""; description= describe annot}
+        | Prim (_, "mutez", [], annot) ->
+            Leaf {t= Mutez; v= Reactive.var ""; description= describe annot}
+        | Prim (_, "pair", [l; r], _) -> Pair {left= go l; right= go r}
+        | Prim (_, _, [l; r], annot) as tp ->
+            Leaf
+              { t= Any (strip_locations tp)
+              ; v= Reactive.var ""
+              ; description= describe annot }
+        | tp ->
+            Leaf
+              { t= Any (strip_locations tp)
+              ; v= Reactive.var ""
+              ; description= None } in
+      go (root m)
+
+    let rec peek = function
+      | Leaf l -> Reactive.peek l.v
+      | Pair {left; right} -> Fmt.str "(Pair %s %s)" (peek left) (peek right)
+
+    let validate_micheline m =
+      match parse_micheline m with _ -> true | exception _ -> false
+
+    let rec is_valid = function
+      | Leaf {t= Nat | Mutez; v; _} ->
+          Reactive.(
+            get v
+            |> map ~f:(function
+                 | "" -> false
+                 | s -> (
+                   match Z.of_string s with _ -> true | exception _ -> false )))
+      | Leaf lf -> Reactive.(get lf.v |> map ~f:validate_micheline)
+      | Pair {left; right} ->
+          Reactive.(map2 ( && ) (is_valid left) (is_valid right))
+
+    let rec validity_error = function
+      | Nat -> t "Invalid natural number."
+      | _ -> t "Invalid Micheline syntax."
+
+    let rec to_form_items mf =
+      let open Meta_html in
+      let open Bootstrap.Form in
+      let type_expr = function
+        | Nat -> b (ct "nat")
+        | Mutez -> b (ct "mutez")
+        | Any m ->
+            let open Tezos_micheline in
+            Fmt.kstr ct "%a" Micheline_printer.print_expr
+              (Micheline_printer.printable Base.Fn.id m) in
+      match mf with
+      | Pair {left; right} -> to_form_items left @ to_form_items right
+      | Leaf leaf ->
+          [ input
+              ~label:
+                ( match leaf.description with
+                | None -> t "The parameter of type" %% type_expr leaf.t % t "."
+                | Some (an, s) ->
+                    t "The parameter called " % ct an %% t "of type"
+                    %% type_expr leaf.t % t ":" %% it s )
+              ~help:
+                Reactive.(
+                  bind (is_valid mf) ~f:(function
+                    | true -> Bootstrap.color `Success (t "OK")
+                    | false -> Bootstrap.color `Danger (validity_error leaf.t)))
+              ~placeholder:(Reactive.pure "Some decent Michelson right here")
+              (Reactive.Bidirectrional.of_var leaf.v) ]
+  end
+
   let michelson_view ctxt ~view =
     let open Tezos_contract_metadata.Metadata_contents in
     let open View in
@@ -562,9 +666,9 @@ module Tezos_html = struct
                 ( Contract_metadata.Uri.Fetcher.current_contract ctxt
                 |> Reactive.peek |> Option.value ~default:"" ) in
             let parameter_input =
-              match parameter with
-              | Some p -> Some (p, Reactive.var "")
-              | None -> None in
+              Option.map parameter
+                ~f:(Michelson_form.of_type ~annotations:view.human_annotations)
+            in
             let parse_micheline m =
               match Tezos_micheline.Micheline_parser.tokenize m with
               | tokens, [] -> (
@@ -586,7 +690,7 @@ module Tezos_html = struct
                   fun ~mkexn () ->
                     let parameter =
                       match parameter_input with
-                      | Some (_, v) -> Reactive.peek v |> parse_micheline
+                      | Some mf -> Michelson_form.peek mf |> parse_micheline
                       | None -> parse_micheline "Unit" in
                     Query_nodes.call_off_chain_view ctxt ~log
                       ~address:(Reactive.peek address) ~view ~parameter
@@ -612,14 +716,10 @@ module Tezos_html = struct
                          match B58_hashes.check_b58_kt1_hash input_value with
                          | _ -> true
                          | exception _ -> false in
-                       let validate_micheline m =
-                         match parse_micheline m with
-                         | _ -> true
-                         | exception _ -> false in
                        let input_valid =
                          Reactive.(
                            match parameter_input with
-                           | Some (_, v) -> map ~f:validate_micheline (get v)
+                           | Some mf -> Michelson_form.is_valid mf
                            | None -> pure true) in
                        let active =
                          Reactive.(
@@ -659,22 +759,22 @@ module Tezos_html = struct
                        let param_input =
                          match parameter_input with
                          | None -> [magic (t "No parameter")]
-                         | Some (p, v) ->
-                             [ input
-                                 ~label:
-                                   ( t "The parameters to use" %% t "("
-                                   % ct (mich p)
-                                   % t ")" )
-                                 ~help:
-                                   (Reactive.bind input_valid ~f:(function
-                                     | true -> Bootstrap.color `Success (t "OK")
-                                     | false ->
-                                         Bootstrap.color `Danger
-                                           (t "Invalid micheline.")))
-                                 ~placeholder:
-                                   (Reactive.pure
-                                      "Some decent Michelson right here")
-                                 (Reactive.Bidirectrional.of_var v) ] in
+                         | Some mf -> Michelson_form.to_form_items mf
+                         (* [ input
+                             ~label:
+                               ( t "The parameters to use" %% t "("
+                               % ct (mich p)
+                               % t ")" )
+                             ~help:
+                               (Reactive.bind input_valid ~f:(function
+                                 | true -> Bootstrap.color `Success (t "OK")
+                                 | false ->
+                                     Bootstrap.color `Danger
+                                       (t "Invalid micheline.")))
+                             ~placeholder:
+                               (Reactive.pure
+                                  "Some decent Michelson right here")
+                             (Reactive.Bidirectrional.of_var v) ] *) in
                        make ~enter_action:go_action
                          ( addr_input @ param_input
                          @ [submit_button ~active (t "Go!") go_action] )) ))
