@@ -224,96 +224,100 @@ let call_off_chain_view nodes ~log ~address ~view ~parameter =
   find_node_with_contract nodes address
   >>= fun node ->
   logf "Found contract with node %S" node.name ;
-  catch
-    (fun () ->
-      Fmt.kstr (Node.rpc_get node)
-        "/chains/main/blocks/head/context/contracts/%s/storage" address
-      >>= fun storage ->
-      logf "Got the storage: %s" storage ;
-      Fmt.kstr (Node.rpc_get node)
-        "/chains/main/blocks/head/context/contracts/%s/script" address
-      >>= fun script ->
-      Fmt.kstr (Node.rpc_get node)
-        "/chains/main/blocks/head/context/contracts/%s/balance" address
-      >>= fun balance ->
-      let balance = Ezjsonm.(value_from_string balance |> get_string) in
-      Fmt.kstr (Node.rpc_get node) "/chains/main/chain_id"
-      >>= fun chain_id ->
-      let chain_id = Ezjsonm.(value_from_string chain_id |> get_string) in
-      logf "Got the script: %s" script ;
-      let contract_storage = Michelson.micheline_of_json storage in
-      let `Contract view_contract, `Input view_input, `Storage view_storage =
-        let code_mich = Michelson.micheline_of_json script in
-        let open Tezos_contract_metadata.Contract_storage in
-        let contract_storage_type =
-          get_storage_type_exn
-            (Tezos_micheline.Micheline.strip_locations code_mich) in
-        let contract_parameter_type =
-          get_parameter_type_exn
-            (Tezos_micheline.Micheline.strip_locations code_mich) in
-        let view_parameters =
-          Tezos_micheline.Micheline.(strip_locations parameter |> root) in
-        let view =
-          (* TEMPORARY: this is one macro expansion for the test that is on
-             carthagenet *)
-          let code =
-            match view.code with
-            | Micheline mich ->
-                let open Tezos_micheline.Micheline in
-                let node = root mich in
-                let rec go = function
-                  | (Int _ | String _ | Bytes _) as ok -> ok
-                  | Prim (_loc, "CDAR", [], _annot) ->
-                      Seq
-                        ( _loc
-                        , [ Prim (_loc, "CDR", [], [])
-                          ; Prim (_loc, "CAR", [], []) ] )
-                  | Prim (_loc, _prim, args, _annot) ->
-                      Prim (_loc, _prim, List.map ~f:go args, _annot)
-                  | Seq (loc, args) -> Seq (loc, List.map ~f:go args) in
-                go node |> strip_locations in
-          {view with code= Micheline code} in
-        build_off_chain_view_contract view
-          ~contract_balance:(Z.of_string balance) ~contract_address:address
-          ~contract_storage ~view_parameters ~contract_storage_type
-          ~contract_parameter_type in
-      logf "Made the view-script: %a"
-        Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
-        view_contract ;
-      logf "Made the view-input: %a"
-        Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
-        view_input ;
-      logf "Made the view-storage: %a"
-        Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
-        view_storage ;
-      let rpc_post node ~body path =
-        let open Node in
-        let open Lwt in
-        let uri = Fmt.str "%s/%s" node.prefix path in
-        Js_of_ocaml_lwt.XmlHttpRequest.(
-          perform ~contents:(`String body) ~content_type:"application/json"
-            (Option.value_exn ~message:"uri-of-string"
-               (Js_of_ocaml.Url.url_of_string uri))
-          >>= fun frame ->
-          dbgf "%s %s code: %d" node.prefix path frame.code ;
-          match frame.code with
-          | 200 -> return frame.content
-          | other ->
-              dbgf "CONTENT: %s" frame.content ;
-              Fmt.failwith "Getting %S returned code: %d" path other) in
-      let constructed =
-        let open Ezjsonm in
-        dict
-          [ ("script", Michelson.micheline_to_ezjsonm view_contract)
-          ; ("storage", Michelson.micheline_to_ezjsonm view_storage)
-          ; ("input", Michelson.micheline_to_ezjsonm view_input)
-          ; ("amount", string "0"); ("chain_id", string chain_id) ] in
-      rpc_post node
-        ~body:(Ezjsonm.value_to_string constructed)
-        "/chains/main/blocks/head/helpers/scripts/run_code"
-      >>= fun result ->
-      logf "RESULT: %s" result ;
-      (*
+  Fmt.kstr (Node.rpc_get node)
+    "/chains/main/blocks/head/context/contracts/%s/storage" address
+  >>= fun storage ->
+  logf "Got the storage: %s" storage ;
+  Fmt.kstr (Node.rpc_get node)
+    "/chains/main/blocks/head/context/contracts/%s/script" address
+  >>= fun script ->
+  Fmt.kstr (Node.rpc_get node)
+    "/chains/main/blocks/head/context/contracts/%s/balance" address
+  >>= fun balance ->
+  let balance = Ezjsonm.(value_from_string balance |> get_string) in
+  Fmt.kstr (Node.rpc_get node) "/chains/main/chain_id"
+  >>= fun chain_id ->
+  let chain_id = Ezjsonm.(value_from_string chain_id |> get_string) in
+  logf "Got the script: %s" script ;
+  let contract_storage = Michelson.micheline_of_json storage in
+  let `Contract view_contract, `Input view_input, `Storage view_storage =
+    let code_mich = Michelson.micheline_of_json script in
+    let open Tezos_contract_metadata.Contract_storage in
+    let contract_storage_type =
+      get_storage_type_exn (Tezos_micheline.Micheline.strip_locations code_mich)
+    in
+    let contract_parameter_type =
+      get_parameter_type_exn
+        (Tezos_micheline.Micheline.strip_locations code_mich) in
+    let view_parameters =
+      Tezos_micheline.Micheline.(strip_locations parameter |> root) in
+    let view =
+      (* TEMPORARY: this is one macro expansion for the test that is on
+         carthagenet *)
+      let code =
+        match view.code with
+        | Micheline mich ->
+            let open Tezos_micheline.Micheline in
+            let node = root mich in
+            let rec go = function
+              | (Int _ | String _ | Bytes _) as ok -> ok
+              | Prim (_loc, "CDAR", [], _annot) ->
+                  Seq
+                    ( _loc
+                    , [Prim (_loc, "CDR", [], []); Prim (_loc, "CAR", [], [])]
+                    )
+              | Prim (_loc, _prim, args, _annot) ->
+                  Prim (_loc, _prim, List.map ~f:go args, _annot)
+              | Seq (loc, args) -> Seq (loc, List.map ~f:go args) in
+            go node |> strip_locations in
+      {view with code= Micheline code} in
+    build_off_chain_view_contract view ~contract_balance:(Z.of_string balance)
+      ~contract_address:address ~contract_storage ~view_parameters
+      ~contract_storage_type ~contract_parameter_type in
+  logf "Made the view-script: %a"
+    Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
+    view_contract ;
+  logf "Made the view-input: %a"
+    Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline view_input ;
+  logf "Made the view-storage: %a"
+    Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline view_storage ;
+  let rpc_post node ~body path =
+    let open Node in
+    let open Lwt in
+    let uri = Fmt.str "%s/%s" node.prefix path in
+    Js_of_ocaml_lwt.XmlHttpRequest.(
+      perform ~contents:(`String body) ~content_type:"application/json"
+        (Option.value_exn ~message:"uri-of-string"
+           (Js_of_ocaml.Url.url_of_string uri))
+      >>= fun frame ->
+      dbgf "%s %s code: %d" node.prefix path frame.code ;
+      match frame.code with
+      | 200 -> return frame.content
+      | other ->
+          dbgf "CONTENT: %s" frame.content ;
+          Decorate_error.(
+            raise
+              Message.(
+                t "POST request at" %% ct uri
+                %% Fmt.kstr t "failwith with return code %d:" other
+                %% code_block
+                     ( try
+                         Ezjsonm.value_from_string frame.content
+                         |> Ezjsonm.value_to_string ~minify:false
+                       with _ -> frame.content )))) in
+  let constructed =
+    let open Ezjsonm in
+    dict
+      [ ("script", Michelson.micheline_to_ezjsonm view_contract)
+      ; ("storage", Michelson.micheline_to_ezjsonm view_storage)
+      ; ("input", Michelson.micheline_to_ezjsonm view_input)
+      ; ("amount", string "0"); ("chain_id", string chain_id) ] in
+  rpc_post node
+    ~body:(Ezjsonm.value_to_string constructed)
+    "/chains/main/blocks/head/helpers/scripts/run_code"
+  >>= fun result ->
+  logf "RESULT: %s" result ;
+  (*
       POST /chains/main/blocks/head/helpers/scripts/run_code
       "properties":
         { "script":
@@ -330,19 +334,18 @@ let call_off_chain_view nodes ~log ~address ~view ~parameter =
           "entrypoint": { "$ref": "#/definitions/unistring" } },
       "required": [ "chain_id", "amount", "input", "storage", "script" ],
      *)
-      let actual_result =
-        let open Ezjsonm in
-        let d = value_from_string result |> get_dict in
-        let mich =
-          match List.Assoc.find ~equal:String.equal d "storage" with
-          | None -> Fmt.failwith "Result has not storage: %S" result
-          | Some json -> Michelson.micheline_of_ezjsonm json in
-        let open Tezos_micheline.Micheline in
-        match mich with
-        | Prim (_, "Some", [s], _) -> s
-        | other ->
-            Fmt.failwith "Result is not (Some _): %a"
-              Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
-              other in
-      return (Ok (actual_result, contract_storage)))
-    (fun e -> return (Error (Fmt.str "FAILED: %a" Exn.pp e)))
+  let actual_result =
+    let open Ezjsonm in
+    let d = value_from_string result |> get_dict in
+    let mich =
+      match List.Assoc.find ~equal:String.equal d "storage" with
+      | None -> Fmt.failwith "Result has not storage: %S" result
+      | Some json -> Michelson.micheline_of_ezjsonm json in
+    let open Tezos_micheline.Micheline in
+    match mich with
+    | Prim (_, "Some", [s], _) -> s
+    | other ->
+        Fmt.failwith "Result is not (Some _): %a"
+          Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline other
+  in
+  return (Ok (actual_result, contract_storage))
