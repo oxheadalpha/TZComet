@@ -252,7 +252,7 @@ module State = struct
              "Has a URI that points nowhere." ;
            kt1 "KT1AtHTLvsBVy2yGPw9LWGMnhG2vL5ucm7ak"
              "Quite a few off-chain-view tests." ;
-           kt1_dev "KT1XNWz276oab4SBVcYea6hP49kgvc8xXqrK"
+           kt1_dev "KT1Jogrd6JKijDQH4hnGPgihVvh9wXBXwc5e"
              "Event more weird off-chain-views." ;
            uri https_ok "A valid HTTPS URI." ;
            uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
