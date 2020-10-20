@@ -16,6 +16,7 @@ module Errors_html = struct
     | Failure s -> bt "Failure:" %% t s
     | e -> bt "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e)
 end
+
 module Work_status = struct
   type log_item = Html_types.div_content_fun Meta_html.H5.elt
   type 'a status = Empty | Work_in_progress | Done of ('a, log_item) Result.t
@@ -51,7 +52,7 @@ module Work_status = struct
             function
             | Work_failed l -> error wip l ; return ()
             | exn ->
-                error wip (Errors_html.exception_html () exn );
+                error wip (Errors_html.exception_html () exn) ;
                 return ()))
 
   let render work_status ~f =
@@ -353,7 +354,6 @@ let settings_page state =
                  "Shows things that regular users should not see and \
                   artificially slows down the application.") ])
 
-
 module Tezos_html = struct
   let uri_parsing_error err =
     let open Meta_html in
@@ -575,13 +575,65 @@ module Tezos_html = struct
                 | _, errs -> Fmt.failwith "parsing" )
               | _, errs -> Fmt.failwith "tokeninzeing" in
             let wip = Work_status.empty () in
+            let go_action () =
+              Work_status.wip wip ;
+              let log s =
+                Work_status.log wip
+                  (it "Calling view" %% t "→" %% Bootstrap.monospace (t s))
+              in
+              Work_status.async_catch wip
+                Lwt.Infix.(
+                  fun ~mkexn () ->
+                    let parameter =
+                      match parameter_input with
+                      | Some (_, v) -> Reactive.peek v |> parse_micheline
+                      | None -> parse_micheline "Unit" in
+                    Query_nodes.call_off_chain_view ctxt ~log
+                      ~address:(Reactive.peek address) ~view ~parameter
+                    >>= function
+                    | Ok (result, storage) ->
+                        Work_status.ok wip
+                          ( t "Result:"
+                          %% ct (mich_node result)
+                          %% t "Storage:"
+                          %% ct (mich_node storage) ) ;
+                        Lwt.return ()
+                    | Error s ->
+                        Work_status.error wip (t "Error:" %% ct s) ;
+                        Lwt.return ()) ;
+              dbgf "go view" in
             switch ~action:(fun () -> Reactive.set call_mode false) (t "Cancel")
             % ( Work_status.is_empty wip
               |> Reactive.bind ~f:(function
                    | false -> Work_status.render wip ~f:Fn.id
                    | true ->
                        let open Bootstrap.Form in
+                       let validate_address input_value =
+                         match B58_hashes.check_b58_kt1_hash input_value with
+                         | _ -> true
+                         | exception _ -> false in
+                       let validate_micheline m =
+                         match parse_micheline m with
+                         | _ -> true
+                         | exception _ -> false in
+                       let input_valid =
+                         Reactive.(
+                           match parameter_input with
+                           | Some (_, v) -> map ~f:validate_micheline (get v)
+                           | None -> pure true) in
+                       let active =
+                         Reactive.(
+                           get address ** input_valid
+                           |> map ~f:(fun (a, iv) -> validate_address a && iv))
+                       in
                        let addr_input =
+                         let addr_help a =
+                           if validate_address a then
+                             Bootstrap.color `Success
+                               (t "Thanks, this is valid.")
+                           else
+                             Bootstrap.color `Danger
+                               (t "This is not a valid KT1 address") in
                          [ input
                              ~label:(t "The contract to hit the view with:")
                              ~placeholder:
@@ -596,13 +648,13 @@ module Tezos_html = struct
                                          .current_contract ctxt) )
                                    ~f:(function
                                      | "", _ -> t "Please, we need one."
-                                     | _, None -> t "Thanks, we needed one."
+                                     | a, None -> addr_help a
                                      | a1, Some a2 ->
                                          if String.equal a1 a2 then
                                            t
                                              "This is the “main-address” \
                                               currently in context."
-                                         else t "Interesting …"))
+                                         else addr_help a1))
                              (Reactive.Bidirectrional.of_var address) ] in
                        let param_input =
                          match parameter_input with
@@ -613,42 +665,19 @@ module Tezos_html = struct
                                    ( t "The parameters to use" %% t "("
                                    % ct (mich p)
                                    % t ")" )
+                                 ~help:
+                                   (Reactive.bind input_valid ~f:(function
+                                     | true -> Bootstrap.color `Success (t "OK")
+                                     | false ->
+                                         Bootstrap.color `Danger
+                                           (t "Invalid micheline.")))
                                  ~placeholder:
                                    (Reactive.pure
                                       "Some decent Michelson right here")
                                  (Reactive.Bidirectrional.of_var v) ] in
-                       make
+                       make ~enter_action:go_action
                          ( addr_input @ param_input
-                         @ [ submit_button (t "Go!") (fun () ->
-                                 Work_status.wip wip ;
-                                 let log s =
-                                   Work_status.log wip
-                                     ( it "Calling view" %% t "→"
-                                     %% Bootstrap.monospace (t s) ) in
-                                 Work_status.async_catch wip
-                                   Lwt.Infix.(
-                                     fun ~mkexn () ->
-                                       let parameter =
-                                         match parameter_input with
-                                         | Some (_, v) ->
-                                             Reactive.peek v |> parse_micheline
-                                         | None -> parse_micheline "Unit" in
-                                       Query_nodes.call_off_chain_view ctxt ~log
-                                         ~address:(Reactive.peek address) ~view
-                                         ~parameter
-                                       >>= function
-                                       | Ok (result, storage) ->
-                                           Work_status.ok wip
-                                             ( t "Result:"
-                                             %% ct (mich_node result)
-                                             %% t "Storage:"
-                                             %% ct (mich_node storage) ) ;
-                                           Lwt.return ()
-                                       | Error s ->
-                                           Work_status.error wip
-                                             (t "Error:" %% ct s) ;
-                                           Lwt.return ()) ;
-                                 dbgf "go view") ] )) ))
+                         @ [submit_button ~active (t "Go!") go_action] )) ))
 
   let metadata_contents ctxt =
     let open Tezos_contract_metadata.Metadata_contents in
