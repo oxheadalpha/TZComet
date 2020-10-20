@@ -573,10 +573,19 @@ module Tezos_html = struct
                                | Some p -> mich p ^ " × " )
                                (mich return_type))
                         @ normal_field "Code"
-                            H5.(
-                              details
-                                (summary [txt (Lwd.pure "Expand")])
-                                [pre [code [txt (Lwd.pure (mich michcode))]]])
+                            (let concrete = mich michcode in
+                             let lines =
+                               1
+                               + String.count concrete ~f:(function
+                                   | '\n' -> true
+                                   | _ -> false) in
+                             if lines <= 1 then ct concrete
+                             else
+                               let collapse =
+                                 Bootstrap.Collapse.make ~button_kind:`Secondary
+                                   () in
+                               collapse#button (t "Michelson Code")
+                               % collapse#div (pre (ct concrete)))
                         @ list_field "Annotations" human_annotations
                             (fun anns ->
                               itemize
