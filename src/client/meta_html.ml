@@ -116,10 +116,21 @@ module Bootstrap = struct
 
   let monospace content = H5.span ~a:[classes ["text-monospace"]] [content]
 
-  let button ?(kind = `Light) content ~action =
-    button ~action
-      ~a:[classes ["btn"; Fmt.str "btn-%s" (Label_kind.to_string kind)]]
-      content
+  let button ?(outline = false) ?(disabled = false) ?(size = `Normal)
+      ?(kind = `Light) content ~action =
+    let a =
+      [ classes
+          ( [ "btn"
+            ; Fmt.str "btn-%s%s"
+                (if outline then "outline-" else "")
+                (Label_kind.to_string kind) ]
+          @
+          match size with
+          | `Normal -> []
+          | `Small -> ["btn-sm"]
+          | `Large -> ["btn-lg"] ) ]
+      @ if disabled then [H5.a_disabled ()] else [] in
+    button ~action ~a content
 
   let container ?(suffix = "-md") c =
     H.div ~a:[classes [Fmt.str "container%s" suffix]] c
