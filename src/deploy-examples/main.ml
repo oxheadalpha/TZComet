@@ -40,7 +40,7 @@ let originate ?(balance = 0) ?(description = "") ~source ~init ~name ~logfile ()
     tezos_client
       [ "--wait"; "0"; "originate"; "contract"; name; "transferring"
       ; Int.to_string balance; "from"; Env.funder (); "running"; source
-      ; "--burn-cap"; "10"; "--init"; init; "--force" ] in
+      ; "--burn-cap"; "100"; "--init"; init; "--force" ] in
   System.exec cmd ;
   System.append_to_file ~file:logfile (Fmt.str "## Contract `%s`\n\n" name) ;
   System.append_to_file ~file:logfile (Fmt.str "- Init: `%s`\n- Address: " init) ;
@@ -62,6 +62,8 @@ module Micheline_views = struct
   let prim ?(annotations = []) p l =
     dict [("prim", string p); ("args", `A l); ("annots", strings annotations)]
 
+  let int i = dict [("int", string (Int.to_string i))]
+  let seq l = list Fn.id l
   let nat = prim "nat" []
   let mutez = prim "mutez" []
   let timestamp = prim "timestamp" []
@@ -163,28 +165,36 @@ let all ?only ~logfile () =
           ) ] in
   let failwith_01 =
     view_with_code
-      ~parameter:
-        (prim "pair"
-           [ prim "nat" ~annotations:["%arg_zero"] []
-           ; prim "mutez" ~annotations:["%arg_one"] [] ])
-      "just-call-failwith"
+      ~return_type:(prim "int" ~annotations:["%negative_even_number"] [])
+      ~parameter:(prim "int" ~annotations:["%the_decisive_argument"] [])
+      "multiply-negative-number-or-call-failwith"
       ~annotations:
-        [ ("%arg_zero", "This is obvioulsy ignored.")
-        ; ("%arg_one", "This is also ignored, but different.") ]
-      [prim "FAILWITH" []] in
+        [ ( "%the_decisive_argument"
+          , "The integer argument if >0 this will fail." )
+        ; ( "%negative_even_number"
+          , "The result, if any, is twice the argument \
+             (%the_decisive_argument)." ) ]
+      [ prim "CAR" []; prim "CAR" []; prim "DUP" []
+      ; prim "PUSH" [prim "int" []; int 0]; prim "COMPARE" []; prim "LT" []
+      ; prim "IF"
+          [ seq [prim "FAILWITH" []]
+          ; seq [prim "PUSH" [prim "int" []; int 2]; prim "MUL" []] ] ] in
   let identity_01 =
-    let big_type =
+    let big_type ann2 =
       prim "pair"
         [ prim "nat" ~annotations:["%arg_zero"] []
         ; prim "pair"
-            [ prim "string" ~annotations:["%arg_one"] []
+            [ prim "string" ~annotations:[ann2] []
             ; prim "mutez" ~annotations:["%arg_two"] [] ] ] in
-    view_with_code ~parameter:big_type "the-identity" ~return_type:big_type
+    let parameter = big_type "%arg_one" in
+    let return_type = big_type "%arg_one_result" in
+    view_with_code ~parameter "the-identity" ~return_type
       ~annotations:
         [ ("%arg_zero", "This is obvioulsy ignored.")
         ; ("%arg_one", "This is also ignored, but different.")
+        ; ("%arg_one_result", "This is %arg_one on the resulting side.")
         ; ( "%arg_two"
-          , "This is also ignored, but with a lot of data\n\
+          , "This is also ignored, but with a lot of data\n\n\
              Lorem ipsuming and all." ) ]
       [prim "CAR" []; prim "CAR" []] in
   let multiply_the_nat =
@@ -199,7 +209,11 @@ let all ?only ~logfile () =
     view_with_code ~return_type:mutez "just-call-balance" code in
   let call_self_address =
     let code = prims ["DROP"; "SELF"; "ADDRESS"] in
-    view_with_code "get-contract-address" code ~return_type:(prim "address" [])
+    view_with_code "get-contract-address" code
+      ~return_type:(prim "address" [] ~annotations:["%ret"])
+      ~annotations:
+        [ ( "%ret"
+          , "The address of the (any) contract, re-obtained in Michelson." ) ]
   in
   let basics_and_views l = Ezjsonm.(basics @ [("views", list Fn.id l)]) in
   let many () =
