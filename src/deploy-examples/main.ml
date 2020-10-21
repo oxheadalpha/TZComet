@@ -174,8 +174,8 @@ let all ?only ~logfile () =
         ; ( "%negative_even_number"
           , "The result, if any, is twice the argument \
              (%the_decisive_argument)." ) ]
-      [ prim "CAR" []; prim "CAR" []; prim "DUP" []
-      ; prim "PUSH" [prim "int" []; int 0]; prim "COMPARE" []; prim "LT" []
+      [ prim "CAR" []; prim "DUP" []; prim "PUSH" [prim "int" []; int 0]
+      ; prim "COMPARE" []; prim "LT" []
       ; prim "IF"
           [ seq [prim "FAILWITH" []]
           ; seq [prim "PUSH" [prim "int" []; int 2]; prim "MUL" []] ] ] in
@@ -196,10 +196,10 @@ let all ?only ~logfile () =
         ; ( "%arg_two"
           , "This is also ignored, but with a lot of data\n\n\
              Lorem ipsuming and all." ) ]
-      [prim "CAR" []; prim "CAR" []] in
+      [prim "CAR" []] in
   let multiply_the_nat =
     (* let code = prims ["CAR"; "SELF"; "CAR"; "MUL"] in *)
-    let code = prims ["CAR"; "DUP"; "CDR"; "CAR"; "SWAP"; "CAR"; "MUL"] in
+    let code = prims ["DUP"; "CDR"; "CAR"; "SWAP"; "CAR"; "MUL"] in
     view_with_code ~pure:true ~parameter:nat "multiply-the-nat-in-storage" code
       ~description:
         "This one is pure, it multiplies the natural number given as argument \
