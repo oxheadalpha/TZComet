@@ -13,6 +13,8 @@ let list = function
   | [] -> empty ()
   | one :: more -> List.fold more ~init:one ~f:( % )
 
+let parens c = t "(" % c % t ")"
+
 module H = struct
   let p ?a l = singletize H5.p ?a l
   let i ?a l = singletize H5.i ?a l
@@ -34,13 +36,13 @@ module H = struct
   let h6 ?a l = singletize H5.h6 ?a l
 end
 
+let hr = H5.hr
 include H
 
 let classes l = H5.a_class (Lwd.pure l)
 let it s = i (t s)
 let bt s = b (t s)
 let ct s = code (t s)
-let p_lead ?(a = []) c = p ~a:(classes ["lead"] :: a) c
 
 let link ~target ?(a = []) content =
   H.a ~a:(H5.a_href (Lwd.pure target) :: a) content
@@ -94,6 +96,10 @@ module Bootstrap = struct
       ~a:[classes [Fmt.str "text-%s" (Label_kind.to_string kind)]]
       [content]
 
+  let muted f content =
+    (* Using `?a:Some` to force the type inference to see the optional argument. *)
+    f ?a:(Some [classes ["text-muted"]]) content
+
   let spinner ?(kind = `Primary) content =
     H5.div
       ~a:[classes ["spinner-border"]; H5.a_role (Lwd.pure ["status"])]
@@ -105,6 +111,9 @@ module Bootstrap = struct
         [ classes ["alert"; Fmt.str "alert-%s" (Label_kind.to_string kind)]
         ; H5.a_role (Lwd.pure ["alert"]) ]
       [content]
+
+  let p_lead ?(a = []) c = p ~a:(classes ["lead"] :: a) c
+  let div_lead ?(a = []) c = div ~a:(classes ["lead"] :: a) c
 
   let bordered ?(rounded = `Default) ?(kind = `Primary) content =
     H5.div
