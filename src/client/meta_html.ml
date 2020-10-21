@@ -37,6 +37,7 @@ module H = struct
 end
 
 let hr = H5.hr
+
 include H
 
 let classes l = H5.a_class (Lwd.pure l)
@@ -124,6 +125,7 @@ module Bootstrap = struct
       [content]
 
   let monospace content = H5.span ~a:[classes ["text-monospace"]] [content]
+  let terminal_logs content = div ~a:[classes ["bg-dark"; "text-white"]] content
 
   let button ?(outline = false) ?(disabled = false) ?(size = `Normal)
       ?(kind = `Light) content ~action =

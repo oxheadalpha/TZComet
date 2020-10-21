@@ -1,18 +1,20 @@
 open Import
 
 module Errors_html = struct
-  let exception_html ctxt =
-    let open Meta_html in
-    function
+  open Meta_html
+
+  let decorate_error_message ctxt m =
+    let module M = Decorate_error.Message in
+    let rec msg = function
+      | M.Text s -> t s
+      | M.Inline_code c -> ct c
+      | M.Code_block b -> pre (ct b)
+      | M.List l -> List.fold ~init:(empty ()) ~f:(fun a b -> a % msg b) l in
+    msg m
+
+  let exception_html ctxt = function
     | Decorate_error.E {message; trace} ->
-        let module M = Decorate_error.Message in
-        let rec msg = function
-          | M.Text s -> t s
-          | M.Inline_code c -> ct c
-          | M.Code_block b -> pre (ct b)
-          | M.List l -> List.fold ~init:(empty ()) ~f:(fun a b -> a % msg b) l
-        in
-        bt "Error:" %% msg message
+        bt "Error:" %% decorate_error_message ctxt message
     | Failure s -> bt "Failure:" %% t s
     | e -> bt "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e)
 end
@@ -60,8 +62,7 @@ module Work_status = struct
     let show_logs ?(wip = false) () =
       let make_logs_map _ x = H5.li [x] in
       let logs = Reactive.Table.concat_map ~map:make_logs_map work_status.logs in
-      div
-        ~a:[classes ["bg-dark"; "text-white"]]
+      Bootstrap.terminal_logs
         (H5.ul
            ( if wip then
              [logs; H5.li [Bootstrap.spinner ~kind:`Info (t "Working …")]]
@@ -118,11 +119,15 @@ module State = struct
     let page_to_path page =
       Fmt.str "/%s" (Page.to_string page |> String.lowercase)
 
-    let make ~page ~dev_mode ~explorer_input ~explorer_go =
+    let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go =
       let query =
         match explorer_input with
         | "" -> []
         | more -> [("explorer-input", [more])] in
+      let query =
+        match editor_input with
+        | "" -> query
+        | more -> ("editor-input", [more]) :: query in
       let query = if not dev_mode then query else ("dev", ["true"]) :: query in
       let query = if not explorer_go then query else ("go", ["true"]) :: query in
       Uri.make () ~path:(page_to_path page) ~query
@@ -145,6 +150,8 @@ module State = struct
       let dev_mode = true_in_query "dev" in
       let explorer_input =
         match in_query "explorer-input" with Some [one] -> one | _ -> "" in
+      let editor_input =
+        match in_query "editor-input" with Some [one] -> one | _ -> "" in
       let explorer_go = true_in_query "go" in
       { page= Reactive.var page
       ; version_string= None
@@ -156,7 +163,7 @@ module State = struct
              assume it aready happened. *)
           Reactive.var Poly.(page <> Page.Explorer)
       ; explorer_result= Work_status.empty ()
-      ; editor_content= Reactive.var "" }
+      ; editor_content= Reactive.var editor_input }
   end
 
   let create () =
@@ -206,11 +213,20 @@ module State = struct
     let dev = Reactive.get state.dev_mode in
     let page = Reactive.get state.page in
     let explorer_input = Reactive.get state.explorer_input in
+    let editor_input = Reactive.get state.editor_content in
     let explorer_go = Reactive.get state.explorer_go in
-    Reactive.(dev ** page ** explorer_input ** explorer_go)
-    |> Reactive.map ~f:(fun (dev_mode, (page, (explorer_input, explorer_go))) ->
+    Reactive.(dev ** page ** explorer_input ** explorer_go ** editor_input)
+    |> Reactive.map
+         ~f:(fun
+              (dev_mode, (page, (explorer_input, (explorer_go, editor_input))))
+            ->
            let now =
-             Fragment.(make ~page ~dev_mode ~explorer_input ~explorer_go) in
+             Fragment.(
+               let editor_input =
+                 if String.length editor_input < 40 then editor_input else ""
+               in
+               make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input)
+           in
            if side_effects then (
              let current = Js_of_ocaml.Url.Current.get_fragment () in
              dbgf "Updating fragment %S → %a" current Fragment.pp now ;
@@ -509,7 +525,7 @@ module Tezos_html = struct
   let open_in_editor ctxt text =
     div (small (parens (State.link_to_editor ctxt ~text (t "Open in editor"))))
 
-  let metadata_uri ctxt uri =
+  let metadata_uri ?(open_in_editor_link = true) ctxt uri =
     let open Tezos_contract_metadata.Metadata_uri in
     let ct = monot in
     let rec go uri =
@@ -538,7 +554,10 @@ module Tezos_html = struct
               [ field "Target" (go target)
               ; field "… should SHA256-hash to"
                   (Fmt.kstr ct "%a" Hex.pp (Hex.of_string value)) ] in
-    open_in_editor ctxt (Tezos_contract_metadata.Metadata_uri.to_string_uri uri)
+    ( if open_in_editor_link then
+      open_in_editor ctxt
+        (Tezos_contract_metadata.Metadata_uri.to_string_uri uri)
+    else empty () )
     % div (go uri)
 
   let parse_micheline m =
@@ -827,7 +846,9 @@ module Tezos_html = struct
                                         (Contract_metadata.Uri.Fetcher
                                          .current_contract ctxt) )
                                    ~f:(function
-                                     | "", _ -> t "Please, we need one."
+                                     | "", _ ->
+                                         Bootstrap.color `Danger
+                                           (t "Please, we need one.")
                                      | a, None -> addr_help a
                                      | a1, Some a2 ->
                                          if String.equal a1 a2 then
@@ -844,7 +865,7 @@ module Tezos_html = struct
                          ( addr_input @ param_input
                          @ [submit_button ~active (t "Go!") go_action] )) ))
 
-  let metadata_contents ctxt =
+  let metadata_contents ?(open_in_editor_link = true) ctxt =
     let open Tezos_contract_metadata.Metadata_contents in
     fun ( { name
           ; description
@@ -929,8 +950,10 @@ module Tezos_html = struct
                ct k %% pre (ct (Ezjsonm.value_to_string ~minify:false v))))
       in
       let url_elt u = url t u in
-      open_in_editor ctxt
-        (Tezos_contract_metadata.Metadata_contents.to_json metadata)
+      ( if open_in_editor_link then
+        open_in_editor ctxt
+          (Tezos_contract_metadata.Metadata_contents.to_json metadata)
+      else empty () )
       % itemize
           ( option_field "Name" name ct
           @ option_field "Version" version ct
@@ -944,26 +967,120 @@ module Tezos_html = struct
 end
 
 module Editor = struct
-  let page state =
+  let page ctxt =
     let open Meta_html in
-    let content = State.editor_content state in
-    H5.(
-      textarea
-        (txt (Reactive.Bidirectrional.get content))
-        ~a:
-          [ a_style (Lwd.pure "font-family: monospace"); a_rows (Lwd.pure 30)
-          ; a_cols (Lwd.pure 80)
-          ; a_oninput
-              (Tyxml_lwd.Lwdom.attr
-                 Js_of_ocaml.(
-                   fun ev ->
-                     Js.Opt.iter ev##.target (fun input ->
-                         Js.Opt.iter (Dom_html.CoerceTo.textarea input)
-                           (fun input ->
-                             let v = input##.value |> Js.to_string in
-                             dbgf "TA inputs: %d bytes: %S" (String.length v) v ;
-                             Reactive.Bidirectrional.set content v)) ;
-                     true)) ])
+    let content = State.editor_content ctxt in
+    let editor =
+      H5.(
+        textarea
+          (txt (Reactive.Bidirectrional.get content))
+          ~a:
+            [ a_style (Lwd.pure "font-family: monospace"); a_rows (Lwd.pure 30)
+            ; a_cols (Lwd.pure 80)
+            ; a_oninput
+                (Tyxml_lwd.Lwdom.attr
+                   Js_of_ocaml.(
+                     fun ev ->
+                       Js.Opt.iter ev##.target (fun input ->
+                           Js.Opt.iter (Dom_html.CoerceTo.textarea input)
+                             (fun input ->
+                               let v = input##.value |> Js.to_string in
+                               dbgf "TA inputs: %d bytes: %S" (String.length v)
+                                 v ;
+                               Reactive.Bidirectrional.set content v)) ;
+                       true)) ]) in
+    let guessers =
+      let of_predicate name v f ~log inp =
+        let worked = f inp in
+        log
+          Decorate_error.Message.(
+            t "Trying predicate" %% ct name %% t "→"
+            % if worked then t "OK!" else t "Nope :/") ;
+        if worked then Some v else None in
+      let looks_like_json s =
+        match (String.strip s).[0] with '[' | '{' | '"' -> true | _ -> false
+      in
+      let looks_like_an_uri s =
+        match String.split ~on:'\n' (String.strip s) with
+        | [""] -> false
+        | [_] -> true
+        | _ -> false in
+      [ of_predicate "is-empty" `Empty (fun s -> String.(is_empty (strip s)))
+      ; of_predicate "looks-like-json" `Json looks_like_json
+      ; of_predicate "looks-like-an-uri" `Uri looks_like_an_uri ] in
+    let guess_validate input =
+      let _logs = ref [] in
+      let log m = _logs := m :: !_logs in
+      let res =
+        match List.find_map guessers ~f:(fun f -> f ~log input) with
+        | Some s -> s
+        | None -> `No_idea in
+      (input, res, List.rev !_logs) in
+    let big_answer level content =
+      let kind = match level with `Ok -> `Success | `Error -> `Danger in
+      h2 (Bootstrap.color kind content) in
+    let show_metadata ctxt inpo =
+      let open Tezos_contract_metadata.Metadata_contents in
+      match of_json inpo with
+      | Ok m -> Tezos_html.metadata_contents ~open_in_editor_link:false ctxt m
+      | Error el -> Tezos_html.error_trace ctxt el in
+    let list_of_validation_errors l =
+      itemize
+        (List.map l ~f:(fun (w, s, e) ->
+             (match w with `Network -> t "Network" | `Address -> t "Address")
+             %% ct s % t ":" %% t e)) in
+    let show_uri ctxt inpo =
+      match Contract_metadata.Uri.validate inpo with
+      | Ok u, errs ->
+          let header =
+            match errs with
+            | [] -> big_answer `Ok (t "This metadata URI is VALID 👍")
+            | _ ->
+                big_answer `Error
+                  (t "This metadata URI parses OK but is not VALID 😞") in
+          let sec = h4 in
+          let validation_errors =
+            match errs with
+            | [] -> empty ()
+            | more ->
+                sec (Bootstrap.color `Danger (t "Validation Errors:"))
+                % list_of_validation_errors more in
+          header % validation_errors
+          % sec (t "Understood As:")
+          % Tezos_html.metadata_uri ~open_in_editor_link:false ctxt u
+      | Error el, errs -> (
+          big_answer `Error (t "There were parsing/validation errors 😭")
+          % Tezos_html.error_trace ctxt el
+          %
+          match errs with
+          | [] -> empty ()
+          | more -> p (t "Moreover:") % list_of_validation_errors more ) in
+    let result =
+      Reactive.Bidirectrional.get content
+      |> Reactive.map ~f:guess_validate
+      |> Reactive.bind ~f:(fun (inp, kind, logs) ->
+             let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
+             let show_logs =
+               collapse#button (t "Show logs")
+               % collapse#div
+                   (Bootstrap.terminal_logs
+                      (itemize
+                         (List.map logs
+                            ~f:(Errors_html.decorate_error_message ctxt))))
+             in
+             match kind with
+             | `Empty -> h4 (t "Editor Is Empty")
+             | `Json ->
+                 h4 (t "This looks like JSON Metadata …")
+                 % show_metadata ctxt inp
+             | `Uri -> show_uri ctxt inp
+             | `No_idea ->
+                 h4 (t "Don't know how to validate this")
+                 % pre ~a:[classes ["pre-scrollable"]] (ct inp)
+                 % div show_logs) in
+    div
+      ~a:[classes ["row"]]
+      (div ~a:[classes ["col-6"]] editor % div ~a:[classes ["col-6"]] result)
 end
 
 module Explorer = struct
@@ -976,8 +1093,8 @@ module Explorer = struct
           , [Tezos_error_monad.Error_monad.failure "Invalid KT1 address"] )
     | exception _ -> (
       match Contract_metadata.Uri.validate input_value with
-      | Ok uri -> `Uri (input_value, uri)
-      | Error e -> `Error (input_value, e) )
+      | Ok uri, _ -> `Uri (input_value, uri)
+      | Error e, _ -> `Error (input_value, e) )
 
   let input_valid state =
     Reactive.map (State.explorer_input state) ~f:validate_intput
@@ -1081,8 +1198,8 @@ module Explorer = struct
               Contract_metadata.Uri.Fetcher.set_current_contract ctxt address ;
               Work_status.log result (t "Now going for: " %% ct metadata_uri) ;
               match Contract_metadata.Uri.validate metadata_uri with
-              | Ok uri -> on_uri ctxt uri
-              | Error error ->
+              | Ok uri, _ -> on_uri ctxt uri
+              | Error error, _ ->
                   raise
                     (mkexn
                        (uri_there_but_wrong ctxt ~uri_string:metadata_uri

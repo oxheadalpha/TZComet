@@ -18,7 +18,10 @@ module Uri = struct
           | Failure f -> error `Network s f
           | e -> Fmt.kstr (error `Network s) "%a" Exn.pp e ) ;
           Ok () in
-    Uri.of_string uri_code |> of_uri ~validate_kt1_address ~validate_network
+    let uri =
+      Uri.of_string uri_code |> of_uri ~validate_kt1_address ~validate_network
+    in
+    (uri, List.rev !errors)
 
   module Fetcher = struct
     type t = {current_contract: string option Reactive.var}
