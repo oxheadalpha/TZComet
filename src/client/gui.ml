@@ -222,8 +222,8 @@ module State = struct
     let open Meta_html in
     let fragment = make_fragment ~side_effects:false ctxt in
     let href =
-      Reactive.(map (page ctxt ** fragment)) ~f:(fun (p, frg) ->
-          Fragment.(to_string (change_for_page frg p))) in
+      Reactive.(map fragment) ~f:(fun frg ->
+          "#" ^ Fragment.(to_string (change_for_page frg Page.Editor))) in
     a
       ~a:
         [ H5.a_href href
