@@ -18,7 +18,7 @@ ensure_vendors () {
     # We use the following pointer to the main repo's master branch:
     tezos_branch=smondet-contract-metadata
     tezos_remote=https://gitlab.com/smondet/tezos.git
-    tezos_commit="73e22c6c7a88813ff1a02aebe715ed4beccf80d1"
+    tezos_commit="8d186ce456726568971d95321d18709ad63ec624"
     say "Vendoring tezos @ %10s" "$tezos_branch"
     if [ -f "local-vendor/tezos/README.md" ] ; then
         say "Tezos already cloned"
