@@ -107,7 +107,7 @@ module State = struct
     ; explorer_go: bool Reactive.var
     ; explorer_went: bool Reactive.var
     ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Work_status.t
-    }
+    ; editor_content: string Reactive.var }
 
   let get (state : < gui: t ; .. > Context.t) = state#gui
 
@@ -155,7 +155,8 @@ module State = struct
           (* If page is not the explorer we will ignore the command =
              assume it aready happened. *)
           Reactive.var Poly.(page <> Page.Explorer)
-      ; explorer_result= Work_status.empty () }
+      ; explorer_result= Work_status.empty ()
+      ; editor_content= Reactive.var "" }
   end
 
   let create () =
@@ -189,7 +190,12 @@ module State = struct
   let explorer_input_bidirectional state =
     (get state).explorer_input |> Reactive.Bidirectrional.of_var
 
-  let make_fragment ctxt =
+  let editor_content state =
+    (get state).editor_content |> Reactive.Bidirectrional.of_var
+
+  let set_editor_content state v = Reactive.set (get state).editor_content v
+
+  let make_fragment ?(side_effects = true) ctxt =
     (* WARNING: for now it is important for this to be attached "somewhere"
        in the DOM.
        WARNING-2: this function is used for side effects unrelated to the
@@ -203,13 +209,30 @@ module State = struct
     let explorer_go = Reactive.get state.explorer_go in
     Reactive.(dev ** page ** explorer_input ** explorer_go)
     |> Reactive.map ~f:(fun (dev_mode, (page, (explorer_input, explorer_go))) ->
-           let current = Js_of_ocaml.Url.Current.get_fragment () in
            let now =
              Fragment.(make ~page ~dev_mode ~explorer_input ~explorer_go) in
-           dbgf "Updating fragment %S → %a" current Fragment.pp now ;
-           Current.set_fragment (Fragment.to_string now) ;
-           System.set_dev_mode ctxt dev_mode ;
+           if side_effects then (
+             let current = Js_of_ocaml.Url.Current.get_fragment () in
+             dbgf "Updating fragment %S → %a" current Fragment.pp now ;
+             Current.set_fragment (Fragment.to_string now) ;
+             System.set_dev_mode ctxt dev_mode ) ;
            now)
+
+  let link_to_editor ctxt content ~text =
+    let open Meta_html in
+    let fragment = make_fragment ~side_effects:false ctxt in
+    let href =
+      Reactive.(map (page ctxt ** fragment)) ~f:(fun (p, frg) ->
+          Fragment.(to_string (change_for_page frg p))) in
+    a
+      ~a:
+        [ H5.a_href href
+        ; H5.a_onclick
+            (Tyxml_lwd.Lwdom.attr (fun _ ->
+                 set_editor_content ctxt text ;
+                 set_page ctxt Page.Editor () ;
+                 false)) ]
+      content
 
   let if_explorer_should_go state f =
     if
@@ -253,7 +276,7 @@ module State = struct
              "Has a URI that points nowhere." ;
            kt1 "KT1AtHTLvsBVy2yGPw9LWGMnhG2vL5ucm7ak"
              "Quite a few off-chain-view tests." ;
-           kt1_dev "KT1DsevihNwG9XL3vesCQEBbpFUQvxU8BpYM"
+           kt1_dev "KT1LpdmvU8HSyrDsnV3JFTBbuTMUvGcAipZs"
              "Event more weird off-chain-views." ;
            uri https_ok "A valid HTTPS URI." ;
            uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
@@ -483,33 +506,40 @@ module Tezos_html = struct
         known "Delphi" "https://blog.nomadic-labs.com/delphi-changelog.html"
     | s -> proto s
 
-  let rec metadata_uri ctxt uri =
+  let open_in_editor ctxt text =
+    div (small (parens (State.link_to_editor ctxt ~text (t "Open in editor"))))
+
+  let metadata_uri ctxt uri =
     let open Tezos_contract_metadata.Metadata_uri in
     let ct = monot in
-    match uri with
-    | Web u -> t "Web URL:" %% url ct u
-    | Ipfs {cid; path} ->
-        let gatewayed = Fmt.str "https://gateway.ipfs.io/ipfs/%s%s" cid path in
-        field_head "IPFS URI"
-        % itemize
-            [ field "CID" (ct cid); field "Path" (ct path)
-            ; t "(Try " %% url ct gatewayed % t ")" ]
-    | Storage {network; address; key} ->
-        field_head "In-Contract-Storage"
-        % itemize
-            [ field "Network"
-                (Option.value_map network
-                   ~default:(t "“Current network”.")
-                   ~f:ct)
-            ; field "Address"
-                (Option.value_map address ~default:(t "“Same contract”.")
-                   ~f:ct); field "Key in the big-map" (Fmt.kstr ct "%S" key) ]
-    | Hash {kind= `Sha256; value; target} ->
-        field_head "Hash checked URI"
-        % itemize
-            [ field "Target" (metadata_uri ctxt target)
-            ; field "… should SHA256-hash to"
-                (Fmt.kstr ct "%a" Hex.pp (Hex.of_string value)) ]
+    let rec go uri =
+      match uri with
+      | Web u -> t "Web URL:" %% url ct u
+      | Ipfs {cid; path} ->
+          let gatewayed = Fmt.str "https://gateway.ipfs.io/ipfs/%s%s" cid path in
+          field_head "IPFS URI"
+          % itemize
+              [ field "CID" (ct cid); field "Path" (ct path)
+              ; t "(Try " %% url ct gatewayed % t ")" ]
+      | Storage {network; address; key} ->
+          field_head "In-Contract-Storage"
+          % itemize
+              [ field "Network"
+                  (Option.value_map network
+                     ~default:(t "“Current network”.")
+                     ~f:ct)
+              ; field "Address"
+                  (Option.value_map address ~default:(t "“Same contract”.")
+                     ~f:ct); field "Key in the big-map" (Fmt.kstr ct "%S" key)
+              ]
+      | Hash {kind= `Sha256; value; target} ->
+          field_head "Hash checked URI"
+          % itemize
+              [ field "Target" (go target)
+              ; field "… should SHA256-hash to"
+                  (Fmt.kstr ct "%a" Hex.pp (Hex.of_string value)) ] in
+    open_in_editor ctxt (Tezos_contract_metadata.Metadata_uri.to_string_uri uri)
+    % div (go uri)
 
   let parse_micheline m =
     match Tezos_micheline.Micheline_parser.tokenize m with
@@ -816,15 +846,15 @@ module Tezos_html = struct
 
   let metadata_contents ctxt =
     let open Tezos_contract_metadata.Metadata_contents in
-    fun { name
-        ; description
-        ; version
-        ; license
-        ; authors
-        ; homepage
-        ; interfaces
-        ; views
-        ; unknown } ->
+    fun ( { name
+          ; description
+          ; version
+          ; license
+          ; authors
+          ; homepage
+          ; interfaces
+          ; views
+          ; unknown } as metadata ) ->
       let ct = monot in
       let license_elt l =
         let open License in
@@ -899,27 +929,41 @@ module Tezos_html = struct
                ct k %% pre (ct (Ezjsonm.value_to_string ~minify:false v))))
       in
       let url_elt u = url t u in
-      itemize
-        ( option_field "Name" name ct
-        @ option_field "Version" version ct
-        @ option_field "Description" description paragraphs
-        @ option_field "License" license license_elt
-        @ option_field "Homepage" homepage url_elt
-        @ list_field "Authors" authors authors_elt
-        @ list_field "Interfaces" interfaces interfaces_elt
-        @ list_field "Views" views views_elt
-        @ list_field "Extra/Unknown" unknown unknown_extras )
+      open_in_editor ctxt
+        (Tezos_contract_metadata.Metadata_contents.to_json metadata)
+      % itemize
+          ( option_field "Name" name ct
+          @ option_field "Version" version ct
+          @ option_field "Description" description paragraphs
+          @ option_field "License" license license_elt
+          @ option_field "Homepage" homepage url_elt
+          @ list_field "Authors" authors authors_elt
+          @ list_field "Interfaces" interfaces interfaces_elt
+          @ list_field "Views" views views_elt
+          @ list_field "Extra/Unknown" unknown unknown_extras )
 end
 
 module Editor = struct
   let page state =
     let open Meta_html in
+    let content = State.editor_content state in
     H5.(
       textarea
-        (txt (Lwd.pure "Enter code here"))
+        (txt (Reactive.Bidirectrional.get content))
         ~a:
           [ a_style (Lwd.pure "font-family: monospace"); a_rows (Lwd.pure 30)
-          ; a_cols (Lwd.pure 80) ])
+          ; a_cols (Lwd.pure 80)
+          ; a_oninput
+              (Tyxml_lwd.Lwdom.attr
+                 Js_of_ocaml.(
+                   fun ev ->
+                     Js.Opt.iter ev##.target (fun input ->
+                         Js.Opt.iter (Dom_html.CoerceTo.textarea input)
+                           (fun input ->
+                             let v = input##.value |> Js.to_string in
+                             dbgf "TA inputs: %d bytes: %S" (String.length v) v ;
+                             Reactive.Bidirectrional.set content v)) ;
+                     true)) ])
 end
 
 module Explorer = struct
