@@ -269,55 +269,102 @@ module State = struct
       f () )
     else ()
 
-  let examples state =
-    let https_ok =
-      "https://raw.githubusercontent.com/tqtezos/TZComet/master/data/metadata_example0.json"
-    in
-    let hash_of_https_ok =
-      (* `sha256sum data/metadata_example0.json` → Achtung, the URL
-         above takes about 5 minutes to be up to date with `master` *)
-      "7d961916f05d72afc765389a695458a9b451954419b41fa3cdd5fa816128b744" in
-    let sha256_https_ok =
-      Fmt.str "sha256://0x%s/%s" hash_of_https_ok (Uri.pct_encode https_ok)
-    in
-    let sha256_https_ko =
-      Fmt.str "sha256://0x%s/%s"
-        (String.tr hash_of_https_ok ~target:'9' ~replacement:'1')
-        (Uri.pct_encode https_ok) in
-    (get state).dev_mode |> Reactive.get
-    |> Reactive.map ~f:(fun dev ->
-           let contracts = ref [] in
-           let uris = ref [] in
-           let kt1 v desc = contracts := (v, desc) :: !contracts in
-           let kt1_dev v desc = if dev then kt1 v desc in
-           let uri v desc = uris := (v, desc) :: !uris in
-           let uri_dev v desc = if dev then uri v desc in
-           kt1 "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
-             "Contract with metadata on Carthagenet." ;
-           kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
-             "Should not exist any where." ;
-           kt1_dev "KT1Su4bveK3P3PFonoCzPgefQriwBtN1KAgJ"
-             "Just a version string." ;
-           kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
-             "Has a URI that points nowhere." ;
-           kt1 "KT1VAieU3HoaKtywG2VwuZXBB6mViguWoibH" "Has one off-chain-view." ;
-           kt1_dev "KT1Ffua85vzkCyuHnYTr8iXAypMryh2fjaF5"
-             "Event more weird off-chain-views." ;
-           uri https_ok "A valid HTTPS URI." ;
-           uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
-           uri_dev sha256_https_ko
-             "A valid SHA256+HTTPS URI but the hash is not right." ;
-           uri "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9/here"
-             "An on-chain pointer to metadata." ;
-           uri_dev
-             "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9.NetXrtZMmJmZSeb/here"
-             "An on-chain pointer to metadata with chain-id." ;
-           uri_dev "tezos-storage:/here"
-             "An on-chain pointer that requires a KT1 in context." ;
-           uri "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
-             "An IPFS URI to metadata JSON." ;
-           uri_dev "ipfs://ldisejdse-dlseidje" "An invalid IPFS URI." ;
-           (`Contracts (List.rev !contracts), `Uris (List.rev !uris)))
+  module Examples = struct
+    type item = string * string
+
+    type t =
+      { contracts: item list
+      ; uris: item list
+      ; metadata_blobs: item list
+      ; michelson_bytes: item list
+      ; michelson_concretes: item list }
+
+    let get state =
+      let https_ok =
+        "https://raw.githubusercontent.com/tqtezos/TZComet/master/data/metadata_example0.json"
+      in
+      let hash_of_https_ok =
+        (* `sha256sum data/metadata_example0.json` → Achtung, the URL
+           above takes about 5 minutes to be up to date with `master` *)
+        "7d961916f05d72afc765389a695458a9b451954419b41fa3cdd5fa816128b744" in
+      let sha256_https_ok =
+        Fmt.str "sha256://0x%s/%s" hash_of_https_ok (Uri.pct_encode https_ok)
+      in
+      let sha256_https_ko =
+        Fmt.str "sha256://0x%s/%s"
+          (String.tr hash_of_https_ok ~target:'9' ~replacement:'1')
+          (Uri.pct_encode https_ok) in
+      (get state).dev_mode |> Reactive.get
+      |> Reactive.map ~f:(fun dev ->
+             let aggl () =
+               let all = ref [] in
+               let add v desc = all := (v, desc) :: !all in
+               let add_dev v desc = if dev then add v desc else () in
+               let all () = List.rev !all in
+               (add, add_dev, all) in
+             let kt1, kt1_dev, kt1_all = aggl () in
+             let uri, uri_dev, uri_all = aggl () in
+             let mtb, mtb_dev, mtb_all = aggl () in
+             let mby, mby_dev, mby_all = aggl () in
+             let tzc, tzc_dev, tzc_all = aggl () in
+             kt1 "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
+               "Contract with metadata on Carthagenet." ;
+             kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
+               "Should not exist any where." ;
+             kt1_dev "KT1Su4bveK3P3PFonoCzPgefQriwBtN1KAgJ"
+               "Just a version string." ;
+             kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
+               "Has a URI that points nowhere." ;
+             kt1 "KT1VAieU3HoaKtywG2VwuZXBB6mViguWoibH"
+               "Has one off-chain-view." ;
+             kt1_dev "KT1Ffua85vzkCyuHnYTr8iXAypMryh2fjaF5"
+               "Event more weird off-chain-views." ;
+             uri https_ok "A valid HTTPS URI." ;
+             uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
+             uri_dev sha256_https_ko
+               "A valid SHA256+HTTPS URI but the hash is not right." ;
+             uri "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9/here"
+               "An on-chain pointer to metadata." ;
+             uri_dev
+               "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9.NetXrtZMmJmZSeb/here"
+               "An on-chain pointer to metadata with chain-id." ;
+             uri_dev "tezos-storage:/here"
+               "An on-chain pointer that requires a KT1 in context." ;
+             uri "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
+               "An IPFS URI to metadata JSON." ;
+             uri_dev "ipfs://ldisejdse-dlseidje" "An invalid IPFS URI." ;
+             mtb "{}" "Empty, but valid, Metadata" ;
+             let all_mtb_from_lib =
+               let open Tezos_contract_metadata.Metadata_contents in
+               let rec go n =
+                 try (n, Example.build n) :: go (n + 1) with _ -> [] in
+               go 0 in
+             List.iter all_mtb_from_lib ~f:(fun (ith, v) ->
+                 mtb_dev
+                   (Tezos_contract_metadata.Metadata_contents.to_json v)
+                   (Fmt.str "Meaningless example #%d" ith)) ;
+             mby "0x05030b" "The Unit value, PACKed." ;
+             mby
+               "050707010000000c486\n\
+                56c6c6f20576f726c64\n\
+                2102000000260704010\n\
+                0000003666f6f010000\n\
+                0003626172070401000\n\
+                0000474686973010000\n\
+                000474686174"
+               "Michelson with a (map string string)." ;
+             mby_dev "0x05" "Empty but still Michelsonian bytes." ;
+             (let tzself f c = Fmt.kstr (f c) "Michelson %S" c in
+              List.iter ~f:(tzself tzc)
+                ["Unit"; "12"; "\"hello world\""; "(Pair 42 51)"] ;
+              List.iter ~f:(tzself tzc_dev)
+                ["Unit 12"; "\"hœlló wörld\""; "(Pair 42 51 \"meh\")"]) ;
+             { contracts= kt1_all ()
+             ; uris= uri_all ()
+             ; metadata_blobs= mtb_all ()
+             ; michelson_bytes= mby_all ()
+             ; michelson_concretes= tzc_all () })
+  end
 end
 
 let tzcomet_link () =
@@ -1058,29 +1105,61 @@ module Tezos_html = struct
           @ list_field "Extra/Unknown" unknown unknown_extras )
 end
 
+module Examples_dropdown = struct
+  open Meta_html
+
+  let make ctxt ~action l =
+    let open Bootstrap.Dropdown_menu in
+    let example (v, msg) =
+      let cct v =
+        if String.length v > 22 then
+          abbreviation v (ct (String.sub v ~pos:0 ~len:21 ^ "…"))
+        else ct v in
+      item (cct v %% t "→" %% it msg) ~action:(fun () -> action v) in
+    Reactive.bind (State.Examples.get ctxt) ~f:(fun examples ->
+        button (t "Examples 💡 ")
+          (List.concat_map l ~f:(fun (h, f) ->
+               header h :: List.map (f examples) ~f:example)))
+
+  let explorable ctxt =
+    make ctxt
+      ~action:(fun x -> State.set_explorer_input ctxt x)
+      [ (t "KT1 Contracts", fun x -> x.contracts)
+      ; (t "TZIP-16-URIs", fun x -> x.uris) ]
+
+  let editable ctxt =
+    make ctxt
+      ~action:(fun x -> State.set_editor_content ctxt x)
+      [ (t "TZIP-16 Metadata Content", fun x -> x.metadata_blobs)
+      ; (t "TZIP-16-URIs", fun x -> x.uris)
+      ; (t "Michelson Bytes Blobs", fun x -> x.michelson_bytes)
+      ; (t "Michelson Concrete Expressions", fun x -> x.michelson_concretes) ]
+end
+
 module Editor = struct
   let page ctxt =
     let open Meta_html in
     let content = State.editor_content ctxt in
     let editor =
-      H5.(
-        textarea
-          (txt (Reactive.Bidirectrional.get content))
-          ~a:
-            [ a_style (Lwd.pure "font-family: monospace"); a_rows (Lwd.pure 30)
-            ; a_cols (Lwd.pure 80)
-            ; a_oninput
-                (Tyxml_lwd.Lwdom.attr
-                   Js_of_ocaml.(
-                     fun ev ->
-                       Js.Opt.iter ev##.target (fun input ->
-                           Js.Opt.iter (Dom_html.CoerceTo.textarea input)
-                             (fun input ->
-                               let v = input##.value |> Js.to_string in
-                               dbgf "TA inputs: %d bytes: %S" (String.length v)
-                                 v ;
-                               Reactive.Bidirectrional.set content v)) ;
-                       true)) ]) in
+      div (Examples_dropdown.editable ctxt)
+      % H5.(
+          textarea
+            (txt (Reactive.Bidirectrional.get content))
+            ~a:
+              [ a_style (Lwd.pure "font-family: monospace"); a_rows (Lwd.pure 30)
+              ; a_cols (Lwd.pure 80)
+              ; a_oninput
+                  (Tyxml_lwd.Lwdom.attr
+                     Js_of_ocaml.(
+                       fun ev ->
+                         Js.Opt.iter ev##.target (fun input ->
+                             Js.Opt.iter (Dom_html.CoerceTo.textarea input)
+                               (fun input ->
+                                 let v = input##.value |> Js.to_string in
+                                 dbgf "TA inputs: %d bytes: %S"
+                                   (String.length v) v ;
+                                 Reactive.Bidirectrional.set content v)) ;
+                         true)) ]) in
     let guessers =
       let of_predicate name v f ~log inp =
         let worked = f inp in
@@ -1313,28 +1392,7 @@ module Explorer = struct
         State.if_explorer_should_go ctxt enter_action ;
         make ~enter_action
           [ row
-              [ cell 2
-                  (magic
-                     Bootstrap.Dropdown_menu.(
-                       let example (v, msg) =
-                         let cct v =
-                           if String.length v > 22 then
-                             abbreviation v
-                               (ct (String.sub v ~pos:0 ~len:21 ^ "…"))
-                           else ct v in
-                         item
-                           (cct v %% t "→" %% it msg)
-                           ~action:(fun () -> State.set_explorer_input ctxt v)
-                       in
-                       Reactive.bind (State.examples ctxt)
-                         ~f:(fun
-                              (`Contracts contract_examples, `Uris uri_examples)
-                            ->
-                           button (t "Examples 💡 ")
-                             ( [header (t "KT1 Contracts")]
-                             @ List.map contract_examples ~f:example
-                             @ [header (t "TZIP-16 URIs")]
-                             @ List.map uri_examples ~f:example ))))
+              [ cell 2 (magic (Examples_dropdown.explorable ctxt))
               ; cell 8
                   (input
                      ~placeholder:
