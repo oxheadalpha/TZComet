@@ -1143,23 +1143,24 @@ module Editor = struct
     let editor =
       div (Examples_dropdown.editable ctxt)
       % H5.(
-          textarea
-            (txt (Reactive.Bidirectrional.get content))
-            ~a:
-              [ a_style (Lwd.pure "font-family: monospace"); a_rows (Lwd.pure 30)
-              ; a_cols (Lwd.pure 80)
-              ; a_oninput
-                  (Tyxml_lwd.Lwdom.attr
-                     Js_of_ocaml.(
-                       fun ev ->
-                         Js.Opt.iter ev##.target (fun input ->
-                             Js.Opt.iter (Dom_html.CoerceTo.textarea input)
-                               (fun input ->
-                                 let v = input##.value |> Js.to_string in
-                                 dbgf "TA inputs: %d bytes: %S"
-                                   (String.length v) v ;
-                                 Reactive.Bidirectrional.set content v)) ;
-                         true)) ]) in
+          div
+            [ textarea
+                (txt (Reactive.Bidirectrional.get content))
+                ~a:
+                  [ a_style (Lwd.pure "font-family: monospace")
+                  ; classes ["col-12"]; a_rows (Lwd.pure 50)
+                  ; a_oninput
+                      (Tyxml_lwd.Lwdom.attr
+                         Js_of_ocaml.(
+                           fun ev ->
+                             Js.Opt.iter ev##.target (fun input ->
+                                 Js.Opt.iter (Dom_html.CoerceTo.textarea input)
+                                   (fun input ->
+                                     let v = input##.value |> Js.to_string in
+                                     dbgf "TA inputs: %d bytes: %S"
+                                       (String.length v) v ;
+                                     Reactive.Bidirectrional.set content v)) ;
+                             true)) ] ]) in
     let guessers =
       let of_predicate name v f ~log inp =
         let worked = f inp in
