@@ -301,7 +301,7 @@ module State = struct
            kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
              "Has a URI that points nowhere." ;
            kt1 "KT1VAieU3HoaKtywG2VwuZXBB6mViguWoibH" "Has one off-chain-view." ;
-           kt1_dev "KT1LpdmvU8HSyrDsnV3JFTBbuTMUvGcAipZs"
+           kt1_dev "KT1Ffua85vzkCyuHnYTr8iXAypMryh2fjaF5"
              "Event more weird off-chain-views." ;
            uri https_ok "A valid HTTPS URI." ;
            uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
@@ -623,6 +623,7 @@ module Tezos_html = struct
       | Pair of {left: t; right: t}
 
     open Tezos_contract_metadata.Metadata_contents.View.Implementation
+    open Tezos_contract_metadata.Metadata_contents.Michelson_blob
 
     let of_type ~annotations (Micheline m) =
       let view_annots = annotations in
@@ -722,8 +723,7 @@ module Tezos_html = struct
   end
 
   let mich
-      (Tezos_contract_metadata.Metadata_contents.View.Implementation.Micheline
-        m) =
+      (Tezos_contract_metadata.Metadata_contents.Michelson_blob.Micheline m) =
     let open Tezos_micheline in
     Fmt.str "%a" Micheline_printer.print_expr
       (Micheline_printer.printable Base.Fn.id m)
@@ -909,7 +909,9 @@ module Tezos_html = struct
           ; license
           ; authors
           ; homepage
+          ; source
           ; interfaces
+          ; errors
           ; views
           ; unknown } as metadata ) ->
       let ct = monot in
@@ -945,47 +947,99 @@ module Tezos_html = struct
           Re.split_full (Re.compile r) s |> List.map ~f:tok |> list in
         List.map l ~f:interface |> List.intersperse ~sep:(t ", ") |> list in
       let _todo l = Fmt.kstr t "todo: %d items" (List.length l) in
+      let view_id s = Fmt.str "view-%s" s in
+      let view v =
+        let open View in
+        let purity =
+          if v.is_pure then Bootstrap.color `Success (t "pure")
+          else Bootstrap.color `Warning (t "inpure") in
+        let implementations impls =
+          let open Implementation in
+          itemize
+            (List.map impls ~f:(function
+              | Michelson_storage view -> michelson_view ctxt ~view
+              | Rest_api_query raq ->
+                  field "REST-API Query"
+                    (itemize
+                       ( normal_field "OpenAPI Spec" (ct raq.specification_uri)
+                       @ option_field "Base-URI Override" raq.base_uri ct
+                       @ normal_field "Path" (ct raq.path)
+                       @ normal_field "Method"
+                           (Fmt.kstr ct "%s"
+                              (Cohttp.Code.string_of_method raq.meth)) ))))
+        in
+        div
+          ~a:[H5.a_id (Lwd.pure (view_id v.name))]
+          ( bt v.name %% t "(" % purity % t "):"
+          % itemize
+              ( option_field "Description" v.description paragraphs
+              @
+              match v.implementations with
+              | [] ->
+                  [Bootstrap.color `Danger (t "There are no implementations.")]
+              | l ->
+                  let name =
+                    Fmt.str "Implementation%s"
+                      (if List.length l = 1 then "" else "s") in
+                  list_field name v.implementations implementations ) ) in
       let views_elt (views : View.t list) =
-        let view v =
-          let open View in
-          let purity =
-            if v.is_pure then Bootstrap.color `Success (t "pure")
-            else Bootstrap.color `Warning (t "inpure") in
-          let implementations impls =
-            let open Implementation in
-            itemize
-              (List.map impls ~f:(function
-                | Michelson_storage view -> michelson_view ctxt ~view
-                | Rest_api_query raq ->
-                    field "REST-API Query"
-                      (itemize
-                         ( normal_field "OpenAPI Spec" (ct raq.specification_uri)
-                         @ option_field "Base-URI Override" raq.base_uri ct
-                         @ normal_field "Path" (ct raq.path)
-                         @ normal_field "Method"
-                             (Fmt.kstr ct "%s"
-                                (Cohttp.Code.string_of_method raq.meth)) ))))
-          in
-          div
-            ( bt v.name %% t "(" % purity % t "):"
-            % itemize
-                ( option_field "Description" v.description paragraphs
-                @
-                match v.implementations with
-                | [] ->
-                    [Bootstrap.color `Danger (t "There are no implementations.")]
-                | l ->
-                    let name =
-                      Fmt.str "Implementation%s"
-                        (if List.length l = 1 then "" else "s") in
-                    list_field name v.implementations implementations ) ) in
         itemize (List.map views ~f:(fun v -> view v)) in
+      let url_elt u = url t u in
+      let source_elt source =
+        let open Source in
+        itemize
+          ( field "Tools"
+              ( ( oxfordize_list source.tools ~map:ct
+                    ~sep:(fun () -> t ", ")
+                    ~last_sep:(fun () -> t ", and ")
+                |> list )
+              % t "." )
+          :: option_field "Location" source.location url_elt ) in
+      let errors_elt errors =
+        let open Errors.Translation in
+        let langs = function
+          | None -> empty ()
+          | Some [] -> div (t "[lang=?]")
+          | Some more ->
+              div
+                ( t "[lang="
+                % list
+                    (let sep () = t "|" in
+                     oxfordize_list more ~map:ct ~sep ~last_sep:sep)
+                % t "]" ) in
+        let expand (Michelson_blob.Micheline m as mm) =
+          let open Tezos_micheline.Micheline in
+          let qit s =
+            abbreviation
+              (Fmt.str "Michelson: %s" (mich mm))
+              (Fmt.kstr it "“%s”" s) in
+          match root m with
+          | String (_, s) -> qit s
+          | Bytes (_, b) -> qit (Bytes.to_string b)
+          | _ -> ct (mich mm) in
+        let view_link name =
+          List.find views ~f:(fun v -> String.equal name v.View.name)
+          |> function
+          | None ->
+              ct name %% small (Bootstrap.color `Danger (t "(Cannot find it!)"))
+          | Some v ->
+              let collapse =
+                Bootstrap.Collapse.make () ~button_kind:`Secondary in
+              collapse#button (ct name) % collapse#div (view v) in
+        itemize
+          (List.map errors ~f:(function
+            | Static {error; expansion; languages} ->
+                field "Static-translation"
+                  ( ct (mich error)
+                  %% t "→" %% expand expansion %% langs languages )
+            | Dynamic {view_name; languages} ->
+                field "Dynamic-view" (view_link view_name %% langs languages)))
+      in
       let unknown_extras kv =
         itemize
           (List.map kv ~f:(fun (k, v) ->
                ct k %% pre (ct (Ezjsonm.value_to_string ~minify:false v))))
       in
-      let url_elt u = url t u in
       ( if open_in_editor_link then
         open_in_editor ctxt
           (Tezos_contract_metadata.Metadata_contents.to_json metadata)
@@ -996,8 +1050,10 @@ module Tezos_html = struct
           @ option_field "Description" description paragraphs
           @ option_field "License" license license_elt
           @ option_field "Homepage" homepage url_elt
+          @ option_field "Source" source source_elt
           @ list_field "Authors" authors authors_elt
           @ list_field "Interfaces" interfaces interfaces_elt
+          @ option_field "Errors" errors errors_elt
           @ list_field "Views" views views_elt
           @ list_field "Extra/Unknown" unknown unknown_extras )
 end

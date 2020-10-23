@@ -231,7 +231,7 @@ module Content = struct
                   ; human_annotations
                   ; version } ->
                   let open Michelson_storage in
-                  let mich (Micheline m) =
+                  let mich (Michelson_blob.Micheline m) =
                     let open Tezos_micheline in
                     Fmt.str "%a" Micheline_printer.print_expr
                       (Micheline_printer.printable Base.Fn.id m) in
