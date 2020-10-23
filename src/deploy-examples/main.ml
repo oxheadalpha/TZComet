@@ -142,7 +142,32 @@ let all ?only ~logfile () =
     Ezjsonm.
       [ ( "license"
         , dict [("name", string "MIT"); ("details", string "The MIT License")]
-        ); ("homepage", string "https://github.com/tqtezos/TZComet") ] in
+        ); ("homepage", string "https://github.com/tqtezos/TZComet")
+      ; ( "source"
+        , dict
+            [ ("tools", list string ["TZComet"; "deploy-examples/main.exe"])
+            ; ( "location"
+              , string
+                  "https://github.com/tqtezos/TZComet/blob/48fed5db6bd367cae0e7a5ef3ec415e6cf76b30b/src/deploy-examples/main.ml#L147"
+              ) ] )
+      ; ( "errors"
+        , list Fn.id
+            [ dict
+                [ ("error", dict [("int", string "42")])
+                ; ("expansion", dict [("string", string "Hello I'm error 42")])
+                ]
+            ; dict
+                [ ("error", dict [("int", string "42")])
+                ; ( "expansion"
+                  , dict
+                      [ ( "bytes"
+                        , string
+                            "7175656c7175652063686f7365206e276120706173206d61726368c3a9"
+                        ) ] ); ("languages", strings ["fr"]) ]
+            ; dict [("view", string "does-not-exist")]
+            ; dict
+                [ ("view", string "multiply-the-nat-in-storage")
+                ; ("languages", strings []) ] ] ) ] in
   let empty_view_01 =
     view
       ~description:
