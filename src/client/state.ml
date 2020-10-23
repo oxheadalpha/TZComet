@@ -32,7 +32,7 @@ type t =
   ; explorer_uri_input: string Var.t
   ; start_fetching_uri: bool Var.t }
 
-let kt1_with_metadata = "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
+let kt1_with_metadata = "KT1VAieU3HoaKtywG2VwuZXBB6mViguWoibH"
 
 let init ~arguments () =
   let arg s = List.Assoc.find arguments ~equal:String.equal s in
