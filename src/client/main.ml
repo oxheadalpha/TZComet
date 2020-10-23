@@ -544,8 +544,9 @@ let michelson_bytes_editor_page _state ~michelson_bytes_editor
 let metadata_explorer state_handle =
   let open RD in
   let _state_handle =
+    let sys = System.create () in
     object
-      method system = System.{dev_mode= false}
+      method system = sys
     end in
   let nodes = Tezos_nodes._global in
   Tezos_nodes.ensure_update_loop nodes ;
@@ -1177,8 +1178,9 @@ let lwd_onload _ =
     let gui = Gui.State.create () in
     let nodes = Query_nodes.create () in
     let fetcher = Contract_metadata.Uri.Fetcher.create () in
+    let sys = System.create () in
     object
-      method system = System.{dev_mode= false}
+      method system = sys
 
       method gui = gui
 

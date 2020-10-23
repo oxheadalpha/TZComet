@@ -49,20 +49,6 @@ end
 
 module Context = struct type 'a t = 'a constraint 'a = < .. > end
 
-module System = struct
-  type t = {mutable dev_mode: bool}
-
-  let get (state : < system: t ; .. > Context.t) = state#system
-
-  let set_dev_mode c v =
-    dbgf "system: setting dev_mode to %b" v ;
-    (get c).dev_mode <- v
-
-  let slow_step ctxt =
-    if (get ctxt).dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5
-    else Lwt.return ()
-end
-
 module Reactive = struct
   include Lwd
 
@@ -79,6 +65,7 @@ module Reactive = struct
     let of_var v = make (Lwd.get v) (Lwd.set v)
     let get v = v.lwd
     let set v x = v.set x
+    let convert {lwd; set} f t = {lwd= map lwd ~f; set= (fun x -> set (t x))}
   end
 
   module Table = struct
@@ -122,24 +109,52 @@ module Reactive = struct
   module Sequence = Lwd_seq
 end
 
+module Message = struct
+  type t =
+    | Text of string
+    | Inline_code of string
+    | Code_block of string
+    | List of t list
+
+  let t s = Text s
+  let ct s = Inline_code s
+  let code_block s = Code_block s
+  let list l = List l
+  let ( % ) a b = List [a; b]
+  let ( %% ) a b = List [a; t " "; b]
+end
+
 module Decorate_error = struct
-  module Message = struct
-    type t =
-      | Text of string
-      | Inline_code of string
-      | Code_block of string
-      | List of t list
-
-    let t s = Text s
-    let ct s = Inline_code s
-    let code_block s = Code_block s
-    let list l = List l
-    let ( % ) a b = List [a; b]
-    let ( %% ) a b = List [a; t " "; b]
-  end
-
   exception E of {message: Message.t; trace: exn list}
 
   let raise ?(trace = []) message = raise (E {message; trace})
   let reraise message ~f = Lwt.catch f (fun e -> raise message ~trace:[e])
+end
+
+module System = struct
+  type t = {mutable dev_mode: bool; http_timeout: float Reactive.var}
+
+  let create () = {dev_mode= false; http_timeout= Reactive.var 3.}
+  let get (state : < system: t ; .. > Context.t) = state#system
+
+  let set_dev_mode c v =
+    dbgf "system: setting dev_mode to %b" v ;
+    (get c).dev_mode <- v
+
+  let set_http_timeout c v = Reactive.set (get c).http_timeout v
+  let http_timeout c = Reactive.get (get c).http_timeout
+  let http_timeout_peek c = Reactive.peek (get c).http_timeout
+
+  let http_timeout_bidirectional c =
+    Reactive.Bidirectrional.of_var (get c).http_timeout
+
+  let slow_step ctxt =
+    if (get ctxt).dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5
+    else Lwt.return ()
+
+  let with_timeout ctxt ~f ~raise =
+    let open Lwt.Infix in
+    let timeout = http_timeout_peek ctxt in
+    Lwt.pick
+      [f (); (Js_of_ocaml_lwt.Lwt_js.sleep timeout >>= fun () -> raise timeout)]
 end

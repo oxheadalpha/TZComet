@@ -13,19 +13,62 @@ module Node = struct
   let create name prefix =
     {name; prefix; status= Reactive.var (0., Uninitialized)}
 
-  let rpc_get node path =
+  let rpc_get ctxt node path =
     let open Lwt in
     let uri = Fmt.str "%s/%s" node.prefix path in
-    Js_of_ocaml_lwt.XmlHttpRequest.(
-      get uri
-      >>= fun frame ->
-      dbgf "%s %s code: %d" node.prefix path frame.code ;
-      match frame.code with
-      | 200 -> return frame.content
-      | other -> Fmt.failwith "Getting %S returned code: %d" path other)
+    System.with_timeout ctxt
+      ~f:
+        Js_of_ocaml_lwt.XmlHttpRequest.(
+          fun () ->
+            get uri
+            >>= fun frame ->
+            dbgf "%s %s code: %d" node.prefix path frame.code ;
+            match frame.code with
+            | 200 -> return frame.content
+            | other -> Fmt.failwith "Getting %S returned code: %d" path other)
+      ~raise:(fun timeout ->
+        dbgf "Node-%S GET %s → TIMEOUT" node.name path ;
+        Decorate_error.raise
+          Message.(
+            t "Calling" %% ct "HTTP-GET" %% ct path %% t "on node"
+            %% ct node.name
+            %% Fmt.kstr t "timeouted (%.03f seconds)" timeout))
+
+  let rpc_post ctxt node ~body path =
+    let open Lwt in
+    let uri = Fmt.str "%s/%s" node.prefix path in
+    let fail msg =
+      Decorate_error.raise
+        Message.(
+          t "Calling" %% ct "HTTP-POST" %% ct path %% t "on node"
+          %% ct node.name %% t "with" %% code_block body % msg) in
+    System.with_timeout ctxt
+      ~f:
+        Js_of_ocaml_lwt.XmlHttpRequest.(
+          fun () ->
+            perform ~contents:(`String body) ~content_type:"application/json"
+              (Option.value_exn ~message:"uri-of-string"
+                 (Js_of_ocaml.Url.url_of_string uri))
+            >>= fun frame ->
+            dbgf "%s %s code: %d" node.prefix path frame.code ;
+            match frame.code with
+            | 200 -> return frame.content
+            | other ->
+                dbgf "CONTENT: %s" frame.content ;
+                fail
+                  Message.(
+                    Fmt.kstr t "failed with with return code %d:" other
+                    %% code_block
+                         ( try
+                             Ezjsonm.value_from_string frame.content
+                             |> Ezjsonm.value_to_string ~minify:false
+                           with _ -> frame.content )))
+      ~raise:(fun timeout ->
+        fail Message.(Fmt.kstr t "timeouted (%03.f seconds)." timeout))
 
   let ping node =
     let open Lwt in
+    (* TODO use the above *)
     Js_of_ocaml_lwt.XmlHttpRequest.(
       Fmt.kstr get "%s/chains/main/blocks/head/metadata" node.prefix
       >>= fun frame ->
@@ -40,7 +83,7 @@ module Node = struct
 
   let metadata_big_map state_handle node ~address ~log =
     let open Lwt in
-    let get = rpc_get node in
+    let get = rpc_get state_handle node in
     let log fmt = Fmt.kstr log fmt in
     Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/storage" address
     >>= fun storage_string ->
@@ -76,7 +119,7 @@ module Node = struct
           |> String.concat ~sep:"" )
     | [one] -> return one
 
-  let bytes_value_of_big_map_at_string node ~big_map_id ~key ~log =
+  let bytes_value_of_big_map_at_string ctxt node ~big_map_id ~key ~log =
     let open Lwt in
     let hash_string = B58_hashes.b58_script_id_hash_of_michelson_string key in
     Decorate_error.(
@@ -86,7 +129,7 @@ module Node = struct
           %% ct (Z.to_string big_map_id)
           %% t "at the key" %% ct key %% t "(hash: " % ct hash_string % t ").")
         ~f:(fun () ->
-          Fmt.kstr (rpc_get node)
+          Fmt.kstr (rpc_get ctxt node)
             "/chains/main/blocks/head/context/big_maps/%s/%s"
             (Z.to_string big_map_id) hash_string))
     >>= fun bytes_raw_value ->
@@ -187,16 +230,21 @@ end
 
 let find_node_with_contract ctxt addr =
   let open Lwt in
+  let trace = ref [] in
   Reactive.Table.Lwt.find (nodes ctxt) ~f:(fun node ->
       catch
         (fun () ->
-          Fmt.kstr (Node.rpc_get node)
+          Fmt.kstr (Node.rpc_get ctxt node)
             "/chains/main/blocks/head/context/contracts/%s/storage" addr
           >>= fun _ -> return_true)
-        (fun _ -> return_false))
+        (fun exn ->
+          trace := exn :: !trace ;
+          return_false))
   >>= function
   | Some node -> Lwt.return node
-  | None -> Fmt.failwith "Cannot find a node that knows about %S" addr
+  | None ->
+      Decorate_error.raise ~trace:(List.rev !trace)
+        Message.(t "Cannot find a node that knows about address" %% ct addr)
 
 let metadata_value ctxt ~address ~key ~(log : string -> unit) =
   let open Lwt in
@@ -207,9 +255,9 @@ let metadata_value ctxt ~address ~key ~(log : string -> unit) =
   Node.metadata_big_map ctxt node ~address ~log
   >>= fun big_map_id ->
   logf "Metadata big-map: %s" (Z.to_string big_map_id) ;
-  Node.bytes_value_of_big_map_at_string node ~big_map_id ~key ~log
+  Node.bytes_value_of_big_map_at_string ctxt node ~big_map_id ~key ~log
 
-let call_off_chain_view nodes ~log ~address ~view ~parameter =
+let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   let open Lwt in
   let open Tezos_contract_metadata.Metadata_contents.View.Implementation
            .Michelson_storage in
@@ -221,21 +269,21 @@ let call_off_chain_view nodes ~log ~address ~view ~parameter =
       f in
   logf "Calling %s(%a)" address
     Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline parameter ;
-  find_node_with_contract nodes address
+  find_node_with_contract ctxt address
   >>= fun node ->
   logf "Found contract with node %S" node.name ;
-  Fmt.kstr (Node.rpc_get node)
+  Fmt.kstr (Node.rpc_get ctxt node)
     "/chains/main/blocks/head/context/contracts/%s/storage" address
   >>= fun storage ->
   logf "Got the storage: %s" storage ;
-  Fmt.kstr (Node.rpc_get node)
+  Fmt.kstr (Node.rpc_get ctxt node)
     "/chains/main/blocks/head/context/contracts/%s/script" address
   >>= fun script ->
-  Fmt.kstr (Node.rpc_get node)
+  Fmt.kstr (Node.rpc_get ctxt node)
     "/chains/main/blocks/head/context/contracts/%s/balance" address
   >>= fun balance ->
   let balance = Ezjsonm.(value_from_string balance |> get_string) in
-  Fmt.kstr (Node.rpc_get node) "/chains/main/chain_id"
+  Fmt.kstr (Node.rpc_get ctxt node) "/chains/main/chain_id"
   >>= fun chain_id ->
   let chain_id = Ezjsonm.(value_from_string chain_id |> get_string) in
   logf "Got the script: %s" script ;
@@ -281,30 +329,6 @@ let call_off_chain_view nodes ~log ~address ~view ~parameter =
     Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline view_input ;
   logf "Made the view-storage: %a"
     Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline view_storage ;
-  let rpc_post node ~body path =
-    let open Node in
-    let open Lwt in
-    let uri = Fmt.str "%s/%s" node.prefix path in
-    Js_of_ocaml_lwt.XmlHttpRequest.(
-      perform ~contents:(`String body) ~content_type:"application/json"
-        (Option.value_exn ~message:"uri-of-string"
-           (Js_of_ocaml.Url.url_of_string uri))
-      >>= fun frame ->
-      dbgf "%s %s code: %d" node.prefix path frame.code ;
-      match frame.code with
-      | 200 -> return frame.content
-      | other ->
-          dbgf "CONTENT: %s" frame.content ;
-          Decorate_error.(
-            raise
-              Message.(
-                t "POST request at" %% ct uri
-                %% Fmt.kstr t "failwith with return code %d:" other
-                %% code_block
-                     ( try
-                         Ezjsonm.value_from_string frame.content
-                         |> Ezjsonm.value_to_string ~minify:false
-                       with _ -> frame.content )))) in
   let constructed =
     let open Ezjsonm in
     dict
@@ -312,7 +336,7 @@ let call_off_chain_view nodes ~log ~address ~view ~parameter =
       ; ("storage", Michelson.micheline_to_ezjsonm view_storage)
       ; ("input", Michelson.micheline_to_ezjsonm view_input)
       ; ("amount", string "0"); ("chain_id", string chain_id) ] in
-  rpc_post node
+  Node.rpc_post ctxt node
     ~body:(Ezjsonm.value_to_string constructed)
     "/chains/main/blocks/head/helpers/scripts/run_code"
   >>= fun result ->

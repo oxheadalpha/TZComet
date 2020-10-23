@@ -4,7 +4,7 @@ module Errors_html = struct
   open Meta_html
 
   let decorate_error_message ctxt m =
-    let module M = Decorate_error.Message in
+    let module M = Message in
     let rec msg = function
       | M.Text s -> t s
       | M.Inline_code c -> ct c
@@ -12,11 +12,21 @@ module Errors_html = struct
       | M.List l -> List.fold ~init:(empty ()) ~f:(fun a b -> a % msg b) l in
     msg m
 
-  let exception_html ctxt = function
-    | Decorate_error.E {message; trace} ->
-        bt "Error:" %% decorate_error_message ctxt message
-    | Failure s -> bt "Failure:" %% t s
-    | e -> bt "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e)
+  let exception_html ctxt exn =
+    let rec construct = function
+      | Decorate_error.E {message; trace} ->
+          let trace_part =
+            match trace with
+            | [] -> empty ()
+            | more ->
+                let collapse =
+                  Bootstrap.Collapse.make ~button_kind:`Secondary () in
+                collapse#button (t "Error Trace")
+                % collapse#div (itemize (List.map more ~f:construct)) in
+          decorate_error_message ctxt message % trace_part
+      | Failure s -> t "Failure:" %% t s
+      | e -> t "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e) in
+    bt "Error:" %% construct exn
 end
 
 module Work_status = struct
@@ -290,8 +300,7 @@ module State = struct
              "Just a version string." ;
            kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
              "Has a URI that points nowhere." ;
-           kt1 "KT1AtHTLvsBVy2yGPw9LWGMnhG2vL5ucm7ak"
-             "Quite a few off-chain-view tests." ;
+           kt1 "KT1VAieU3HoaKtywG2VwuZXBB6mViguWoibH" "Has one off-chain-view." ;
            kt1_dev "KT1LpdmvU8HSyrDsnV3JFTBbuTMUvGcAipZs"
              "Event more weird off-chain-views." ;
            uri https_ok "A valid HTTPS URI." ;
@@ -379,19 +388,46 @@ let about_page state =
           % p (t "This is also a test/experiment in UI writing …")
           % Meta_html.Example.e1 ())
 
-let settings_page state =
+let settings_page ctxt =
   let open Meta_html in
   let open State in
+  let timeout_valid_and_changed = Reactive.var None in
+  let timeout =
+    Reactive.Bidirectrional.make
+      (System.http_timeout_peek ctxt |> Fmt.str "%f" |> Reactive.pure)
+      (fun x ->
+        match Float.of_string x with
+        | f ->
+            System.set_http_timeout ctxt f ;
+            Reactive.set timeout_valid_and_changed
+              (Some (t "Timeout set to " % Fmt.kstr ct "%f" f))
+        | exception _ ->
+            Reactive.set timeout_valid_and_changed
+              (Some
+                 (Bootstrap.color `Danger
+                    ( t "Timeout cannot be set to"
+                    %% ct x
+                    % t ", it should a valid floating-point number." )))) in
   h2 (t "Settings")
   % Bootstrap.Form.(
       make
         [ check_box
-            (State.dev_mode_bidirectional state)
+            (State.dev_mode_bidirectional ctxt)
             ~label:(t "Dev-mode enabled")
             ~help:
               (t
                  "Shows things that regular users should not see and \
-                  artificially slows down the application.") ])
+                  artificially slows down the application.")
+        ; input
+            ~placeholder:(Reactive.pure "Number of seconds (with decimals).")
+            ~help:
+              (Reactive.bind_var timeout_valid_and_changed ~f:(function
+                | None ->
+                    t
+                      "How long to wait for nodes and gateways to give/accept \
+                       data."
+                | Some msg -> msg))
+            ~label:(t "HTTP-Call Timeout") timeout ])
 
 module Tezos_html = struct
   let uri_parsing_error err =
@@ -993,7 +1029,7 @@ module Editor = struct
       let of_predicate name v f ~log inp =
         let worked = f inp in
         log
-          Decorate_error.Message.(
+          Message.(
             t "Trying predicate" %% ct name %% t "→"
             % if worked then t "OK!" else t "Nope :/") ;
         if worked then Some v else None in
