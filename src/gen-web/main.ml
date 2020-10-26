@@ -31,6 +31,27 @@ let base_bootstrap page_title =
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
     <script src="main-client.js"></script>
+    <script>
+|html};
+      List.map [ "shown"; "show"; "hide"; "hidden" ] ~f:(fun evname ->
+          Fmt.str
+            {html|
+$(document).on('%s.bs.collapse', function (e) {
+   console.log('##%s ' + e.type + ' TRGT ' + e.target.id);
+   var ev = new CustomEvent('collapse-%s', { detail: e.target.id });
+   document.body.dispatchEvent(ev);
+})|html}
+            evname evname evname)
+      |> String.concat ~sep:"\n";
+      (*
+$(document).on('hidden.bs.collapse', function (e) {
+   console.log('##shown ' + e.type + ' TRGT ' + e.target.id);
+   var ev = new CustomEvent('collapse-hidden', { detail: e.target.id } );
+   document.body.dispatchEvent(ev);
+})
+ *)
+      {html|
+</script>
   </body>
 </html>
 |html};

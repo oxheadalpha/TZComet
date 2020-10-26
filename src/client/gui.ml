@@ -85,7 +85,11 @@ module Work_status = struct
           let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
           Bootstrap.bordered ~kind:`Success
             ( div (f x)
-            %% collapse#button (t "Show logs")
+            %% collapse#button
+                 (Reactive.bind collapse#state ~f:(function
+                   | `Showing | `Hiding -> it "\\o/"
+                   | `Shown -> t "Hide logs"
+                   | `Hidden -> t "Show logs"))
             % collapse#div (show_logs ~wip:false ()) )
       | Done (Error e) ->
           let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in

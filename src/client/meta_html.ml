@@ -428,6 +428,48 @@ module Bootstrap = struct
   end
 
   module Collapse = struct
+    type state = [`Hidden | `Hiding | `Shown | `Showing]
+
+    module Global_jquery_communication = struct
+      (* 
+         This module brings the `*.bs.collapse` jQuery events into the Lwd
+         realm, using each a global handler for traditional JS events.
+      *)
+
+      let done_once = ref false
+      let ids_and_states : (string * state Reactive.var) list ref = ref []
+
+      let ensure_handlers () =
+        match !done_once with
+        | true -> ()
+        | false ->
+            let open Js_of_ocaml in
+            (* This adds one listener per collapse element … *)
+            let the_div =
+              (Dom_html.document##.body :> Js_of_ocaml.Dom_html.element Js.t)
+            in
+            List.iter
+              [ ("shown", `Shown); ("show", `Showing); ("hide", `Hiding)
+              ; ("hidden", `Hidden) ]
+              ~f:(fun (evname, resulting_status) ->
+                let ev_type = Fmt.kstr Dom.Event.make "collapse-%s" evname in
+                let _id =
+                  Dom_html.addEventListener the_div ev_type
+                    (Dom_html.handler (fun ev ->
+                         dbgf "html-handler: %s -- %s"
+                           (Js.to_string ev##._type)
+                           (Js.to_string ev##.detail) ;
+                         List.iter !ids_and_states ~f:(fun (the_id, state) ->
+                             if String.equal (Js.to_string ev##.detail) the_id
+                             then Reactive.set state resulting_status) ;
+                         Js._true))
+                    Js._true in
+                ()) ;
+            done_once := true
+
+      let register id state = ids_and_states := (id, state) :: !ids_and_states
+    end
+
     let make ?(button_kind = `Primary) ?id () =
       let open H5 in
       let the_id = Fresh_id.of_option "collapse" id in
@@ -441,8 +483,13 @@ module Bootstrap = struct
             ; a_user_data "target" (Lwd.pure (Fmt.str "#%s" the_id))
             ; a_aria "expanded" (Lwd.pure ["false"])
             ; a_aria "controls" (Lwd.pure [the_id]) ] in
+      let (state : state Reactive.var) = Reactive.var `Hidden in
+      Global_jquery_communication.ensure_handlers () ;
+      Global_jquery_communication.register the_id state ;
       object
         method button content = make_button [content]
+
+        method state = Reactive.get state
 
         method div content =
           div ~a:[classes ["collapse"]; a_id (Lwd.pure the_id)] [content]
