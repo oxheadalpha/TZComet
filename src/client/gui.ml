@@ -433,7 +433,17 @@ module Settings_page = struct
   let nodes_form ctxt =
     let open Meta_html in
     Bootstrap.Table.simple
-      ~header_row:[t "Name"; t "URI-Prefix"; t "Status"; t "Latest Ping"]
+      ~header_row:
+        [ t "Name"; t "URI-Prefix"; t "Status"
+        ; t "Latest Ping"
+          %% Reactive.bind
+               (Query_nodes.loop_status ctxt)
+               ~f:
+                 (let m s = i (parens (t s)) in
+                  function
+                  | `Not_started -> m "ping-loop not started"
+                  | `In_progress -> m "ping-loop in progress"
+                  | `Sleeping -> m "ping-loop sleeping") ]
       (let row l = H5.tr (List.map ~f:td l) in
        let node_status =
          let m kind s = Bootstrap.color kind (Bootstrap.monospace (t s)) in
@@ -478,8 +488,8 @@ module Settings_page = struct
                ~a:
                  [ H5.a_placeholder (Reactive.pure "URL-Prefix")
                  ; classes ["form-control"] ]
-           ; Bootstrap.button (t "⇐ Add node") ~kind:`Secondary
-               ~action:(fun () ->
+           ; Bootstrap.button (t "⇐ Add/replace node (by name)")
+               ~kind:`Secondary ~action:(fun () ->
                  Query_nodes.add_node ctxt
                    (Query_nodes.Node.create (Reactive.peek name)
                       (Reactive.peek prefix)) ;

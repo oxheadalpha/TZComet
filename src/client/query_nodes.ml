@@ -169,13 +169,15 @@ type t =
   { nodes: Node_list.t Reactive.var
   ; wake_up_call: unit Lwt_condition.t
   ; loop_started: bool Reactive.var
-  ; loop_interval: float Reactive.var }
+  ; loop_interval: float Reactive.var
+  ; loop_status: [`Not_started | `In_progress | `Sleeping] Reactive.var }
 
 let create () =
   { nodes= Reactive.var Node_list.empty
   ; wake_up_call= Lwt_condition.create ()
   ; loop_started= Reactive.var false
-  ; loop_interval= Reactive.var 10. }
+  ; loop_interval= Reactive.var 10.
+  ; loop_status= Reactive.var `Not_started }
 
 let get (ctxt : < nodes: t ; .. > Context.t) = ctxt#nodes
 let nodes t = (get t).nodes
@@ -209,6 +211,8 @@ let add_default_nodes ctxt =
   List.iter ~f:(add_node ~dev:false ctxt) default_nodes
 
 let loop_interval ctxt = Reactive.peek (get ctxt).loop_interval
+let loop_status ctxt = Reactive.get (get ctxt).loop_status
+let set_loop_status ctxt = Reactive.set (get ctxt).loop_status
 
 let observe_nodes ctxt =
   let data = Reactive.(get_nodes ~map:Fn.id ctxt) in
@@ -225,6 +229,7 @@ module Update_status_loop = struct
     let open Lwt.Infix in
     Lwt.ignore_result
       (let rec loop count =
+         set_loop_status ctxt `In_progress ;
          let sleep_time = loop_interval ctxt in
          let nodes = observe_nodes ctxt in
          dbgf "update-loop %d (%f s) %d nodes" count sleep_time
@@ -239,6 +244,7 @@ module Update_status_loop = struct
              Reactive.set nod.status (now, new_status) ;
              Lwt.return ())
          >>= fun () ->
+         set_loop_status ctxt `Sleeping ;
          Lwt.pick
            [Js_of_ocaml_lwt.Lwt_js.sleep sleep_time; wait_for_wake_up ctxt]
          >>= fun () ->
