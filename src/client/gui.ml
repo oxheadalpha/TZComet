@@ -19,10 +19,14 @@ module Errors_html = struct
             match trace with
             | [] -> empty ()
             | more ->
-                let collapse =
-                  Bootstrap.Collapse.make ~button_kind:`Secondary () in
-                collapse#button (t "Error Trace")
-                % collapse#div (itemize (List.map more ~f:construct)) in
+                let collapse = Bootstrap.Collapse.make () in
+                Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
+                  collapse ~width:"12em" ~kind:`Secondary
+                  ~button:(function
+                    | `Hiding | `Showing -> t "~ . . . ~"
+                    | `Hidden -> t "Show Error Trace"
+                    | `Shown -> t "Hide Error Trace")
+                  (itemize (List.map more ~f:construct)) in
           decorate_error_message ctxt message % trace_part
       | Failure s -> t "Failure:" %% t s
       | e -> t "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e) in
@@ -77,26 +81,22 @@ module Work_status = struct
            ( if wip then
              [logs; H5.li [Bootstrap.spinner ~kind:`Info (t "Working …")]]
            else [logs] )) in
+    let collapsing_logs () =
+      let collapse = Bootstrap.Collapse.make () in
+      Bootstrap.Collapse.fixed_width_reactive_button_with_div_below collapse
+        ~width:"12em" ~kind:`Secondary
+        ~button:(function
+          | `Hiding | `Showing -> t "..⻎.."
+          | `Hidden -> t "Show Logs"
+          | `Shown -> t "Collapse Logs")
+        (show_logs ~wip:false ()) in
     Reactive.bind_var work_status.status ~f:(function
       | Empty -> empty ()
       | Work_in_progress ->
           Bootstrap.alert ~kind:`Secondary (show_logs ~wip:true ())
-      | Done (Ok x) ->
-          let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
-          Bootstrap.bordered ~kind:`Success
-            ( div (f x)
-            %% collapse#button
-                 (Reactive.bind collapse#state ~f:(function
-                   | `Showing | `Hiding -> it "\\o/"
-                   | `Shown -> t "Hide logs"
-                   | `Hidden -> t "Show logs"))
-            % collapse#div (show_logs ~wip:false ()) )
+      | Done (Ok x) -> div (f x) % collapsing_logs ()
       | Done (Error e) ->
-          let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
-          Bootstrap.bordered ~kind:`Danger
-            ( div e
-            %% collapse#button (t "Show logs")
-            % collapse#div (show_logs ~wip:false ()) ))
+          Bootstrap.bordered ~kind:`Danger (div e %% collapsing_logs ()))
 end
 
 module State = struct
@@ -839,11 +839,15 @@ module Tezos_html = struct
                            | _ -> false) in
                      if lines <= 1 then ct concrete
                      else
-                       let collapse =
-                         Bootstrap.Collapse.make ~button_kind:`Secondary ()
-                       in
-                       collapse#button (t "Michelson Code")
-                       % collapse#div (pre (ct concrete)))
+                       let collapse = Bootstrap.Collapse.make () in
+                       Bootstrap.Collapse
+                       .fixed_width_reactive_button_with_div_below collapse
+                         ~width:"12em" ~kind:`Secondary
+                         ~button:(function
+                           | `Hiding | `Showing -> t "..🏃.."
+                           | `Hidden -> t "Show Michelson"
+                           | `Shown -> t "Hide Michelson")
+                         (pre (ct concrete)))
                 @ list_field "Annotations" human_annotations (fun anns ->
                       itemize
                         (List.map anns ~f:(fun (k, v) ->
@@ -1074,9 +1078,9 @@ module Tezos_html = struct
           | None ->
               ct name %% small (Bootstrap.color `Danger (t "(Cannot find it!)"))
           | Some v ->
-              let collapse =
-                Bootstrap.Collapse.make () ~button_kind:`Secondary in
-              collapse#button (ct name) % collapse#div (view v) in
+              let collapse = Bootstrap.Collapse.make () in
+              Bootstrap.Collapse.make_button ~kind:`Secondary collapse (ct name)
+              % Bootstrap.Collapse.make_div collapse (view v) in
         itemize
           (List.map errors ~f:(function
             | Static {error; expansion; languages} ->
@@ -1235,15 +1239,18 @@ module Editor = struct
       Reactive.Bidirectrional.get content
       |> Reactive.map ~f:guess_validate
       |> Reactive.bind ~f:(fun (inp, kind, logs) ->
-             let collapse = Bootstrap.Collapse.make ~button_kind:`Secondary () in
              let show_logs =
-               collapse#button (t "Show logs")
-               % collapse#div
-                   (Bootstrap.terminal_logs
-                      (itemize
-                         (List.map logs
-                            ~f:(Errors_html.decorate_error_message ctxt))))
-             in
+               let collapse = Bootstrap.Collapse.make () in
+               Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
+                 collapse ~width:"12em" ~kind:`Secondary
+                 ~button:(function
+                   | `Hiding | `Showing -> t "..🚸.."
+                   | `Hidden -> t "Show Logs"
+                   | `Shown -> t "Collapse Logs")
+                 (Bootstrap.terminal_logs
+                    (itemize
+                       (List.map logs
+                          ~f:(Errors_html.decorate_error_message ctxt)))) in
              match kind with
              | `Empty -> h4 (t "Editor Is Empty")
              | `Json ->

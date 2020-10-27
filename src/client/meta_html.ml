@@ -485,7 +485,9 @@ module Bootstrap = struct
           List.Assoc.remove !ids_and_states id ~equal:String.equal
     end
 
-    let make ?(button_kind = `Primary) ?id () =
+    type t = {id: string Reactive.t; state: state Reactive.var}
+
+    let make ?id () =
       let open H5 in
       let (state : state Reactive.var) = Reactive.var `Hidden in
       let the_id_prim =
@@ -497,23 +499,33 @@ module Bootstrap = struct
             the_id)
           ~release:(fun id -> Global_jquery_communication.unregister id) in
       let the_id = Reactive.get_prim the_id_prim in
-      let make_button =
-        button
-          ~a:
-            [ classes
-                [ "btn"; "btn-sm"
-                ; Fmt.str "btn-outline-%s" (Label_kind.to_string button_kind) ]
-            ; a_user_data "toggle" (Lwd.pure "collapse")
-            ; a_user_data "target" (Reactive.map ~f:(Fmt.str "#%s") the_id)
-            ; a_aria "expanded" (Lwd.pure ["false"])
-            ; a_aria "controls" (Reactive.map ~f:(fun x -> [x]) the_id) ] in
-      object
-        method button content = make_button [content]
+      {id= the_id; state}
 
-        method state = Reactive.get state
+    let make_button ?(kind = `Primary) ?style ?more_classes t content =
+      let more_a =
+        Option.value_map style ~default:[] ~f:(fun s -> [H5.a_style s]) in
+      H5.button
+        ~a:
+          ( more_a
+          @ H5.
+              [ classes
+                  [ "btn"; "btn-sm"
+                  ; Fmt.str "btn-outline-%s" (Label_kind.to_string kind) ]
+              ; a_user_data "toggle" (Lwd.pure "collapse")
+              ; a_user_data "target" (Reactive.map ~f:(Fmt.str "#%s") t.id)
+              ; a_aria "expanded" (Lwd.pure ["false"])
+              ; a_aria "controls" (Reactive.map ~f:(fun x -> [x]) t.id) ] )
+        [content]
 
-        method div content = div ~a:[classes ["collapse"]; a_id the_id] [content]
-      end
+    let state t = Reactive.get t.state
+    let make_div t content = div ~a:[classes ["collapse"]; H5.a_id t.id] content
+
+    let fixed_width_reactive_button_with_div_below ?kind t ~width ~button
+        content =
+      make_button ?kind t
+        ~style:(Reactive.pure (Fmt.str "width: %s" width))
+        (Reactive.bind (state t) ~f:button)
+      % make_div t content
   end
 end
 
