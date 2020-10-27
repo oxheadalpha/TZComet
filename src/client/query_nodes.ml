@@ -1,7 +1,7 @@
 open! Import
 
 module Node_status = struct
-  type t = Uninitialized | Non_responsive of string | Ready of string
+  type t = Uninitialized | Non_responsive of exn | Ready of string
 end
 
 open Node_status
@@ -12,6 +12,8 @@ module Node = struct
 
   let create name prefix =
     {name; prefix; status= Reactive.var (0., Uninitialized)}
+
+  let status n = Reactive.get n.status
 
   let rpc_get ctxt node path =
     let open Lwt in
@@ -68,20 +70,13 @@ module Node = struct
       ~raise:(fun timeout ->
         fail Message.(Fmt.kstr t "timeouted (%03.f seconds)." timeout))
 
-  let ping node =
-    let open Lwt in
-    (* TODO use the above *)
-    Js_of_ocaml_lwt.XmlHttpRequest.(
-      Fmt.kstr get "%s/chains/main/blocks/head/metadata" node.prefix
-      >>= fun frame ->
-      dbgf "%s metadata code: %d" node.name frame.code ;
-      let new_status =
-        match frame.code with
-        | 200 ->
-            dbgf "%s metadata content: %s" node.name frame.content ;
-            Ready frame.content
-        | other -> Non_responsive (Fmt.str "Return-code: %d" other) in
-      return new_status)
+  let ping ctxt node =
+    let open Lwt.Infix in
+    Lwt.catch
+      (fun () ->
+        rpc_get ctxt node "/chains/main/blocks/head/metadata"
+        >>= fun metadata -> Lwt.return (Ready metadata))
+      (fun e -> Lwt.return (Non_responsive e))
 
   let metadata_big_map state_handle node ~address ~log =
     let open Lwt in
@@ -151,34 +146,76 @@ module Node = struct
     return content
 end
 
+module Node_list = struct
+  type t = (string, Node.t * bool) List.Assoc.t
+
+  let empty : t = []
+
+  let add ?(dev = false) t n =
+    List.Assoc.add ~equal:String.equal t n.Node.name (n, dev)
+
+  let remove ?(dev = false) t n =
+    List.Assoc.remove ~equal:String.equal t n.Node.name
+
+  let remove_dev t =
+    List.filter t ~f:(function _, (_, true) -> false | _ -> true)
+
+  let fold_nodes t ~init ~f = List.fold t ~init ~f:(fun p (_, (n, _)) -> f p n)
+  let map t ~f = List.map t ~f:(fun (_, (n, _)) -> f n)
+  let concat_map t ~f = List.concat_map t ~f:(fun (_, (n, _)) -> f n)
+end
+
 type t =
-  { nodes: Node.t Reactive.Table.t
+  { nodes: Node_list.t Reactive.var
   ; wake_up_call: unit Lwt_condition.t
   ; loop_started: bool Reactive.var
   ; loop_interval: float Reactive.var }
 
 let create () =
-  { nodes=
-      Reactive.Table.make ()
-      (* ~eq:(List.equal Node.(fun na nb -> String.equal na.prefix nb.prefix)) *)
+  { nodes= Reactive.var Node_list.empty
   ; wake_up_call= Lwt_condition.create ()
   ; loop_started= Reactive.var false
   ; loop_interval= Reactive.var 10. }
 
 let get (ctxt : < nodes: t ; .. > Context.t) = ctxt#nodes
 let nodes t = (get t).nodes
-let add_node ctxt nod = Reactive.Table.append (nodes ctxt) nod
+
+let get_nodes t ~map =
+  Reactive.pair ((get t).nodes |> Reactive.get) (System.dev_mode t)
+  |> Reactive.map ~f:(function
+       | l, true -> Node_list.map ~f:map l
+       | l, false -> Node_list.map ~f:map (Node_list.remove_dev l))
+
+let add_node ?dev ctxt nod =
+  Reactive.set (nodes ctxt)
+    (Node_list.add ?dev (Reactive.peek (nodes ctxt)) nod)
 
 let default_nodes =
-  [ Node.create "Carthagenet-GigaNode" "https://testnet-tezos.giganode.io"
-  ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
-  ; Node.create "Dalphanet-GigaNode" "https://dalphanet-tezos.giganode.io"
-  ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
-  ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
-  ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io" ]
+  List.rev
+    [ Node.create "Carthagenet-GigaNode" "https://testnet-tezos.giganode.io"
+    ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
+    ; Node.create "Dalphanet-GigaNode" "https://dalphanet-tezos.giganode.io"
+    ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
+    ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
+    ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io" ]
 
-let add_default_nodes ctxt = List.iter ~f:(add_node ctxt) default_nodes
+let dev_nodes =
+  List.rev
+    [ Node.create "Dev:Wrong-node" "http://example.com/nothing"
+    ; Node.create "Dev:Minibox-node" "http://127.0.0.1:20000" ]
+
+let add_default_nodes ctxt =
+  List.iter ~f:(add_node ~dev:true ctxt) dev_nodes ;
+  List.iter ~f:(add_node ~dev:false ctxt) default_nodes
+
 let loop_interval ctxt = Reactive.peek (get ctxt).loop_interval
+
+let observe_nodes ctxt =
+  let data = Reactive.(get_nodes ~map:Fn.id ctxt) in
+  let data_root = Reactive.observe data in
+  let nodes = Reactive.quick_sample data_root in
+  Reactive.quick_release data_root ;
+  nodes
 
 module Update_status_loop = struct
   let wake_up ctxt = Lwt_condition.broadcast (get ctxt).wake_up_call ()
@@ -189,25 +226,13 @@ module Update_status_loop = struct
     Lwt.ignore_result
       (let rec loop count =
          let sleep_time = loop_interval ctxt in
-         dbgf "update-loop %d (%f s)" count sleep_time ;
-         Reactive.Table.fold (nodes ctxt) ~init:Lwt.return_unit
-           ~f:(fun prevm nod ->
+         let nodes = observe_nodes ctxt in
+         dbgf "update-loop %d (%f s) %d nodes" count sleep_time
+           (List.length nodes) ;
+         List.fold nodes ~init:Lwt.return_unit ~f:(fun prevm nod ->
              prevm
              >>= fun () ->
-             Lwt.catch
-               (fun () ->
-                 Lwt.pick
-                   [ ( Js_of_ocaml_lwt.Lwt_js.sleep 5.
-                     >>= fun () ->
-                     dbgf "%s timeout in start_update_loop" nod.Node.name ;
-                     Lwt.return (Non_responsive "Time-out while getting status")
-                     )
-                   ; ( Node.ping nod
-                     >>= fun res ->
-                     dbgf "%s returned to start_update_loop" nod.name ;
-                     Lwt.return res ) ])
-               (fun e ->
-                 Lwt.return (Non_responsive (Fmt.str "Error: %a" Exn.pp e)))
+             Node.ping ctxt nod
              >>= fun new_status ->
              dbgf "got status for %s" nod.name ;
              let now = (new%js Js_of_ocaml.Js.date_now)##valueOf in
@@ -233,20 +258,23 @@ end
 let find_node_with_contract ctxt addr =
   let open Lwt in
   let trace = ref [] in
-  Reactive.Table.Lwt.find (nodes ctxt) ~f:(fun node ->
-      catch
-        (fun () ->
-          Fmt.kstr (Node.rpc_get ctxt node)
-            "/chains/main/blocks/head/context/contracts/%s/storage" addr
-          >>= fun _ -> return_true)
-        (fun exn ->
-          trace := exn :: !trace ;
-          return_false))
-  >>= function
-  | Some node -> Lwt.return node
-  | None ->
+  catch
+    (fun () ->
+      Lwt_list.find_s
+        (fun node ->
+          catch
+            (fun () ->
+              Fmt.kstr (Node.rpc_get ctxt node)
+                "/chains/main/blocks/head/context/contracts/%s/storage" addr
+              >>= fun _ -> return_true)
+            (fun exn ->
+              trace := exn :: !trace ;
+              return_false))
+        (observe_nodes ctxt)
+      >>= fun node -> Lwt.return node)
+    (fun exn ->
       Decorate_error.raise ~trace:(List.rev !trace)
-        Message.(t "Cannot find a node that knows about address" %% ct addr)
+        Message.(t "Cannot find a node that knows about address" %% ct addr))
 
 let metadata_value ctxt ~address ~key ~(log : string -> unit) =
   let open Lwt in

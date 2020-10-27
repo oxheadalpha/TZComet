@@ -429,46 +429,115 @@ let about_page state =
           % p (t "This is also a test/experiment in UI writing …")
           % Meta_html.Example.e1 ())
 
-let settings_page ctxt =
-  let open Meta_html in
-  let open State in
-  let timeout_valid_and_changed = Reactive.var None in
-  let timeout =
-    Reactive.Bidirectrional.make
-      (System.http_timeout_peek ctxt |> Fmt.str "%f" |> Reactive.pure)
-      (fun x ->
-        match Float.of_string x with
-        | f ->
-            System.set_http_timeout ctxt f ;
-            Reactive.set timeout_valid_and_changed
-              (Some (t "Timeout set to " % Fmt.kstr ct "%f" f))
-        | exception _ ->
-            Reactive.set timeout_valid_and_changed
-              (Some
-                 (Bootstrap.color `Danger
-                    ( t "Timeout cannot be set to"
-                    %% ct x
-                    % t ", it should a valid floating-point number." )))) in
-  h2 (t "Settings")
-  % Bootstrap.Form.(
-      make
-        [ check_box
-            (State.dev_mode_bidirectional ctxt)
-            ~label:(t "Dev-mode enabled")
-            ~help:
-              (t
-                 "Shows things that regular users should not see and \
-                  artificially slows down the application.")
-        ; input
-            ~placeholder:(Reactive.pure "Number of seconds (with decimals).")
-            ~help:
-              (Reactive.bind_var timeout_valid_and_changed ~f:(function
-                | None ->
-                    t
-                      "How long to wait for nodes and gateways to give/accept \
-                       data."
-                | Some msg -> msg))
-            ~label:(t "HTTP-Call Timeout") timeout ])
+module Settings_page = struct
+  let nodes_form ctxt =
+    let open Meta_html in
+    Bootstrap.Table.simple
+      ~header_row:[t "Name"; t "URI-Prefix"; t "Status"; t "Latest Ping"]
+      (let row l = H5.tr (List.map ~f:td l) in
+       let node_status =
+         let m kind s = Bootstrap.color kind (Bootstrap.monospace (t s)) in
+         Query_nodes.Node_status.(
+           function
+           | Uninitialized -> m `Warning "Uninitialized"
+           | Non_responsive e ->
+               let collapse = Bootstrap.Collapse.make () in
+               m `Danger "Non-responsive"
+               % Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
+                   collapse ~width:"12em" ~kind:`Secondary
+                   ~button:(function
+                     | `Hiding | `Showing -> t "..🏃.."
+                     | `Hidden -> t "Show Error"
+                     | `Shown -> t "Hide Error")
+                   (Errors_html.exception_html ctxt e)
+           | Ready _ -> m `Success "Ready") in
+       let ping_date date =
+         if Float.(date < 10.) then (* Construction sign: *) t "🚧"
+         else
+           let date_string =
+             (new%js Js_of_ocaml.Js.date_fromTimeValue date)##toISOString
+             |> Js_of_ocaml__Js.to_string in
+           Bootstrap.monospace (t date_string) in
+       let row_of_node n =
+         row
+           Query_nodes.Node.
+             [ it n.name; ct n.prefix
+             ; Reactive.bind (status n) ~f:(fun (_, s) -> node_status s)
+             ; Reactive.bind (status n) ~f:(fun (f, _) -> ping_date f) ] in
+       let last_row =
+         let name = Reactive.var "" in
+         let nameb = Reactive.Bidirectrional.of_var name in
+         let prefix = Reactive.var "" in
+         let prefixb = Reactive.Bidirectrional.of_var prefix in
+         row
+           [ input_bidirectional nameb
+               ~a:
+                 [ H5.a_placeholder (Reactive.pure "Name")
+                 ; classes ["form-control"] ]
+           ; input_bidirectional prefixb
+               ~a:
+                 [ H5.a_placeholder (Reactive.pure "URL-Prefix")
+                 ; classes ["form-control"] ]
+           ; Bootstrap.button (t "⇐ Add node") ~kind:`Secondary
+               ~action:(fun () ->
+                 Query_nodes.add_node ctxt
+                   (Query_nodes.Node.create (Reactive.peek name)
+                      (Reactive.peek prefix)) ;
+                 Reactive.Bidirectrional.set nameb "" ;
+                 Reactive.Bidirectrional.set prefixb "" ;
+                 ())
+           ; Bootstrap.button (t "⇑ Ping'em'all") ~kind:`Secondary
+               ~action:(fun () ->
+                 Query_nodes.Update_status_loop.ensure ctxt ;
+                 Query_nodes.Update_status_loop.wake_up ctxt) ] in
+       Reactive.bind (Query_nodes.get_nodes ctxt ~map:row_of_node)
+         ~f:(fun nodes -> list nodes)
+       % last_row)
+
+  let render ctxt =
+    let open Meta_html in
+    let open State in
+    let timeout_valid_and_changed = Reactive.var None in
+    let timeout =
+      Reactive.Bidirectrional.make
+        (System.http_timeout_peek ctxt |> Fmt.str "%f" |> Reactive.pure)
+        (fun x ->
+          match Float.of_string x with
+          | f ->
+              System.set_http_timeout ctxt f ;
+              Reactive.set timeout_valid_and_changed
+                (Some (t "Timeout set to " % Fmt.kstr ct "%f" f))
+          | exception _ ->
+              Reactive.set timeout_valid_and_changed
+                (Some
+                   (Bootstrap.color `Danger
+                      ( t "Timeout cannot be set to"
+                      %% ct x
+                      % t ", it should a valid floating-point number." ))))
+    in
+    h2 (t "Settings")
+    % Bootstrap.Form.(
+        make
+          [ check_box
+              (State.dev_mode_bidirectional ctxt)
+              ~label:(t "Dev-mode enabled")
+              ~help:
+                (t
+                   "Shows things that regular users should not see and \
+                    artificially slows down the application.")
+          ; input
+              ~placeholder:(Reactive.pure "Number of seconds (with decimals).")
+              ~help:
+                (Reactive.bind_var timeout_valid_and_changed ~f:(function
+                  | None ->
+                      t
+                        "How long to wait for nodes and gateways to \
+                         give/accept data."
+                  | Some msg -> msg))
+              ~label:(t "HTTP-Call Timeout") timeout ])
+    % h3 (t "Tezos Nodes")
+    % nodes_form ctxt
+end
 
 module Tezos_html = struct
   let uri_parsing_error err =
@@ -1425,5 +1494,5 @@ let root_document state =
           function
           | Explorer -> Explorer.page state
           | Editor -> Editor.page state
-          | Settings -> settings_page state
+          | Settings -> Settings_page.render state
           | About -> about_page state) )

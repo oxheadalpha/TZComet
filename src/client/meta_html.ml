@@ -4,7 +4,7 @@ module H5 = Tyxml_lwd.Html
 type 'a t = 'a H5.elt (* list Lwd.t *)
 
 let t (s : string) : _ t = H5.(txt (Lwd.pure s))
-let empty () = t ""
+let empty () = Lwd.pure Lwd_seq.empty
 let ( % ) a b : _ t = Lwd.map2 Lwd_seq.concat a b
 let ( %% ) a b : _ t = a % t " " % b
 let singletize f ?a x = f ?a [x]
@@ -34,6 +34,9 @@ module H = struct
   let h4 ?a l = singletize H5.h4 ?a l
   let h5 ?a l = singletize H5.h5 ?a l
   let h6 ?a l = singletize H5.h6 ?a l
+  let tr ?a l = singletize H5.tr ?a l
+  let td ?a l = singletize H5.td ?a l
+  let th ?a l = singletize H5.th ?a l
 end
 
 let hr = H5.hr
@@ -63,6 +66,22 @@ let itemize ?(numbered = false) ?a_ul ?a_li l =
   (if not numbered then H5.ul else H5.ol)
     ?a:a_ul
     (List.map l ~f:(fun item -> H5.li ?a:a_li [item]))
+
+let input_bidirectional ?(a = []) bidi =
+  H5.input
+    ~a:
+      ( a
+      @ [ H5.a_value (Reactive.Bidirectrional.get bidi)
+        ; H5.a_oninput
+            (Tyxml_lwd.Lwdom.attr
+               Js_of_ocaml.(
+                 fun ev ->
+                   Js.Opt.iter ev##.target (fun input ->
+                       Js.Opt.iter (Dom_html.CoerceTo.input input) (fun input ->
+                           let v = input##.value |> Js.to_string in
+                           Reactive.Bidirectrional.set bidi v)) ;
+                   true)) ] )
+    ()
 
 module Bootstrap = struct
   module Label_kind = struct
@@ -526,6 +545,15 @@ module Bootstrap = struct
         ~style:(Reactive.pure (Fmt.str "width: %s" width))
         (Reactive.bind (state t) ~f:button)
       % make_div t content
+  end
+
+  module Table = struct
+    let simple ~header_row content =
+      let open H5 in
+      tablex
+        ~a:[classes ["table"; "table-bordered"; "table-hover"]]
+        ~thead:(thead [tr (List.map header_row ~f:(fun x -> th [x]))])
+        [tbody [content]]
   end
 end
 

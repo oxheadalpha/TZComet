@@ -84,6 +84,14 @@ module Reactive = struct
       in
       go init (first t)
 
+    let iter_rows t ~f =
+      let rec go = function
+        | None -> ()
+        | Some s ->
+            let prepare_next = next s in
+            f s ; go prepare_next in
+      go (first t)
+
     module Lwt = struct
       open Lwt.Infix
 
