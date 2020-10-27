@@ -16,6 +16,11 @@ module Node = struct
   let rpc_get ctxt node path =
     let open Lwt in
     let uri = Fmt.str "%s/%s" node.prefix path in
+    let fail msg =
+      Decorate_error.raise
+        Message.(
+          t "Calling" %% ct "HTTP-GET" %% ct path %% t "on node" %% ct node.name
+          %% msg) in
     System.with_timeout ctxt
       ~f:
         Js_of_ocaml_lwt.XmlHttpRequest.(
@@ -25,14 +30,11 @@ module Node = struct
             dbgf "%s %s code: %d" node.prefix path frame.code ;
             match frame.code with
             | 200 -> return frame.content
-            | other -> Fmt.failwith "Getting %S returned code: %d" path other)
+            | other ->
+                fail Message.(t "failed with code" %% Fmt.kstr ct "%d" other))
       ~raise:(fun timeout ->
         dbgf "Node-%S GET %s → TIMEOUT" node.name path ;
-        Decorate_error.raise
-          Message.(
-            t "Calling" %% ct "HTTP-GET" %% ct path %% t "on node"
-            %% ct node.name
-            %% Fmt.kstr t "timeouted (%.03f seconds)" timeout))
+        fail Message.(Fmt.kstr t "timeouted (%.03f seconds)" timeout))
 
   let rpc_post ctxt node ~body path =
     let open Lwt in
@@ -41,7 +43,7 @@ module Node = struct
       Decorate_error.raise
         Message.(
           t "Calling" %% ct "HTTP-POST" %% ct path %% t "on node"
-          %% ct node.name %% t "with" %% code_block body % msg) in
+          %% ct node.name %% t "with" %% code_block body %% msg) in
     System.with_timeout ctxt
       ~f:
         Js_of_ocaml_lwt.XmlHttpRequest.(
