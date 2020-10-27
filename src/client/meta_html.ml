@@ -199,7 +199,9 @@ module Bootstrap = struct
       H5.(
         let open Tyxml_lwd.Lwdom in
         div
-          ~a:[a_class (Reactive.pure ["dropdown"])]
+          ~a:
+            [ a_class (Reactive.pure ["dropdown"])
+            ; a_style (Reactive.pure "display: inline-block") ]
           [ button
               ~a:
                 [ a_class

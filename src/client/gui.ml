@@ -1,9 +1,9 @@
 open Import
 
-module Errors_html = struct
+module Message_html = struct
   open Meta_html
 
-  let decorate_error_message ctxt m =
+  let render _ m =
     let module M = Message in
     let rec msg = function
       | M.Text s -> t s
@@ -11,6 +11,10 @@ module Errors_html = struct
       | M.Code_block b -> pre (ct b)
       | M.List l -> List.fold ~init:(empty ()) ~f:(fun a b -> a % msg b) l in
     msg m
+end
+
+module Errors_html = struct
+  open Meta_html
 
   let exception_html ctxt exn =
     let rec construct = function
@@ -27,7 +31,7 @@ module Errors_html = struct
                     | `Hidden -> t "Show Error Trace"
                     | `Shown -> t "Hide Error Trace")
                   (itemize (List.map more ~f:construct)) in
-          decorate_error_message ctxt message % trace_part
+          Message_html.render ctxt message % trace_part
       | Failure s -> t "Failure:" %% t s
       | e -> t "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e) in
     bt "Error:" %% construct exn
@@ -114,6 +118,30 @@ module State = struct
 
   open Page
 
+  module Editor_mode = struct
+    type format = [`Uri | `Hex | `Michelson | `Metadata_json]
+    type t = [`Guess | format]
+
+    let to_string : [< t] -> string = function
+      | `Guess -> "guess"
+      | `Uri -> "uri"
+      | `Hex -> "hex"
+      | `Michelson -> "michelson"
+      | `Metadata_json -> "metadata"
+
+    let all : t list = [`Guess; `Uri; `Hex; `Michelson; `Metadata_json]
+
+    let explain : t -> _ =
+      let open Meta_html in
+      function
+      | `Metadata_json -> t "Parse and display TZIP-16 Metadata JSON content."
+      | `Uri -> t "Parse and display TZIP-16 Metadata URIs."
+      | `Michelson ->
+          t "Parse and serialize Micheline concrete syntax (Michelson)."
+      | `Hex -> t "Parse Hexadecimal Michelson" %% ct "PACK" % t "-ed bytes."
+      | `Guess -> t "Use heuristics to guess your intended format."
+  end
+
   type t =
     { page: Page.t Reactive.var
     ; version_string: string option
@@ -121,7 +149,8 @@ module State = struct
     ; explorer_go: bool Reactive.var
     ; explorer_went: bool Reactive.var
     ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Work_status.t
-    ; editor_content: string Reactive.var }
+    ; editor_content: string Reactive.var
+    ; editor_mode: Editor_mode.t Reactive.var }
 
   let get (state : < gui: t ; .. > Context.t) = state#gui
 
@@ -132,7 +161,8 @@ module State = struct
     let page_to_path page =
       Fmt.str "/%s" (Page.to_string page |> String.lowercase)
 
-    let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go =
+    let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go
+        ~editor_mode =
       let query =
         match explorer_input with
         | "" -> []
@@ -143,6 +173,10 @@ module State = struct
         | more -> ("editor-input", [more]) :: query in
       let query = if not dev_mode then query else ("dev", ["true"]) :: query in
       let query = if not explorer_go then query else ("go", ["true"]) :: query in
+      let query =
+        match editor_mode with
+        | `Guess -> query
+        | other -> ("editor-mode", [Editor_mode.to_string other]) :: query in
       Uri.make () ~path:(page_to_path page) ~query
 
     let change_for_page t page = Uri.with_path t (page_to_path page)
@@ -165,6 +199,15 @@ module State = struct
         match in_query "explorer-input" with Some [one] -> one | _ -> "" in
       let editor_input =
         match in_query "editor-input" with Some [one] -> one | _ -> "" in
+      let editor_mode =
+        Option.bind (in_query "editor-mode") (function
+          | [] -> None
+          | one :: _ ->
+              List.find Editor_mode.all ~f:(fun mode ->
+                  String.equal
+                    (String.lowercase (Editor_mode.to_string mode))
+                    (one |> String.lowercase)))
+        |> Option.value ~default:`Guess in
       let explorer_go = true_in_query "go" in
       ( System.create ~dev_mode ()
       , { page= Reactive.var page
@@ -176,7 +219,8 @@ module State = struct
                assume it aready happened. *)
             Reactive.var Poly.(page <> Page.Explorer)
         ; explorer_result= Work_status.empty ()
-        ; editor_content= Reactive.var editor_input } )
+        ; editor_content= Reactive.var editor_input
+        ; editor_mode= Reactive.var editor_mode } )
   end
 
   (* in
@@ -206,6 +250,8 @@ module State = struct
     (get state).editor_content |> Reactive.Bidirectrional.of_var
 
   let set_editor_content state v = Reactive.set (get state).editor_content v
+  let editor_mode ctxt = Reactive.get (get ctxt).editor_mode
+  let set_editor_mode ctxt = Reactive.set (get ctxt).editor_mode
 
   let make_fragment ?(side_effects = true) ctxt =
     (* WARNING: for now it is important for this to be attached "somewhere"
@@ -220,18 +266,23 @@ module State = struct
     let explorer_input = Reactive.get state.explorer_input in
     let editor_input = Reactive.get state.editor_content in
     let explorer_go = Reactive.get state.explorer_go in
-    Reactive.(dev ** page ** explorer_input ** explorer_go ** editor_input)
+    Reactive.(
+      dev ** page ** explorer_input ** explorer_go ** editor_input
+      ** get state.editor_mode)
     |> Reactive.map
          ~f:(fun
-              (dev_mode, (page, (explorer_input, (explorer_go, editor_input))))
+              ( dev_mode
+              , ( page
+                , (explorer_input, (explorer_go, (editor_input, editor_mode)))
+                ) )
             ->
            let now =
              Fragment.(
                let editor_input =
                  if String.length editor_input < 40 then editor_input else ""
                in
-               make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input)
-           in
+               make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input
+                 ~editor_mode) in
            if side_effects then (
              let current = Js_of_ocaml.Url.Current.get_fragment () in
              dbgf "Updating fragment %S → %a" current Fragment.pp now ;
@@ -607,6 +658,14 @@ module Tezos_html = struct
     t "Failed to parse URI:" %% ct err.input % t ":"
     % itemize [details; exploded_uri]
 
+  let is_json_jencoding =
+    let open Json_encoding in
+    function
+    | Cannot_destruct _ | Unexpected _ | No_case_matched _ | Bad_array_size _
+     |Missing_field _ | Unexpected_field _ | Bad_schema _ ->
+        true
+    | _ -> false
+
   let single_error ctxt =
     let open Meta_html in
     let open Tezos_error_monad.Error_monad in
@@ -615,6 +674,10 @@ module Tezos_html = struct
         Fmt.kstr t "JSON Parsing Error: %s, JSON:" msg
         % pre (code (t (Ezjsonm.value_to_string ~minify:false json_value)))
     | Exn (Failure text) -> Fmt.kstr t "Failure: %a" Fmt.text text
+    | Exn json_enc when is_json_jencoding json_enc ->
+        Fmt.kstr t "JSON-Encoding: %a"
+          (Json_encoding.print_error ~print_unknown:Exn.pp)
+          json_enc
     | Exn other_exn -> Errors_html.exception_html ctxt other_exn
     | Tezos_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
         parsing_error ->
@@ -1025,6 +1088,63 @@ module Tezos_html = struct
                          ( addr_input @ param_input
                          @ [submit_button ~active (t "Go!") go_action] )) ))
 
+  let michelson_instruction s =
+    link (t s)
+      ~target:(Fmt.str "https://michelson.nomadic-labs.com/#instr-%s" s)
+
+  let metadata_validation_error ctxt =
+    let open Tezos_contract_metadata.Metadata_contents in
+    let open Validation.Error in
+    let the_off_chain_view view =
+      t "The off-chain-view “" % ct view % t "”" in
+    function
+    | Forbidden_michelson_instruction {view; instruction} ->
+        the_off_chain_view view % t " uses a "
+        % bt "forbidden Michelson instruction: "
+        % michelson_instruction instruction
+        % t " (the other forbidden instructions are: "
+        % H5.span
+            (oxfordize_list
+               (List.filter
+                  ~f:String.(( <> ) instruction)
+                  Validation.Data.forbidden_michelson_instructions)
+               ~sep:(fun () -> t ", ")
+               ~last_sep:(fun () -> t ", and ")
+               ~map:michelson_instruction)
+        % t ")."
+    | Michelson_version_not_a_protocol_hash {view; value} ->
+        the_off_chain_view view
+        % t " references a wrong version of Michelson ("
+        % ct value
+        % t "), it should be a valid protocol hash, like "
+        % ct "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo"
+        % t "."
+
+  let metadata_validation_warning ctxt =
+    let open Tezos_contract_metadata.Metadata_contents in
+    let open Validation.Warning in
+    function
+    | Wrong_author_format author ->
+        t "The author" %% Fmt.kstr ct "%S" author
+        %% t "has a wrong format, it should look like"
+        %% ct "Print Name <contact-url-or-email>"
+        % t "."
+    | Unexpected_whitespace {field; value} ->
+        t "The field" %% ct field %% t "(=" %% Fmt.kstr ct "%S" value
+        % t ") uses confusing white-space characters."
+    | Self_unaddressed {view; instruction} ->
+        t "The off-chain-view" %% ct view %% t "uses the instruction"
+        %% michelson_instruction "SELF"
+        %% ( match instruction with
+           | None -> t "not followed by any instruction."
+           | Some i -> t "followed by" %% michelson_instruction i % t "." )
+        %% t "The current recommendation is to only use the combination"
+        %% Bootstrap.monospace
+             ( michelson_instruction "SELF"
+             % t ";"
+             %% michelson_instruction "ADDRESS" )
+        %% t "in off-chain-views."
+
   let metadata_contents ?(open_in_editor_link = true) ctxt =
     let open Tezos_contract_metadata.Metadata_contents in
     fun ( { name
@@ -1204,9 +1324,8 @@ module Examples_dropdown = struct
       [ (t "KT1 Contracts", fun x -> x.contracts)
       ; (t "TZIP-16-URIs", fun x -> x.uris) ]
 
-  let editable ctxt =
-    make ctxt
-      ~action:(fun x -> State.set_editor_content ctxt x)
+  let editable ctxt ~action =
+    make ctxt ~action
       [ (t "TZIP-16 Metadata Content", fun x -> x.metadata_blobs)
       ; (t "TZIP-16-URIs", fun x -> x.uris)
       ; (t "Michelson Bytes Blobs", fun x -> x.michelson_bytes)
@@ -1214,11 +1333,192 @@ module Examples_dropdown = struct
 end
 
 module Editor = struct
+  type guess = Empty | Failed | Format of State.Editor_mode.format
+
+  let guessers : (log:(Message.t -> unit) -> string -> guess option) list =
+    let of_predicate name v f ~log inp =
+      let worked = f inp in
+      log
+        Message.(
+          t "Trying predicate" %% ct name %% t "→"
+          % if worked then t "OK!" else t "Nope :/") ;
+      if worked then Some v else None in
+    let looks_like_json s =
+      match (String.strip s).[0] with '[' | '{' | '"' -> true | _ -> false in
+    let oneline s =
+      match String.split ~on:'\n' (String.strip s) with
+      | [""] -> false
+      | [_] -> true
+      | _ -> false in
+    let is_prefix_strip s ~prefix = String.is_prefix (String.strip s) ~prefix in
+    let uri_start = Re.Posix.compile_pat "^[a-z0-9\\-]+:" in
+    let looks_like_an_uri s = oneline s && Re.execp uri_start s in
+    let looks_like_hexa s =
+      is_prefix_strip s ~prefix:"0x"
+      || String.for_all s ~f:(function
+           | 'A' .. 'F' | 'a' .. 'f' | '0' .. '9' | 'x' | ' ' | '\n' -> true
+           | _ -> false) in
+    let format_of_predicate n v = of_predicate n (Format v) in
+    [ of_predicate "it-is-empty" Empty (fun s ->
+          String.is_empty (String.strip s))
+    ; format_of_predicate "looks-like-json" `Metadata_json looks_like_json
+    ; format_of_predicate "looks-like-an-uri" `Uri looks_like_an_uri
+    ; format_of_predicate "looks-like-hexadecimal" `Hex looks_like_hexa ]
+
+  open Meta_html
+
+  let big_answer level content =
+    let kind = match level with `Ok -> `Success | `Error -> `Danger in
+    h2 (Bootstrap.color kind content)
+
+  let show_uri ctxt inpo =
+    let list_of_validation_errors l =
+      itemize
+        (List.map l ~f:(fun (w, s, e) ->
+             (match w with `Network -> t "Network" | `Address -> t "Address")
+             %% ct s % t ":" %% t e)) in
+    match Contract_metadata.Uri.validate inpo with
+    | Ok u, errs ->
+        let header =
+          match errs with
+          | [] -> big_answer `Ok (t "This metadata URI is VALID 👍")
+          | _ ->
+              big_answer `Error
+                (t "This metadata URI parses OK but is not VALID 😞") in
+        let sec = h4 in
+        let validation_errors =
+          match errs with
+          | [] -> empty ()
+          | more ->
+              sec (Bootstrap.color `Danger (t "Validation Errors:"))
+              % list_of_validation_errors more in
+        header % validation_errors
+        % sec (t "Understood As:")
+        % Tezos_html.metadata_uri ~open_in_editor_link:false ctxt u
+    | Error el, errs -> (
+        big_answer `Error (t "There were parsing/validation errors 😭")
+        % Tezos_html.error_trace ctxt el
+        %
+        match errs with
+        | [] -> empty ()
+        | more -> p (t "Moreover:") % list_of_validation_errors more )
+
+  let show_metadata ctxt inpo =
+    let open Tezos_contract_metadata.Metadata_contents in
+    match of_json inpo with
+    | Ok m ->
+        let errs, warns =
+          Validation.validate m ~protocol_hash_is_valid:(fun s ->
+              try
+                let _ = B58_hashes.check_b58_protocol_hash s in
+                true
+              with e ->
+                dbgf "Protocol hash problem: %a" Exn.pp e ;
+                false) in
+        let header =
+          match (errs, warns) with
+          | [], [] -> big_answer `Ok (t "This metadata JSON is VALID 👌")
+          | _ :: _, _ ->
+              big_answer `Error
+                (t "This metadata JSON parses Okay but is not valid 👎")
+          | [], _ :: _ ->
+              big_answer `Ok
+                (t "This metadata JSON is valid 👍, with warnings …") in
+        let section title reasons to_html =
+          match reasons with
+          | [] -> empty ()
+          | more -> h4 title %% itemize (List.map more ~f:to_html) in
+        header
+        % section (t "Errors") errs (Tezos_html.metadata_validation_error ctxt)
+        % section (t "Warnings") warns
+            (Tezos_html.metadata_validation_warning ctxt)
+        % h4 (t "Contents")
+        % Tezos_html.metadata_contents ~open_in_editor_link:false ctxt m
+    | Error el ->
+        big_answer `Error (t "This metadata JSON is not valid 🥸")
+        % Tezos_html.error_trace ctxt el
+
   let page ctxt =
     let open Meta_html in
     let content = State.editor_content ctxt in
+    let guess_validate input =
+      let _logs = ref [] in
+      let log m = _logs := m :: !_logs in
+      let res =
+        List.find_map guessers ~f:(fun f -> f ~log input)
+        |> Option.value ~default:Failed in
+      (input, res, List.rev !_logs) in
+    let format_result =
+      Reactive.(Bidirectrional.get content ** State.editor_mode ctxt)
+      |> Reactive.map ~f:(function
+           | input, `Guess -> (`Guess, guess_validate input)
+           | input, (#State.Editor_mode.format as fmt) ->
+               (fmt, (input, Format fmt, []))) in
+    let display_guess =
+      Reactive.bind format_result ~f:(function
+        | `Guess, (inp, kind, logs) -> (
+            let normal c = Bootstrap.color `Secondary (small c) in
+            match kind with
+            | Empty -> normal (t "The editor is actually empty")
+            | Format m ->
+                normal (t "Using mode" %% ct (State.Editor_mode.to_string m))
+            | Failed -> Bootstrap.color `Danger (t "Failed to guess a format.")
+            )
+        | _ -> empty ()) in
+    let result =
+      Reactive.bind format_result ~f:(fun (mode, (inp, kind, logs)) ->
+          let show_logs =
+            let collapse = Bootstrap.Collapse.make () in
+            Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
+              collapse ~width:"12em" ~kind:`Secondary
+              ~button:(function
+                | `Hiding | `Showing -> t "..🚸.."
+                | `Hidden -> t "Show Logs"
+                | `Shown -> t "Collapse Logs")
+              (Bootstrap.terminal_logs
+                 (itemize (List.map logs ~f:(Message_html.render ctxt)))) in
+          let header = div show_logs in
+          match kind with
+          | Empty ->
+              header
+              %% div
+                   ~a:
+                     [ classes ["mx-auto"]
+                     ; H5.a_style (Reactive.pure "width: 50%") ]
+                   (span
+                      ~a:
+                        [ H5.a_style
+                            (Reactive.pure "font-size: 3000%; opacity: 0.1") ]
+                      (t "ꜩ"))
+          | Format fmt -> (
+              header
+              %
+              match fmt with
+              | `Metadata_json -> show_metadata ctxt inp
+              | `Uri -> show_uri ctxt inp
+              | `Michelson | `Hex -> t "TODO" )
+          | Failed ->
+              header
+              % h4 (t "Don't know how to validate this")
+              % pre ~a:[classes ["pre-scrollable"]] (ct inp)) in
     let editor =
-      div (Examples_dropdown.editable ctxt)
+      div
+        ( Examples_dropdown.editable ctxt ~action:(fun v ->
+              Reactive.Bidirectrional.set content v)
+        % Bootstrap.Dropdown_menu.(
+            button
+              ( t "Mode:"
+              %% ( State.editor_mode ctxt
+                 |> Reactive.bind ~f:(fun m ->
+                        ct (State.Editor_mode.to_string m)) ) )
+              ( header (t "Editor Validation Modes")
+              :: List.map State.Editor_mode.all ~f:(fun m ->
+                     item
+                       ~action:(fun () -> State.set_editor_mode ctxt m)
+                       ( ct (State.Editor_mode.to_string m)
+                       %% t "→"
+                       %% State.Editor_mode.explain m )) ))
+        %% display_guess )
       % H5.(
           div
             [ textarea
@@ -1238,98 +1538,6 @@ module Editor = struct
                                        (String.length v) v ;
                                      Reactive.Bidirectrional.set content v)) ;
                              true)) ] ]) in
-    let guessers =
-      let of_predicate name v f ~log inp =
-        let worked = f inp in
-        log
-          Message.(
-            t "Trying predicate" %% ct name %% t "→"
-            % if worked then t "OK!" else t "Nope :/") ;
-        if worked then Some v else None in
-      let looks_like_json s =
-        match (String.strip s).[0] with '[' | '{' | '"' -> true | _ -> false
-      in
-      let looks_like_an_uri s =
-        match String.split ~on:'\n' (String.strip s) with
-        | [""] -> false
-        | [_] -> true
-        | _ -> false in
-      [ of_predicate "is-empty" `Empty (fun s -> String.(is_empty (strip s)))
-      ; of_predicate "looks-like-json" `Json looks_like_json
-      ; of_predicate "looks-like-an-uri" `Uri looks_like_an_uri ] in
-    let guess_validate input =
-      let _logs = ref [] in
-      let log m = _logs := m :: !_logs in
-      let res =
-        match List.find_map guessers ~f:(fun f -> f ~log input) with
-        | Some s -> s
-        | None -> `No_idea in
-      (input, res, List.rev !_logs) in
-    let big_answer level content =
-      let kind = match level with `Ok -> `Success | `Error -> `Danger in
-      h2 (Bootstrap.color kind content) in
-    let show_metadata ctxt inpo =
-      let open Tezos_contract_metadata.Metadata_contents in
-      match of_json inpo with
-      | Ok m -> Tezos_html.metadata_contents ~open_in_editor_link:false ctxt m
-      | Error el -> Tezos_html.error_trace ctxt el in
-    let list_of_validation_errors l =
-      itemize
-        (List.map l ~f:(fun (w, s, e) ->
-             (match w with `Network -> t "Network" | `Address -> t "Address")
-             %% ct s % t ":" %% t e)) in
-    let show_uri ctxt inpo =
-      match Contract_metadata.Uri.validate inpo with
-      | Ok u, errs ->
-          let header =
-            match errs with
-            | [] -> big_answer `Ok (t "This metadata URI is VALID 👍")
-            | _ ->
-                big_answer `Error
-                  (t "This metadata URI parses OK but is not VALID 😞") in
-          let sec = h4 in
-          let validation_errors =
-            match errs with
-            | [] -> empty ()
-            | more ->
-                sec (Bootstrap.color `Danger (t "Validation Errors:"))
-                % list_of_validation_errors more in
-          header % validation_errors
-          % sec (t "Understood As:")
-          % Tezos_html.metadata_uri ~open_in_editor_link:false ctxt u
-      | Error el, errs -> (
-          big_answer `Error (t "There were parsing/validation errors 😭")
-          % Tezos_html.error_trace ctxt el
-          %
-          match errs with
-          | [] -> empty ()
-          | more -> p (t "Moreover:") % list_of_validation_errors more ) in
-    let result =
-      Reactive.Bidirectrional.get content
-      |> Reactive.map ~f:guess_validate
-      |> Reactive.bind ~f:(fun (inp, kind, logs) ->
-             let show_logs =
-               let collapse = Bootstrap.Collapse.make () in
-               Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
-                 collapse ~width:"12em" ~kind:`Secondary
-                 ~button:(function
-                   | `Hiding | `Showing -> t "..🚸.."
-                   | `Hidden -> t "Show Logs"
-                   | `Shown -> t "Collapse Logs")
-                 (Bootstrap.terminal_logs
-                    (itemize
-                       (List.map logs
-                          ~f:(Errors_html.decorate_error_message ctxt)))) in
-             match kind with
-             | `Empty -> h4 (t "Editor Is Empty")
-             | `Json ->
-                 h4 (t "This looks like JSON Metadata …")
-                 % show_metadata ctxt inp
-             | `Uri -> show_uri ctxt inp
-             | `No_idea ->
-                 h4 (t "Don't know how to validate this")
-                 % pre ~a:[classes ["pre-scrollable"]] (ct inp)
-                 % div show_logs) in
     div
       ~a:[classes ["row"]]
       (div ~a:[classes ["col-6"]] editor % div ~a:[classes ["col-6"]] result)
