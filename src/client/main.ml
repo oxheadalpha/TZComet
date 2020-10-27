@@ -1175,10 +1175,10 @@ let lwd_onload _ =
   let base_div = Dom_html.getElementById "attach-ui" in
   base_div##.innerHTML := Js.string "" ;
   let state =
-    let gui = Gui.State.create () in
+    let fragment = Js_of_ocaml.Url.Current.get_fragment () in
+    let sys, gui = Gui.State.Fragment.parse fragment in
     let nodes = Query_nodes.create () in
     let fetcher = Contract_metadata.Uri.Fetcher.create () in
-    let sys = System.create () in
     object
       method system = sys
 

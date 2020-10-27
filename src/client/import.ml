@@ -132,15 +132,23 @@ module Decorate_error = struct
 end
 
 module System = struct
-  type t = {mutable dev_mode: bool; http_timeout: float Reactive.var}
+  type t = {dev_mode: bool Reactive.var; http_timeout: float Reactive.var}
 
-  let create () = {dev_mode= false; http_timeout= Reactive.var 3.}
+  let create ?(dev_mode = false) () =
+    {dev_mode= Reactive.var dev_mode; http_timeout= Reactive.var 3.}
+
   let get (state : < system: t ; .. > Context.t) = state#system
 
   let set_dev_mode c v =
     dbgf "system: setting dev_mode to %b" v ;
-    (get c).dev_mode <- v
+    Reactive.set (get c).dev_mode v
 
+  let dev_mode c = Reactive.get (get c).dev_mode
+
+  let dev_mode_bidirectional state =
+    (get state).dev_mode |> Reactive.Bidirectrional.of_var
+
+  let if_dev c f = if Reactive.peek (get c).dev_mode then f () else ()
   let set_http_timeout c v = Reactive.set (get c).http_timeout v
   let http_timeout c = Reactive.get (get c).http_timeout
   let http_timeout_peek c = Reactive.peek (get c).http_timeout
@@ -149,7 +157,7 @@ module System = struct
     Reactive.Bidirectrional.of_var (get c).http_timeout
 
   let slow_step ctxt =
-    if (get ctxt).dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5
+    if Reactive.peek (get ctxt).dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5
     else Lwt.return ()
 
   let with_timeout ctxt ~f ~raise =

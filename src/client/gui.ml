@@ -117,7 +117,6 @@ module State = struct
   type t =
     { page: Page.t Reactive.var
     ; version_string: string option
-    ; dev_mode: bool Reactive.var
     ; explorer_input: string Reactive.var
     ; explorer_go: bool Reactive.var
     ; explorer_went: bool Reactive.var
@@ -167,23 +166,18 @@ module State = struct
       let editor_input =
         match in_query "editor-input" with Some [one] -> one | _ -> "" in
       let explorer_go = true_in_query "go" in
-      { page= Reactive.var page
-      ; version_string= None
-      ; dev_mode= Reactive.var dev_mode
-      ; explorer_input= Reactive.var explorer_input
-      ; explorer_go= Reactive.var explorer_go
-      ; explorer_went=
-          (* If page is not the explorer we will ignore the command =
-             assume it aready happened. *)
-          Reactive.var Poly.(page <> Page.Explorer)
-      ; explorer_result= Work_status.empty ()
-      ; editor_content= Reactive.var editor_input }
+      ( System.create ~dev_mode ()
+      , { page= Reactive.var page
+        ; version_string= None
+        ; explorer_input= Reactive.var explorer_input
+        ; explorer_go= Reactive.var explorer_go
+        ; explorer_went=
+            (* If page is not the explorer we will ignore the command =
+               assume it aready happened. *)
+            Reactive.var Poly.(page <> Page.Explorer)
+        ; explorer_result= Work_status.empty ()
+        ; editor_content= Reactive.var editor_input } )
   end
-
-  let create () =
-    (*   let {Fragment.page; dev_mode; explorer_input} = *)
-    let fragment = Js_of_ocaml.Url.Current.get_fragment () in
-    Fragment.parse fragment
 
   (* in
      { page= Reactive.var page
@@ -199,11 +193,8 @@ module State = struct
   let current_page_is_not state p =
     Reactive.get (get state).page |> Reactive.map ~f:Poly.(( <> ) p)
 
-  let dev_mode state = (get state).dev_mode |> Reactive.get
-
-  let dev_mode_bidirectional state =
-    (get state).dev_mode |> Reactive.Bidirectrional.of_var
-
+  let dev_mode state = System.dev_mode state
+  let dev_mode_bidirectional = System.dev_mode_bidirectional
   let explorer_input state = (get state).explorer_input |> Reactive.get
   let explorer_input_value state = (get state).explorer_input |> Reactive.peek
   let set_explorer_input state = (get state).explorer_input |> Reactive.set
@@ -224,7 +215,7 @@ module State = struct
     *)
     let open Js_of_ocaml.Url in
     let state = get ctxt in
-    let dev = Reactive.get state.dev_mode in
+    let dev = dev_mode ctxt in
     let page = Reactive.get state.page in
     let explorer_input = Reactive.get state.explorer_input in
     let editor_input = Reactive.get state.editor_content in
@@ -244,8 +235,7 @@ module State = struct
            if side_effects then (
              let current = Js_of_ocaml.Url.Current.get_fragment () in
              dbgf "Updating fragment %S → %a" current Fragment.pp now ;
-             Current.set_fragment (Fragment.to_string now) ;
-             System.set_dev_mode ctxt dev_mode ) ;
+             Current.set_fragment (Fragment.to_string now) ) ;
            now)
 
   let link_to_editor ctxt content ~text =
@@ -298,7 +288,7 @@ module State = struct
         Fmt.str "sha256://0x%s/%s"
           (String.tr hash_of_https_ok ~target:'9' ~replacement:'1')
           (Uri.pct_encode https_ok) in
-      (get state).dev_mode |> Reactive.get
+      dev_mode state
       |> Reactive.map ~f:(fun dev ->
              let aggl () =
                let all = ref [] in
