@@ -1587,6 +1587,12 @@ module Editor = struct
              let ppbig ppf i =
                let open Fmt in
                pf ppf "%s" (Int.to_string_hum i ~delimiter:' ') in
+             (* carthage: 1 militez / byte
+                http://mainnet.smartpy.io/chains/main/blocks/head/context/constants
+                "cost_per_byte":"1000"
+                http://delphinet.smartpy.io/chains/main/blocks/head/context/constants
+                "cost_per_byte":"250"
+             *)
              prev
              % row
                  [ t label; Fmt.kstr t "%a B" ppbig bytes

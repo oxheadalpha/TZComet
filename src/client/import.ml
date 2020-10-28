@@ -14,39 +14,6 @@ let ellipsize_string ?(ellipsis = " …") s ~max_length =
   if String.length s <= max_length then s
   else String.prefix s max_length ^ ellipsis
 
-module Var = struct
-  type 'a t =
-    {name: string; signal: 'a React.S.t; set: ?step:React.step -> 'a -> unit}
-
-  let create ?eq name v =
-    let signal, set = React.S.create ?eq v in
-    {name; signal; set}
-
-  let set var v = var.set v
-  let signal v = v.signal
-  let value v = React.S.value v.signal
-
-  let map ?name v ~f =
-    let sgn = signal v in
-    let new_signal = React.S.map f sgn in
-    let name = Option.value name ~default:(v.name ^ "-m") in
-    {name; signal= new_signal; set= (fun ?step:_ _ -> failwith "not setable")}
-
-  let map_to_list v ~f =
-    let sgn = signal v in
-    React.S.map f sgn |> ReactiveData.RList.from_signal
-end
-
-module RD = struct
-  include Js_of_ocaml_tyxml.Tyxml_js.Html
-
-  module Reactive = struct
-    include Js_of_ocaml_tyxml.Tyxml_js.R.Html
-
-    let div_of_var v ~f = Var.map_to_list v ~f |> div
-  end
-end
-
 module Context = struct type 'a t = 'a constraint 'a = < .. > end
 
 module Reactive = struct
