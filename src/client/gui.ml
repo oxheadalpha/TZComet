@@ -1594,13 +1594,29 @@ module Editor = struct
     header % result
 
   let show_binary_info ctxt (kind : guess) input_bytes =
+    let packed_mich =
+      if Poly.(kind = Format `Michelson) then
+        match process_micheline ctxt input_bytes with
+        | Error e -> None
+        | Ok (_, _, packed) -> (
+          match packed with Ok o -> Some ("\x05" ^ o) | Error e -> None )
+      else None in
+    let binary_from_hex =
+      if Poly.(kind = Format `Hex) then
+        try
+          let _, with05, hex_bytes = explode_hex input_bytes in
+          let bin = Hex.to_string (`Hex hex_bytes) in
+          Some (if with05 then "\x05" ^ bin else bin)
+        with _ -> None
+      else None in
     let sizing =
       Bootstrap.Table.simple
         ~header_row:[empty (); t "Size"; t "Carthage Burn"; t "Delphi Burn"]
         (let row l = H5.tr (List.map ~f:td l) in
          let sizes =
            let lif c k v = try if c then [(k, v ())] else [] with _ -> [] in
-           let lif_hex = lif Poly.(kind = Format `Hex) in
+           let lif_opt o k v =
+             match o with Some s -> [(k, v s)] | None -> [] in
            [("Raw Input", String.length input_bytes)]
            @ lif
                Poly.(kind = Format `Metadata_json)
@@ -1609,12 +1625,9 @@ module Editor = struct
                  Ezjsonm.value_from_string input_bytes
                  |> Ezjsonm.value_to_string ~minify:true
                  |> String.length)
-           @ lif_hex "Binary" (fun () ->
-                 let _, with05, hex_bytes = explode_hex input_bytes in
-                 let b = String.length hex_bytes in
-                 if Int.rem b 2 = 1 then Fmt.failwith "nope" ;
-                 let b = b / 2 in
-                 if with05 then b + 1 else b) in
+           @ lif_opt binary_from_hex "Binary" String.length
+           @ lif_opt packed_mich "PACK-ed" (fun packed -> String.length packed)
+         in
          List.fold ~init:(empty ()) sizes ~f:(fun prev (label, bytes) ->
              let ppbig ppf i =
                let open Fmt in
@@ -1673,14 +1686,12 @@ module Editor = struct
       let items = ref [] in
       let item k b h = items := make_item k b h :: !items in
       item "Raw Input" input_bytes [ldgr; sha256; sha512] ;
-      ( if Poly.(kind = Format `Hex) then
-        try
-          let _, with05, hex_bytes = explode_hex input_bytes in
-          let bin = Hex.to_string (`Hex hex_bytes) in
-          item "Binary-Michelson-Expression (with watermark)"
-            (if with05 then "\x05" ^ bin else bin)
-            [ldgr; sha256; sha512; expr58]
-        with _ -> () ) ;
+      Option.iter binary_from_hex ~f:(fun bin ->
+          item "Binary-Michelson-Expression (with watermark)" bin
+            [ldgr; sha256; sha512; expr58]) ;
+      Option.iter packed_mich ~f:(fun packed ->
+          item "Binary-Michelson-Expression (with watermark)" packed
+            [ldgr; sha256; sha512; expr58]) ;
       Bootstrap.Table.simple (list (List.rev !items)) in
     Bootstrap.bordered ~kind:`Secondary
       (Bootstrap.container (sizing % div hashes))
