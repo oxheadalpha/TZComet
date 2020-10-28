@@ -538,7 +538,11 @@ let michelson_bytes_editor_page _state ~michelson_bytes_editor
                          (B58_hashes.b58_script_id_hash actual05) ]) ] ]
         | Error s ->
             [ big_answer `Error [txt "There were parsing/validation errors:"]
-            ; pre [code [txt s]] ]) in
+            ; pre
+                [ code
+                    [ Fmt.kstr txt "%a"
+                        Tezos_error_monad.Error_monad.pp_print_error s ] ] ])
+  in
   [editor_with_preview michelson_bytes_editor ~examples result_div]
 
 let metadata_explorer state_handle =

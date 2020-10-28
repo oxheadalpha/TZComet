@@ -740,6 +740,9 @@ module Tezos_html = struct
         Fmt.kstr t "JSON Parsing Error: %s, JSON:" msg
         % pre (code (t (Ezjsonm.value_to_string ~minify:false json_value)))
     | Exn (Failure text) -> Fmt.kstr t "Failure: %a" Fmt.text text
+    | Exn (Data_encoding.Binary.Read_error e) ->
+        Fmt.kstr t "DataEncoding-Readerror: %a"
+          Data_encoding.Binary.pp_read_error e
     | Exn json_enc when is_json_jencoding json_enc ->
         Fmt.kstr t "JSON-Encoding: %a"
           (Json_encoding.print_error ~print_unknown:Exn.pp)
@@ -1504,8 +1507,60 @@ module Editor = struct
         big_answer `Error (t "This metadata JSON is not valid 🥸")
         % Tezos_html.error_trace ctxt el
 
+  let show_hex ctxt bytes_code =
+    let with_zero_x, bytes =
+      let prefix = "0x" in
+      if String.is_prefix bytes_code ~prefix then
+        (true, String.chop_prefix_exn bytes_code ~prefix)
+      else (false, bytes_code) in
+    let with_zero_five, bytes =
+      let prefix = "05" in
+      if String.is_prefix bytes ~prefix then
+        (true, String.chop_prefix_exn bytes ~prefix)
+      else (false, bytes) in
+    let bytes =
+      String.filter bytes ~f:(function ' ' | '\n' | '\t' -> false | _ -> true)
+    in
+    let block s = pre (code (t s)) in
+    let header, result, valid_pack =
+      match Michelson_bytes.parse_bytes bytes with
+      | Ok (json, concrete) ->
+          let header =
+            big_answer `Ok (t "This hexa-blob was successfully parsed 🏆")
+          in
+          let result =
+            h4 (t "As Concrete Syntax")
+            % block concrete
+            % h4 (t "As JSON")
+            % block (Ezjsonm.value_to_string ~minify:false json) in
+          (header, result, true)
+      | Error el ->
+          ( big_answer `Error (t "There were parsing/validation errors:")
+          , Tezos_html.error_trace ctxt el
+          , false ) in
+    let bytes_summary =
+      match String.length bytes with
+      | m when m < 20 -> bytes
+      | m ->
+          Fmt.str "%s…%s"
+            (String.sub bytes ~pos:0 ~len:8)
+            (String.sub bytes ~pos:(m - 8) ~len:8) in
+    let items =
+      let opt_if c v = if c then Some v else None in
+      List.filter_opt
+        [ opt_if with_zero_x
+            ( t "The prefix" %% ct "0x"
+            %% t "just means “this is hexadecimal”." )
+        ; opt_if with_zero_five
+            ( t "The first byte" %% ct "05"
+            %% t "is the standard prefix/watermark for Michelson expressions."
+            )
+        ; opt_if valid_pack
+            ( t "The bytes" %% ct bytes_summary %% t "are a valid" %% ct "PACK"
+            % t "-ed expression." ) ] in
+    header % itemize items % result
+
   let page ctxt =
-    let open Meta_html in
     let content = State.editor_content ctxt in
     let guess_validate input =
       let _logs = ref [] in
@@ -1568,7 +1623,8 @@ module Editor = struct
               match fmt with
               | `Metadata_json -> show_metadata ctxt inp
               | `Uri -> show_uri ctxt inp
-              | `Michelson | `Hex -> t "TODO" )
+              | `Hex -> show_hex ctxt inp
+              | `Michelson -> t "TODO" )
           | Failed ->
               header
               % h4 (t "Don't know how to validate this")

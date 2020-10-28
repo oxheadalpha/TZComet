@@ -87,9 +87,14 @@ let parse_bytes bytes =
         Fmt.str "%a" Micheline_printer.print_expr
           (Micheline_printer.printable Base.Fn.id mich) )
   with
-  | Data_encoding.Binary.Read_error e ->
+  (*
+| Data_encoding.Binary.Read_error e ->
+    Error (Exn
       Error (Fmt.str "readerror: %a" Data_encoding.Binary.pp_read_error e)
-  | e -> Error (Fmt.str "exn: %a" Exn.pp e)
+ *)
+  | e ->
+    let open Tezos_error_monad.Error_monad in
+    Error [Exn e]
 
 let encode_michelson_string s =
   Data_encoding.Binary.to_bytes_exn expr_encoding
