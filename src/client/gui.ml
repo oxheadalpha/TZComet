@@ -210,7 +210,6 @@ module State = struct
 
   type t =
     { page: Page.t Reactive.var
-    ; version_string: string option
     ; explorer_input: string Reactive.var
     ; explorer_go: bool Reactive.var
     ; explorer_went: bool Reactive.var
@@ -277,7 +276,6 @@ module State = struct
       let explorer_go = true_in_query "go" in
       ( System.create ~dev_mode ()
       , { page= Reactive.var page
-        ; version_string= None
         ; explorer_input= Reactive.var explorer_input
         ; explorer_go= Reactive.var explorer_go
         ; explorer_went=
@@ -295,7 +293,6 @@ module State = struct
      ; dev_mode= Reactive.var dev_mode
      ; explorer_input= Reactive.var explorer_input } *)
 
-  let version_string state = (get state).version_string
   let set_page state p () = Reactive.set (get state).page p
   let page state = (get state).page |> Reactive.get
   let explorer_result ctxt = (get ctxt).explorer_result
@@ -517,7 +514,7 @@ let about_page state =
   h2 (t "TZComet")
   % p
       ( t "This is" %% tzcomet_link ()
-      %% ( match State.version_string state with
+      %% ( match state#version_string with
          | None -> it "unknown version"
          | Some vs ->
              t "version "
