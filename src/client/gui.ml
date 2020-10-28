@@ -30,7 +30,7 @@ module Errors_html = struct
                     | `Hiding | `Showing -> t "~ . . . ~"
                     | `Hidden -> t "Show Error Trace"
                     | `Shown -> t "Hide Error Trace")
-                  (itemize (List.map more ~f:construct)) in
+                  (fun () -> itemize (List.map more ~f:construct)) in
           Message_html.render ctxt message % trace_part
       | Failure s -> t "Failure:" %% t s
       | e -> t "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e) in
@@ -441,7 +441,7 @@ module Settings_page = struct
                      | `Hiding | `Showing -> t "..🏃.."
                      | `Hidden -> t "Show Error"
                      | `Shown -> t "Hide Error")
-                   (Errors_html.exception_html ctxt e)
+                   (fun () -> Errors_html.exception_html ctxt e)
            | Ready _ -> m `Success "Ready") in
        let ping_date date =
          if Float.(date < 10.) then (* Construction sign: *) t "🚧"
@@ -898,7 +898,7 @@ module Tezos_html = struct
                            | `Hiding | `Showing -> t "..🏃.."
                            | `Hidden -> t "Show Michelson"
                            | `Shown -> t "Hide Michelson")
-                         (pre (ct concrete)))
+                         (fun () -> pre (ct concrete)))
                 @ list_field "Annotations" human_annotations (fun anns ->
                       itemize
                         (List.map anns ~f:(fun (k, v) ->
@@ -1181,7 +1181,7 @@ module Tezos_html = struct
           | Some v ->
               let collapse = Bootstrap.Collapse.make () in
               Bootstrap.Collapse.make_button ~kind:`Secondary collapse (ct name)
-              % Bootstrap.Collapse.make_div collapse (view v) in
+              % Bootstrap.Collapse.make_div collapse (fun () -> view v) in
         itemize
           (List.map errors ~f:(function
             | Static {error; expansion; languages} ->
@@ -1610,9 +1610,9 @@ module Editor = struct
                     (Reactive.bind (state collapse_logs) ~f:(function
                       | `Hiding | `Hidden -> t "Show Logs"
                       | `Showing | `Shown -> t "Hide Logs"))
-                , make_div collapse_logs
-                    (Bootstrap.terminal_logs
-                       (itemize (List.map logs ~f:(Message_html.render ctxt))))
+                , make_div collapse_logs (fun () ->
+                      Bootstrap.terminal_logs
+                        (itemize (List.map logs ~f:(Message_html.render ctxt))))
                 ) in
           let binary_info_button, binary_info =
             let open Bootstrap.Collapse in
@@ -1621,7 +1621,8 @@ module Editor = struct
                 (Reactive.bind (state collapse_binary) ~f:(function
                   | `Hiding | `Hidden -> t "Show Binary Info"
                   | `Showing | `Shown -> t "Hide Binary Info"))
-            , make_div collapse_binary (show_binary_info ctxt kind inp) ) in
+            , make_div collapse_binary (fun () ->
+                  show_binary_info ctxt kind inp) ) in
           let header =
             div
               ( show_logs %% display_guess %% binary_info_button %% logs

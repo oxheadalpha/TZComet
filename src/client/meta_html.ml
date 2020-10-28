@@ -572,13 +572,11 @@ module Bootstrap = struct
         [content]
 
     let make_div t content =
-      div
-        ~a:
-          [ H5.a_class
-              (Reactive.map (state t) ~f:(function
-                | `Hiding | `Hidden -> ["collapse"]
-                | `Shown | `Showing -> ["collapse"; "show"])); H5.a_id t.id ]
-        content
+      Reactive.bind (state t) ~f:(function
+        | `Hiding | `Hidden ->
+            div ~a:[classes ["collapse"]; H5.a_id t.id] (empty ())
+        | `Shown | `Showing ->
+            div ~a:[classes ["collapse"; "show"]; H5.a_id t.id] (content ()))
 
     let fixed_width_reactive_button_with_div_below ?kind t ~width ~button
         content =

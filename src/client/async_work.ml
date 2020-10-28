@@ -59,7 +59,7 @@ let render work_status ~f =
         | `Hiding | `Showing -> t "..⻎.."
         | `Hidden -> t "Show Logs"
         | `Shown -> t "Collapse Logs")
-      (show_logs ~wip:false ()) in
+      (fun () -> show_logs ~wip:false ()) in
   Reactive.bind_var work_status.status ~f:(function
     | Empty -> empty ()
     | Work_in_progress ->
