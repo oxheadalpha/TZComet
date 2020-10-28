@@ -1510,17 +1510,23 @@ module Editor = struct
         | _ -> empty ()) in
     let result =
       Reactive.bind format_result ~f:(fun (mode, (inp, kind, logs)) ->
-          let show_logs =
-            let collapse = Bootstrap.Collapse.make () in
-            Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
-              collapse ~width:"12em" ~kind:`Secondary
-              ~button:(function
-                | `Hiding | `Showing -> t "..🚸.."
-                | `Hidden -> t "Show Logs"
-                | `Shown -> t "Collapse Logs")
-              (Bootstrap.terminal_logs
-                 (itemize (List.map logs ~f:(Message_html.render ctxt)))) in
-          let header = div show_logs in
+          let show_logs, logs =
+            match logs with
+            | [] -> (empty (), empty ())
+            | _ :: _ ->
+                let open Bootstrap.Collapse in
+                let collapse = make () in
+                ( make_button collapse ~kind:`Secondary
+                    ~style:(Reactive.pure (Fmt.str "width: 12em"))
+                    (Reactive.bind (state collapse) ~f:(function
+                      | `Hiding | `Showing -> t "..🚸.."
+                      | `Hidden -> t "Show Logs"
+                      | `Shown -> t "Collapse Logs"))
+                , make_div collapse
+                    (Bootstrap.terminal_logs
+                       (itemize (List.map logs ~f:(Message_html.render ctxt))))
+                ) in
+          let header = div (show_logs %% display_guess %% logs) in
           match kind with
           | Empty ->
               header
@@ -1585,7 +1591,7 @@ module Editor = struct
                        ( ct (State.Editor_mode.to_string m)
                        %% t "→"
                        %% State.Editor_mode.explain m )) ))
-        % local_storage_button %% display_guess )
+        % local_storage_button )
       % H5.(
           div
             [ textarea
