@@ -71,7 +71,7 @@ let input_bidirectional ?(a = []) bidi =
   H5.input
     ~a:
       ( a
-      @ [ H5.a_value (Reactive.Bidirectrional.get bidi)
+      @ [ H5.a_value (Reactive.Bidirectional.get bidi)
         ; H5.a_oninput
             (Tyxml_lwd.Lwdom.attr
                Js_of_ocaml.(
@@ -79,7 +79,7 @@ let input_bidirectional ?(a = []) bidi =
                    Js.Opt.iter ev##.target (fun input ->
                        Js.Opt.iter (Dom_html.CoerceTo.input input) (fun input ->
                            let v = input##.value |> Js.to_string in
-                           Reactive.Bidirectrional.set bidi v)) ;
+                           Reactive.Bidirectional.set bidi v)) ;
                    true)) ] )
     ()
 
@@ -325,8 +325,8 @@ module Bootstrap = struct
         | Input of
             { input: input
             ; placeholder: string Reactive.t option
-            ; content: string Reactive.Bidirectrional.t }
-        | Check_box of {input: input; checked: bool Reactive.Bidirectrional.t}
+            ; content: string Reactive.Bidirectional.t }
+        | Check_box of {input: input; checked: bool Reactive.Bidirectional.t}
         | Button of
             { label: Html_types.button_content_fun H5.elt
             ; active: bool Reactive.t
@@ -396,7 +396,7 @@ module Bootstrap = struct
                    to_div ~enter_action ~cols item))
         | Input {input= {label= lbl; id; help}; placeholder; content} ->
             generic_input ?id ?help ~kind:`Text lbl ?placeholder
-              [ a_value (Reactive.Bidirectrional.get content)
+              [ a_value (Reactive.Bidirectional.get content)
               ; a_oninput
                   (Tyxml_lwd.Lwdom.attr
                      Js_of_ocaml.(
@@ -407,10 +407,10 @@ module Bootstrap = struct
                                  let v = input##.value |> Js.to_string in
                                  dbgf "TA inputs: %d bytes: %S"
                                    (String.length v) v ;
-                                 Reactive.Bidirectrional.set content v)) ;
+                                 Reactive.Bidirectional.set content v)) ;
                          true)) ]
         | Check_box {input= {label= lbl; id; help}; checked} ->
-            Reactive.Bidirectrional.get checked
+            Reactive.Bidirectional.get checked
             |> Reactive.bind ~f:(fun init_checked ->
                    let initstatus =
                      if init_checked then [a_checked ()] else [] in
@@ -427,7 +427,7 @@ module Bootstrap = struct
                                           let v =
                                             input##.checked |> Js.to_bool in
                                           dbgf "checkbox → %b" v ;
-                                          Reactive.Bidirectrional.set checked v)) ;
+                                          Reactive.Bidirectional.set checked v)) ;
                                   true)) ] ))
         | Button {label= lbl; active; action} ->
             let btn = ["btn"; "btn-primary"] in
@@ -649,10 +649,10 @@ module Example = struct
         % Bootstrap.Form.(
             make
               [ input
-                  (Reactive.Bidirectrional.of_var hello)
+                  (Reactive.Bidirectional.of_var hello)
                   ~label:(t "Say Hello")
               ; check_box ~label:(t "Check this box")
-                  (Reactive.Bidirectrional.of_var checkboxed)
+                  (Reactive.Bidirectional.of_var checkboxed)
               ; submit_button (t "Submit This!") (fun () ->
                     Reactive.set submissions
                       ( (Reactive.peek hello, Reactive.peek checkboxed)

@@ -25,7 +25,7 @@ module Reactive = struct
   let split_var v = (get v, set v)
   let bind_var : 'a var -> f:('a -> 'b t) -> 'b t = fun v ~f -> bind ~f (get v)
 
-  module Bidirectrional = struct
+  module Bidirectional = struct
     type 'a t = {lwd: 'a Lwd.t; set: 'a -> unit}
 
     let make lwd set = {lwd; set}
@@ -121,7 +121,7 @@ module System = struct
   let dev_mode c = Reactive.get (get c).dev_mode
 
   let dev_mode_bidirectional state =
-    (get state).dev_mode |> Reactive.Bidirectrional.of_var
+    (get state).dev_mode |> Reactive.Bidirectional.of_var
 
   let if_dev c f = if Reactive.peek (get c).dev_mode then f () else ()
   let set_http_timeout c v = Reactive.set (get c).http_timeout v
@@ -129,7 +129,7 @@ module System = struct
   let http_timeout_peek c = Reactive.peek (get c).http_timeout
 
   let http_timeout_bidirectional c =
-    Reactive.Bidirectrional.of_var (get c).http_timeout
+    Reactive.Bidirectional.of_var (get c).http_timeout
 
   let slow_step ctxt =
     if Reactive.peek (get ctxt).dev_mode then Js_of_ocaml_lwt.Lwt_js.sleep 0.5

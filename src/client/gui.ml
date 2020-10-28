@@ -307,10 +307,10 @@ module State = struct
   let set_explorer_input state = (get state).explorer_input |> Reactive.set
 
   let explorer_input_bidirectional state =
-    (get state).explorer_input |> Reactive.Bidirectrional.of_var
+    (get state).explorer_input |> Reactive.Bidirectional.of_var
 
   let editor_content state =
-    (get state).editor_content |> Reactive.Bidirectrional.of_var
+    (get state).editor_content |> Reactive.Bidirectional.of_var
 
   let set_editor_content state v = Reactive.set (get state).editor_content v
   let editor_mode ctxt = Reactive.get (get ctxt).editor_mode
@@ -590,9 +590,9 @@ module Settings_page = struct
              ; Reactive.bind (status n) ~f:(fun (f, _) -> ping_date f) ] in
        let last_row =
          let name = Reactive.var "" in
-         let nameb = Reactive.Bidirectrional.of_var name in
+         let nameb = Reactive.Bidirectional.of_var name in
          let prefix = Reactive.var "" in
-         let prefixb = Reactive.Bidirectrional.of_var prefix in
+         let prefixb = Reactive.Bidirectional.of_var prefix in
          row
            [ input_bidirectional nameb
                ~a:
@@ -607,8 +607,8 @@ module Settings_page = struct
                  Query_nodes.add_node ctxt
                    (Query_nodes.Node.create (Reactive.peek name)
                       (Reactive.peek prefix)) ;
-                 Reactive.Bidirectrional.set nameb "" ;
-                 Reactive.Bidirectrional.set prefixb "" ;
+                 Reactive.Bidirectional.set nameb "" ;
+                 Reactive.Bidirectional.set prefixb "" ;
                  ())
            ; Bootstrap.button (t "⇑ Ping'em'all") ~kind:`Secondary
                ~action:(fun () ->
@@ -623,7 +623,7 @@ module Settings_page = struct
     let open State in
     let timeout_valid_and_changed = Reactive.var None in
     let timeout =
-      Reactive.Bidirectrional.make
+      Reactive.Bidirectional.make
         (System.http_timeout_peek ctxt |> Fmt.str "%f" |> Reactive.pure)
         (fun x ->
           match Float.of_string x with
@@ -960,7 +960,7 @@ module Tezos_html = struct
                     | true -> Bootstrap.color `Success (t "OK")
                     | false -> Bootstrap.color `Danger (validity_error leaf.t)))
               ~placeholder:(Reactive.pure "Some decent Michelson right here")
-              (Reactive.Bidirectrional.of_var leaf.v) ]
+              (Reactive.Bidirectional.of_var leaf.v) ]
 
     let rec render mf =
       match mf with
@@ -1145,7 +1145,7 @@ module Tezos_html = struct
                                              "This is the “main-address” \
                                               currently in context."
                                          else addr_help a1))
-                             (Reactive.Bidirectrional.of_var address) ] in
+                             (Reactive.Bidirectional.of_var address) ] in
                        let param_input =
                          match parameter_input with
                          | None -> [magic (t "No parameter")]
@@ -1663,7 +1663,7 @@ module Editor = struct
         |> Option.value ~default:Failed in
       (input, res, List.rev !_logs) in
     let format_result =
-      Reactive.(Bidirectrional.get content ** State.editor_mode ctxt)
+      Reactive.(Bidirectional.get content ** State.editor_mode ctxt)
       |> Reactive.map ~f:(function
            | input, `Guess -> (`Guess, guess_validate input)
            | input, (#State.Editor_mode.format as fmt) ->
@@ -1765,7 +1765,7 @@ module Editor = struct
     let editor =
       div
         ( Examples_dropdown.editable ctxt ~action:(fun v ->
-              Reactive.Bidirectrional.set content v)
+              Reactive.Bidirectional.set content v)
         % Bootstrap.Dropdown_menu.(
             button
               ( t "Mode:"
@@ -1783,7 +1783,7 @@ module Editor = struct
       % H5.(
           div
             [ textarea
-                (txt (Reactive.Bidirectrional.get content))
+                (txt (Reactive.Bidirectional.get content))
                 ~a:
                   [ a_style (Lwd.pure "font-family: monospace")
                   ; classes ["col-12"]; a_rows (Lwd.pure 50)
@@ -1797,7 +1797,7 @@ module Editor = struct
                                      let v = input##.value |> Js.to_string in
                                      dbgf "TA inputs: %d bytes: %S"
                                        (String.length v) v ;
-                                     Reactive.Bidirectrional.set content v)) ;
+                                     Reactive.Bidirectional.set content v)) ;
                              true)) ] ]) in
     div
       ~a:[classes ["row"]]

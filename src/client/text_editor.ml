@@ -7,7 +7,7 @@ type status = Non_initialized | Initialized
 type t =
   { id: string
   ; language: string
-  ; code: string Reactive.Bidirectrional.t
+  ; code: string Reactive.Bidirectional.t
   ; status: status Reactive.var
   ; mutable text_area: Html_types.div Meta_html.t option }
 
@@ -130,7 +130,7 @@ let editor_command_button te ~text command_name =
 
  *)
 let set_code te ~code =
-  Reactive.Bidirectrional.set te.code code ;
+  Reactive.Bidirectional.set te.code code ;
   let _ =
     let open Js_of_ocaml in
     Js.Unsafe.meth_call
