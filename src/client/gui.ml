@@ -37,72 +37,6 @@ module Errors_html = struct
     bt "Error:" %% construct exn
 end
 
-module Work_status = struct
-  type log_item = Html_types.div_content_fun Meta_html.H5.elt
-  type 'a status = Empty | Work_in_progress | Done of ('a, log_item) Result.t
-  type 'a t = {logs: log_item Reactive.Table.t; status: 'a status Reactive.var}
-
-  let empty () = {logs= Reactive.Table.make (); status= Reactive.var Empty}
-
-  let reinit s =
-    Reactive.Table.clear s.logs ;
-    Reactive.set s.status Empty
-
-  let log t item = Reactive.Table.append' t.logs item
-  let wip t = Reactive.set t.status Work_in_progress
-  let ok t o = Reactive.set t.status (Done (Ok o))
-  let error t o = Reactive.set t.status (Done (Error o))
-
-  let busy {status; _} =
-    Reactive.(
-      get status |> map ~f:(function Work_in_progress -> true | _ -> false))
-
-  let is_empty {status; _} =
-    Reactive.(get status |> map ~f:(function Empty -> true | _ -> false))
-
-  let async_catch :
-      type b. 'a t -> (mkexn:(log_item -> exn) -> unit -> unit Lwt.t) -> unit =
-   fun wip f ->
-    let open Lwt in
-    let exception Work_failed of log_item in
-    async (fun () ->
-        catch
-          (fun () -> f ~mkexn:(fun x -> Work_failed x) ())
-          Meta_html.(
-            function
-            | Work_failed l -> error wip l ; return ()
-            | exn ->
-                error wip (Errors_html.exception_html () exn) ;
-                return ()))
-
-  let render work_status ~f =
-    let open Meta_html in
-    let show_logs ?(wip = false) () =
-      let make_logs_map _ x = H5.li [x] in
-      let logs = Reactive.Table.concat_map ~map:make_logs_map work_status.logs in
-      Bootstrap.terminal_logs
-        (H5.ul
-           ( if wip then
-             [logs; H5.li [Bootstrap.spinner ~kind:`Info (t "Working …")]]
-           else [logs] )) in
-    let collapsing_logs () =
-      let collapse = Bootstrap.Collapse.make () in
-      Bootstrap.Collapse.fixed_width_reactive_button_with_div_below collapse
-        ~width:"12em" ~kind:`Secondary
-        ~button:(function
-          | `Hiding | `Showing -> t "..⻎.."
-          | `Hidden -> t "Show Logs"
-          | `Shown -> t "Collapse Logs")
-        (show_logs ~wip:false ()) in
-    Reactive.bind_var work_status.status ~f:(function
-      | Empty -> empty ()
-      | Work_in_progress ->
-          Bootstrap.alert ~kind:`Secondary (show_logs ~wip:true ())
-      | Done (Ok x) -> div (f x) % collapsing_logs ()
-      | Done (Error e) ->
-          Bootstrap.bordered ~kind:`Danger (div e %% collapsing_logs ()))
-end
-
 module State = struct
   module Page = struct
     type t = Explorer | Settings | About | Editor
@@ -147,7 +81,7 @@ module State = struct
     ; explorer_input: string Reactive.var
     ; explorer_go: bool Reactive.var
     ; explorer_went: bool Reactive.var
-    ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Work_status.t
+    ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Async_work.t
     ; editor_content: string Reactive.var
     ; editor_mode: Editor_mode.t Reactive.var }
 
@@ -216,7 +150,7 @@ module State = struct
             (* If page is not the explorer we will ignore the command =
                assume it aready happened. *)
             Reactive.var Poly.(page <> Page.Explorer)
-        ; explorer_result= Work_status.empty ()
+        ; explorer_result= Async_work.empty ()
         ; editor_content= Reactive.var editor_input
         ; editor_mode= Reactive.var editor_mode } )
   end
@@ -978,14 +912,15 @@ module Tezos_html = struct
               Option.map parameter
                 ~f:(Michelson_form.of_type ~annotations:view.human_annotations)
             in
-            let wip = Work_status.empty () in
+            let wip = Async_work.empty () in
             let go_action () =
-              Work_status.wip wip ;
+              Async_work.wip wip ;
               let log s =
-                Work_status.log wip
+                Async_work.log wip
                   (it "Calling view" %% t "→" %% Bootstrap.monospace (t s))
               in
-              Work_status.async_catch wip
+              Async_work.async_catch wip
+                ~exn_to_html:(Errors_html.exception_html ctxt)
                 Lwt.Infix.(
                   fun ~mkexn () ->
                     let parameter =
@@ -997,18 +932,18 @@ module Tezos_html = struct
                       ~address:(Reactive.peek address) ~view ~parameter
                     >>= function
                     | Ok (result, storage) ->
-                        Work_status.ok wip
+                        Async_work.ok wip
                           (view_result ctxt ~result ~storage
                              ~address:(Reactive.peek address) ~view ~parameter) ;
                         Lwt.return ()
                     | Error s ->
-                        Work_status.error wip (t "Error:" %% ct s) ;
+                        Async_work.error wip (t "Error:" %% ct s) ;
                         Lwt.return ()) ;
               dbgf "go view" in
             switch ~action:(fun () -> Reactive.set call_mode false) (t "Cancel")
-            % ( Work_status.is_empty wip
+            % ( Async_work.is_empty wip
               |> Reactive.bind ~f:(function
-                   | false -> Work_status.render wip ~f:Fn.id
+                   | false -> Async_work.render wip ~f:Fn.id
                    | true ->
                        let open Bootstrap.Form in
                        let validate_address input_value =
@@ -1885,14 +1820,15 @@ module Explorer = struct
     let result = State.explorer_result ctxt in
     let input_value = State.explorer_input_value ctxt in
     dbgf "Form submitted with %s" input_value ;
-    Work_status.reinit result ;
-    Work_status.wip result ;
-    Work_status.log result (t "Starting with: " %% ct input_value) ;
-    Work_status.async_catch result
+    Async_work.reinit result ;
+    Async_work.wip result ;
+    Async_work.log result (t "Starting with: " %% ct input_value) ;
+    Async_work.async_catch result
+      ~exn_to_html:(Errors_html.exception_html ctxt)
       Lwt.Infix.(
         fun ~mkexn () ->
           let logs prefix s =
-            Work_status.log result
+            Async_work.log result
               (it prefix %% t "→" %% Bootstrap.monospace (t s)) in
           let full_input = validate_intput input_value in
           let on_uri ctxt uri =
@@ -1908,7 +1844,7 @@ module Explorer = struct
             dbgf "before of-json" ;
             match of_json json_code with
             | Ok metadata ->
-                Work_status.ok result
+                Async_work.ok result
                   (uri_and_metadata_result ctxt ~full_input ~uri ~metadata) ;
                 Lwt.return ()
             | Error error ->
@@ -1922,7 +1858,7 @@ module Explorer = struct
                 ~log:(logs "Getting URI")
               >>= fun metadata_uri ->
               Contract_metadata.Uri.Fetcher.set_current_contract ctxt address ;
-              Work_status.log result (t "Now going for: " %% ct metadata_uri) ;
+              Async_work.log result (t "Now going for: " %% ct metadata_uri) ;
               match Contract_metadata.Uri.validate metadata_uri with
               | Ok uri, _ -> on_uri ctxt uri
               | Error error, _ ->
@@ -1932,7 +1868,7 @@ module Explorer = struct
                           ~full_input ~error)) )
           | `Uri (_, uri) ->
               if Contract_metadata.Uri.needs_context_address uri then
-                Work_status.log result
+                Async_work.log result
                   (bt "This URI requires a context KT1 address …") ;
               System.slow_step ctxt >>= fun () -> on_uri ctxt uri
           | `Error (_, el) -> raise (mkexn (Tezos_html.error_trace ctxt el)))
@@ -1960,13 +1896,13 @@ module Explorer = struct
                      ~active:
                        Reactive.(
                          map
-                           (input_valid ctxt ** Work_status.busy result)
+                           (input_valid ctxt ** Async_work.busy result)
                            ~f:(function
                              | `Error _, _ -> false
                              | _, true -> false
                              | _ -> true))
                      enter_action) ] ])
-    % Work_status.render result ~f:Fn.id
+    % Async_work.render result ~f:Fn.id
 end
 
 let root_document state =
