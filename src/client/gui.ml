@@ -1612,7 +1612,7 @@ module Editor = struct
                  x)
             ; hash "Script-ID-hash (big-map access)"
                 (B58_hashes.b58_script_id_hash bytes) ] in
-      let hrow c = H5.(tr [th ~a:[(* a_colspan (Reactive.pure 2) *)] [c]]) in
+      let hrow c = H5.(tr [th ~a:[ (* a_colspan (Reactive.pure 2) *) ] [c]]) in
       let row k v = H5.(tr [td [k; br (); v]]) in
       let make_item k bytes hashes =
         hrow (t k)
@@ -1667,14 +1667,17 @@ module Editor = struct
                (fmt, (input, Format fmt, []))) in
     let display_guess =
       Reactive.bind format_result ~f:(function
-        | `Guess, (inp, kind, logs) -> (
+        | `Guess, (inp, kind, logs) ->
             let normal c = Bootstrap.color `Secondary (small c) in
-            match kind with
-            | Empty -> normal (t "The editor is actually empty")
-            | Format m ->
-                normal (t "Using mode" %% ct (State.Editor_mode.to_string m))
-            | Failed -> Bootstrap.color `Danger (t "Failed to guess a format.")
-            )
+            div
+              ~a:
+                [H5.a_style (Reactive.pure "width: 12em; display: inline-block")]
+              ( match kind with
+              | Empty -> normal (t "The editor is Empty.")
+              | Format m ->
+                  normal (t "Using mode" %% ct (State.Editor_mode.to_string m))
+              | Failed ->
+                  Bootstrap.color `Danger (t "Failed to guess a format.") )
         | _ -> empty ()) in
     let result =
       (* We keep the [make ()]s outside the bind to that they remember their
@@ -1690,9 +1693,8 @@ module Editor = struct
                 ( make_button collapse_logs ~kind:`Secondary
                     ~style:(Reactive.pure (Fmt.str "width: 8em"))
                     (Reactive.bind (state collapse_logs) ~f:(function
-                      | `Hiding | `Showing -> t "..🚸.."
-                      | `Hidden -> t "Show Logs"
-                      | `Shown -> t "Hide Logs"))
+                      | `Hiding | `Hidden -> t "Show Logs"
+                      | `Showing | `Shown -> t "Hide Logs"))
                 , make_div collapse_logs
                     (Bootstrap.terminal_logs
                        (itemize (List.map logs ~f:(Message_html.render ctxt))))
@@ -1702,9 +1704,8 @@ module Editor = struct
             ( make_button collapse_binary ~kind:`Secondary
                 ~style:(Reactive.pure (Fmt.str "width: 12em"))
                 (Reactive.bind (state collapse_binary) ~f:(function
-                  | `Hiding | `Showing -> t "..🚸.."
-                  | `Hidden -> t "Show Binary Info"
-                  | `Shown -> t "Hide Binary Info"))
+                  | `Hiding | `Hidden -> t "Show Binary Info"
+                  | `Showing | `Shown -> t "Hide Binary Info"))
             , make_div collapse_binary (show_binary_info ctxt kind inp) ) in
           let header =
             div
