@@ -845,19 +845,6 @@ module Tezos_html = struct
     else empty () )
     % div (go uri)
 
-  let parse_micheline m =
-    match Tezos_micheline.Micheline_parser.tokenize m with
-    | tokens, [] -> (
-      match Tezos_micheline.Micheline_parser.parse_expression tokens with
-      | node, [] -> node
-      | _, errs -> Fmt.failwith "parsing" )
-    | _, errs -> Fmt.failwith "tokeninzeing"
-
-  let mich_node node =
-    let open Tezos_micheline in
-    Fmt.str "%a" Micheline_printer.print_expr
-      (Micheline_printer.printable Base.Fn.id (Micheline.strip_locations node))
-
   module Michelson_form = struct
     type type_expression =
       | Any of string Tezos_micheline.Micheline.canonical
@@ -900,6 +887,7 @@ module Tezos_html = struct
 
     let rec fill_with_value mf node =
       let open Tezos_micheline.Micheline in
+      let mich_node = Michelson.micheline_node_to_string in
       match (mf, node) with
       | Leaf leaf, nn -> Reactive.set leaf.v (mich_node nn)
       | Pair {left; right}, Prim (_, "Pair", [l; r], _) ->
@@ -915,7 +903,7 @@ module Tezos_html = struct
       | Pair {left; right} -> Fmt.str "(Pair %s %s)" (peek left) (peek right)
 
     let validate_micheline m =
-      match parse_micheline m with _ -> true | exception _ -> false
+      match Michelson.parse_micheline m with Ok _ -> true | Error _ -> false
 
     let rec is_valid = function
       | Leaf {t= Nat | Mutez; v; _} ->
@@ -940,10 +928,8 @@ module Tezos_html = struct
       let type_expr = function
         | Nat -> b (ct "nat")
         | Mutez -> b (ct "mutez")
-        | Any m ->
-            let open Tezos_micheline in
-            Fmt.kstr ct "%a" Micheline_printer.print_expr
-              (Micheline_printer.printable Base.Fn.id m) in
+        | Any m -> Fmt.kstr ct "%s" (Michelson.micheline_canonical_to_string m)
+      in
       match mf with
       | Pair {left; right} -> to_form_items left @ to_form_items right
       | Leaf leaf ->
@@ -973,9 +959,7 @@ module Tezos_html = struct
 
   let mich
       (Tezos_contract_metadata.Metadata_contents.Michelson_blob.Micheline m) =
-    let open Tezos_micheline in
-    Fmt.str "%a" Micheline_printer.print_expr
-      (Micheline_printer.printable Base.Fn.id m)
+    Michelson.micheline_canonical_to_string m
 
   let view_result ctxt ~result ~storage ~address ~view ~parameter =
     let open Tezos_contract_metadata.Metadata_contents in
@@ -995,6 +979,7 @@ module Tezos_html = struct
         | [one] -> one
         | more -> itemize more
       with exn -> Errors_html.exception_html ctxt exn in
+    let mich_node = Michelson.micheline_node_to_string in
     Bootstrap.div_lead (div (bt "Result:" %% expanded))
     % hr ()
     % Bootstrap.muted div
@@ -1059,15 +1044,6 @@ module Tezos_html = struct
               Option.map parameter
                 ~f:(Michelson_form.of_type ~annotations:view.human_annotations)
             in
-            let parse_micheline m =
-              match Tezos_micheline.Micheline_parser.tokenize m with
-              | tokens, [] -> (
-                match
-                  Tezos_micheline.Micheline_parser.parse_expression tokens
-                with
-                | node, [] -> node
-                | _, errs -> Fmt.failwith "parsing" )
-              | _, errs -> Fmt.failwith "tokeninzeing" in
             let wip = Work_status.empty () in
             let go_action () =
               Work_status.wip wip ;
@@ -1079,9 +1055,10 @@ module Tezos_html = struct
                 Lwt.Infix.(
                   fun ~mkexn () ->
                     let parameter =
+                      let open Michelson in
                       match parameter_input with
-                      | Some mf -> Michelson_form.peek mf |> parse_micheline
-                      | None -> parse_micheline "Unit" in
+                      | Some mf -> Michelson_form.peek mf |> parse_micheline_exn
+                      | None -> parse_micheline_exn "Unit" in
                     Query_nodes.call_off_chain_view ctxt ~log
                       ~address:(Reactive.peek address) ~view ~parameter
                     >>= function
@@ -1403,14 +1380,16 @@ module Editor = struct
 
   let guessers : (log:(Message.t -> unit) -> string -> guess option) list =
     let of_predicate name v f ~log inp =
-      let worked = f inp in
+      let worked = try f inp with _ -> false in
       log
         Message.(
           t "Trying predicate" %% ct name %% t "→"
           % if worked then t "OK!" else t "Nope :/") ;
       if worked then Some v else None in
     let looks_like_json s =
-      match (String.strip s).[0] with '[' | '{' | '"' -> true | _ -> false in
+      let open Char in
+      let str = String.strip s in
+      str.[0] = '{' && str.[String.length str - 1] = '}' in
     let oneline s =
       match String.split ~on:'\n' (String.strip s) with
       | [""] -> false
@@ -1424,12 +1403,19 @@ module Editor = struct
       || String.for_all s ~f:(function
            | 'A' .. 'F' | 'a' .. 'f' | '0' .. '9' | 'x' | ' ' | '\n' -> true
            | _ -> false) in
+    let looks_like_michelson s =
+      match (String.strip s).[0] with
+      | '(' | '"' | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' -> true
+      | _ -> false in
     let format_of_predicate n v = of_predicate n (Format v) in
     [ of_predicate "it-is-empty" Empty (fun s ->
           String.is_empty (String.strip s))
-    ; format_of_predicate "looks-like-json" `Metadata_json looks_like_json
+    ; format_of_predicate "looks-like-a-json-object" `Metadata_json
+        looks_like_json
     ; format_of_predicate "looks-like-an-uri" `Uri looks_like_an_uri
-    ; format_of_predicate "looks-like-hexadecimal" `Hex looks_like_hexa ]
+    ; format_of_predicate "looks-like-hexadecimal" `Hex looks_like_hexa
+    ; format_of_predicate "looks-like-michelson" `Michelson looks_like_michelson
+    ]
 
   open Meta_html
 
@@ -1560,6 +1546,8 @@ module Editor = struct
             ( t "The bytes" %% ct bytes_summary %% t "are a valid" %% ct "PACK"
             % t "-ed expression." ) ] in
     header % itemize items % result
+
+  let show_michelson ctxt inp = t "TODO:show_michelson"
 
   let show_binary_info ctxt (kind : guess) input_bytes =
     let sizing =
@@ -1733,7 +1721,7 @@ module Editor = struct
               | `Metadata_json -> show_metadata ctxt inp
               | `Uri -> show_uri ctxt inp
               | `Hex -> show_hex ctxt inp
-              | `Michelson -> t "TODO" )
+              | `Michelson -> show_michelson ctxt inp )
           | Failed ->
               header
               % h4 (t "Don't know how to validate this")
