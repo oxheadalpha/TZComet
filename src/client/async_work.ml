@@ -55,10 +55,7 @@ let render work_status ~f =
     let collapse = Bootstrap.Collapse.make () in
     Bootstrap.Collapse.fixed_width_reactive_button_with_div_below collapse
       ~width:"12em" ~kind:`Secondary
-      ~button:(function
-        | `Hiding | `Showing -> t "..⻎.."
-        | `Hidden -> t "Show Logs"
-        | `Shown -> t "Collapse Logs")
+      ~button:(function true -> t "Show Logs" | false -> t "Collapse Logs")
       (fun () -> show_logs ~wip:false ()) in
   Reactive.bind_var work_status.status ~f:(function
     | Empty -> empty ()

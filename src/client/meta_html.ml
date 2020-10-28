@@ -550,7 +550,13 @@ module Bootstrap = struct
       let the_id = Reactive.get_prim the_id_prim in
       {id= the_id; state}
 
-    let state t = Reactive.get t.state
+    let full_state t = Reactive.get t.state
+
+    let collapsed_state t =
+      full_state t
+      |> Reactive.map ~f:(function
+           | `Hiding | `Hidden -> true
+           | `Showing | `Shown -> false)
 
     let make_button ?(kind = `Primary) ?style ?more_classes t content =
       let more_a =
@@ -565,24 +571,23 @@ module Bootstrap = struct
               ; a_user_data "toggle" (Lwd.pure "collapse")
               ; a_user_data "target" (Reactive.map ~f:(Fmt.str "#%s") t.id)
               ; a_aria "expanded"
-                  (Reactive.map (state t) ~f:(function
-                    | `Hiding | `Hidden -> ["false"]
-                    | `Shown | `Showing -> ["true"]))
+                  (Reactive.map (collapsed_state t) ~f:(function
+                    | true -> ["false"]
+                    | false -> ["true"]))
               ; a_aria "controls" (Reactive.map ~f:(fun x -> [x]) t.id) ] )
         [content]
 
     let make_div t content =
-      Reactive.bind (state t) ~f:(function
-        | `Hiding | `Hidden ->
-            div ~a:[classes ["collapse"]; H5.a_id t.id] (empty ())
-        | `Shown | `Showing ->
+      Reactive.bind (collapsed_state t) ~f:(function
+        | true -> div ~a:[classes ["collapse"]; H5.a_id t.id] (empty ())
+        | false ->
             div ~a:[classes ["collapse"; "show"]; H5.a_id t.id] (content ()))
 
     let fixed_width_reactive_button_with_div_below ?kind t ~width ~button
         content =
       make_button ?kind t
         ~style:(Reactive.pure (Fmt.str "width: %s" width))
-        (Reactive.bind (state t) ~f:button)
+        (Reactive.bind (collapsed_state t) ~f:button)
       % make_div t content
   end
 

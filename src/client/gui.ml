@@ -27,9 +27,8 @@ module Errors_html = struct
                 Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
                   collapse ~width:"12em" ~kind:`Secondary
                   ~button:(function
-                    | `Hiding | `Showing -> t "~ . . . ~"
-                    | `Hidden -> t "Show Error Trace"
-                    | `Shown -> t "Hide Error Trace")
+                    | true -> t "Show Error Trace"
+                    | false -> t "Hide Error Trace")
                   (fun () -> itemize (List.map more ~f:construct)) in
           Message_html.render ctxt message % trace_part
       | Failure s -> t "Failure:" %% t s
@@ -438,9 +437,7 @@ module Settings_page = struct
                % Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
                    collapse ~width:"12em" ~kind:`Secondary
                    ~button:(function
-                     | `Hiding | `Showing -> t "..🏃.."
-                     | `Hidden -> t "Show Error"
-                     | `Shown -> t "Hide Error")
+                     | true -> t "Show Error" | false -> t "Hide Error")
                    (fun () -> Errors_html.exception_html ctxt e)
            | Ready _ -> m `Success "Ready") in
        let ping_date date =
@@ -895,9 +892,8 @@ module Tezos_html = struct
                        .fixed_width_reactive_button_with_div_below collapse
                          ~width:"12em" ~kind:`Secondary
                          ~button:(function
-                           | `Hiding | `Showing -> t "..🏃.."
-                           | `Hidden -> t "Show Michelson"
-                           | `Shown -> t "Hide Michelson")
+                           | true -> t "Show Michelson"
+                           | false -> t "Hide Michelson")
                          (fun () -> pre (ct concrete)))
                 @ list_field "Annotations" human_annotations (fun anns ->
                       itemize
@@ -1607,9 +1603,9 @@ module Editor = struct
                 let open Bootstrap.Collapse in
                 ( make_button collapse_logs ~kind:`Secondary
                     ~style:(Reactive.pure (Fmt.str "width: 8em"))
-                    (Reactive.bind (state collapse_logs) ~f:(function
-                      | `Hiding | `Hidden -> t "Show Logs"
-                      | `Showing | `Shown -> t "Hide Logs"))
+                    (Reactive.bind (collapsed_state collapse_logs) ~f:(function
+                      | true -> t "Show Logs"
+                      | false -> t "Hide Logs"))
                 , make_div collapse_logs (fun () ->
                       Bootstrap.terminal_logs
                         (itemize (List.map logs ~f:(Message_html.render ctxt))))
@@ -1618,9 +1614,9 @@ module Editor = struct
             let open Bootstrap.Collapse in
             ( make_button collapse_binary ~kind:`Secondary
                 ~style:(Reactive.pure (Fmt.str "width: 12em"))
-                (Reactive.bind (state collapse_binary) ~f:(function
-                  | `Hiding | `Hidden -> t "Show Binary Info"
-                  | `Showing | `Shown -> t "Hide Binary Info"))
+                (Reactive.bind (collapsed_state collapse_binary) ~f:(function
+                  | true -> t "Show Binary Info"
+                  | false -> t "Hide Binary Info"))
             , make_div collapse_binary (fun () ->
                   show_binary_info ctxt kind inp) ) in
           let header =
