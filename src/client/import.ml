@@ -141,3 +141,69 @@ module System = struct
     Lwt.pick
       [f (); (Js_of_ocaml_lwt.Lwt_js.sleep timeout >>= fun () -> raise timeout)]
 end
+
+module Browser_window = struct
+  type width_state = [`Thin | `Wide]
+  type t = {width: width_state option Reactive.var}
+
+  open Js_of_ocaml
+
+  let create ?(threshold = 992) () =
+    let find_out () =
+      match Js.Optdef.to_option Dom_html.window##.innerWidth with
+      | Some s when s >= threshold -> Some `Wide
+      | Some _ -> Some `Thin
+      | None -> None in
+    let width = Reactive.var (find_out ()) in
+    Dom_html.window##.onresize :=
+      Dom_html.handler (fun _ ->
+          Reactive.set width (find_out ()) ;
+          Js._true) ;
+    {width}
+
+  let get (c : < window: t ; .. > Context.t) = c#window
+  let width c = (get c).width |> Reactive.get
+end
+
+module Local_storage : sig
+  type t
+
+  val create : unit -> t
+  val get : < storage: t ; .. > Context.t -> t
+  val available : < storage: t ; .. > Context.t -> bool
+  val read_file : < storage: t ; .. > Context.t -> string -> string option
+
+  val write_file :
+    < storage: t ; .. > Context.t -> string -> content:string -> unit
+
+  val remove_file : < storage: t ; .. > Context.t -> string -> unit
+end = struct
+  open Js_of_ocaml
+
+  type t = Js_of_ocaml.Dom_html.storage Js_of_ocaml.Js.t option
+
+  let create () : t =
+    Js.Optdef.case
+      Dom_html.window##.localStorage
+      (fun () -> dbgf "Local_storage: nope" ; None)
+      (fun x ->
+        dbgf "Local_storage: YES length: %d" x##.length ;
+        Some x)
+
+  let get (c : < storage: t ; .. > Context.t) = c#storage
+  let available c = get c |> Option.is_some
+
+  let read_file ctxt path =
+    get ctxt
+    |> Option.bind ~f:(fun sto ->
+           Js.Opt.to_option (sto##getItem (Js.string path))
+           |> Option.map ~f:Js.to_string)
+
+  let write_file ctxt path ~content =
+    get ctxt
+    |> Option.iter ~f:(fun sto ->
+           sto##setItem (Js.string path) (Js.string content))
+
+  let remove_file ctxt path =
+    get ctxt |> Option.iter ~f:(fun sto -> sto##removeItem (Js.string path))
+end

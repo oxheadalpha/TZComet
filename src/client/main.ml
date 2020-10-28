@@ -24,8 +24,8 @@ let lwd_onload _ =
         let sys, gui = Gui.State.Fragment.parse fragment in
         let nodes = Query_nodes.create () in
         let fetcher = Contract_metadata.Uri.Fetcher.create () in
-        let storage = Gui.Local_storage.create () in
-        let window = Gui.Browser_window.create () in
+        let storage = Local_storage.create () in
+        let window = Browser_window.create () in
         object
           method system = sys
 
