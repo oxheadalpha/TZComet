@@ -1651,13 +1651,13 @@ module Editor = struct
               % h4 (t "Don't know how to validate this")
               % pre ~a:[classes ["pre-scrollable"]] (ct inp)) in
     let local_storage_button =
-      let content = t "Local-Storage" in
+      let label = t "Local-Storage" in
       let button_kind = `Light (* default for dropdowns *) in
       match Local_storage.available ctxt with
       | true ->
           Bootstrap.Dropdown_menu.(
             let filename = "tzcomet-editor-input" in
-            button content ~kind:button_kind
+            button label ~kind:button_kind
               [ item
                   ~action:(fun () ->
                     Local_storage.write_file ctxt filename
@@ -1666,14 +1666,14 @@ module Editor = struct
               ; item
                   ~action:(fun () ->
                     match Local_storage.read_file ctxt filename with
-                    | None -> State.set_editor_content ctxt ""
-                    | Some s -> State.set_editor_content ctxt s)
+                    | None -> Reactive.Bidirectional.set content ""
+                    | Some s -> Reactive.Bidirectional.set content s)
                   (t "Load") ])
       | false ->
           Bootstrap.button ~kind:button_kind ~disabled:true ~action:Fn.ignore
             (abbreviation
                "Local storage is not available for this browser/site combo."
-               content) in
+               label) in
     let editor =
       div
         ( Examples_dropdown.editable ctxt ~action:(fun v ->
