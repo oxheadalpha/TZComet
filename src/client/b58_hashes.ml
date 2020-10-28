@@ -2,6 +2,7 @@ open Import
 
 module B58_crypto = struct
   let sha256 s = Digestif.SHA256.(to_raw_string (digest_string s))
+  let sha512 s = Digestif.SHA512.(to_raw_string (digest_string s))
 end
 
 let script_expr_hash =

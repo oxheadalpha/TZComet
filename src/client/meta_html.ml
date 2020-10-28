@@ -550,6 +550,8 @@ module Bootstrap = struct
       let the_id = Reactive.get_prim the_id_prim in
       {id= the_id; state}
 
+    let state t = Reactive.get t.state
+
     let make_button ?(kind = `Primary) ?style ?more_classes t content =
       let more_a =
         Option.value_map style ~default:[] ~f:(fun s -> [H5.a_style s]) in
@@ -562,12 +564,21 @@ module Bootstrap = struct
                   ; Fmt.str "btn-outline-%s" (Label_kind.to_string kind) ]
               ; a_user_data "toggle" (Lwd.pure "collapse")
               ; a_user_data "target" (Reactive.map ~f:(Fmt.str "#%s") t.id)
-              ; a_aria "expanded" (Lwd.pure ["false"])
+              ; a_aria "expanded"
+                  (Reactive.map (state t) ~f:(function
+                    | `Hiding | `Hidden -> ["false"]
+                    | `Shown | `Showing -> ["true"]))
               ; a_aria "controls" (Reactive.map ~f:(fun x -> [x]) t.id) ] )
         [content]
 
-    let state t = Reactive.get t.state
-    let make_div t content = div ~a:[classes ["collapse"]; H5.a_id t.id] content
+    let make_div t content =
+      div
+        ~a:
+          [ H5.a_class
+              (Reactive.map (state t) ~f:(function
+                | `Hiding | `Hidden -> ["collapse"]
+                | `Shown | `Showing -> ["collapse"; "show"])); H5.a_id t.id ]
+        content
 
     let fixed_width_reactive_button_with_div_below ?kind t ~width ~button
         content =
@@ -578,11 +589,14 @@ module Bootstrap = struct
   end
 
   module Table = struct
-    let simple ~header_row content =
+    let simple ?header_row content =
       let open H5 in
+      let thead =
+        Option.map header_row ~f:(fun hl ->
+            thead [tr (List.map hl ~f:(fun x -> th [x]))]) in
       tablex
         ~a:[classes ["table"; "table-bordered"; "table-hover"]]
-        ~thead:(thead [tr (List.map header_row ~f:(fun x -> th [x]))])
+        ?thead
         [tbody [content]]
   end
 end

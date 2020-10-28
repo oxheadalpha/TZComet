@@ -1507,7 +1507,7 @@ module Editor = struct
         big_answer `Error (t "This metadata JSON is not valid 🥸")
         % Tezos_html.error_trace ctxt el
 
-  let show_hex ctxt bytes_code =
+  let explode_hex bytes_code =
     let with_zero_x, bytes =
       let prefix = "0x" in
       if String.is_prefix bytes_code ~prefix then
@@ -1521,6 +1521,10 @@ module Editor = struct
     let bytes =
       String.filter bytes ~f:(function ' ' | '\n' | '\t' -> false | _ -> true)
     in
+    (with_zero_x, with_zero_five, bytes)
+
+  let show_hex ctxt bytes_code =
+    let with_zero_x, with_zero_five, bytes = explode_hex bytes_code in
     let block s = pre (code (t s)) in
     let header, result, valid_pack =
       match Michelson_bytes.parse_bytes bytes with
@@ -1560,6 +1564,92 @@ module Editor = struct
             % t "-ed expression." ) ] in
     header % itemize items % result
 
+  let show_binary_info ctxt (kind : guess) input_bytes =
+    let sizing =
+      Bootstrap.Table.simple
+        ~header_row:[empty (); t "Size"; t "Carthage Burn"; t "Delphi Burn"]
+        (let row l = H5.tr (List.map ~f:td l) in
+         let sizes =
+           let lif c k v = try if c then [(k, v ())] else [] with _ -> [] in
+           let lif_hex = lif Poly.(kind = Format `Hex) in
+           [("Raw Input", String.length input_bytes)]
+           @ lif
+               Poly.(kind = Format `Metadata_json)
+               "Minimized-JSON"
+               (fun () ->
+                 Ezjsonm.value_from_string input_bytes
+                 |> Ezjsonm.value_to_string ~minify:true
+                 |> String.length)
+           @ lif_hex "Binary" (fun () ->
+                 let _, with05, hex_bytes = explode_hex input_bytes in
+                 let b = String.length hex_bytes in
+                 if Int.rem b 2 = 1 then Fmt.failwith "nope" ;
+                 let b = b / 2 in
+                 if with05 then b + 1 else b) in
+         List.fold ~init:(empty ()) sizes ~f:(fun prev (label, bytes) ->
+             let ppbig ppf i =
+               let open Fmt in
+               pf ppf "%s" (Int.to_string_hum i ~delimiter:' ') in
+             prev
+             % row
+                 [ t label; Fmt.kstr t "%a B" ppbig bytes
+                 ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 1000)
+                 ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 250) ])) in
+    let hashes =
+      let _item k bytes =
+        let hash n v = Fmt.kstr it "%s:" n %% ct v in
+        t k
+        % itemize
+            [ hash "Ledger-BLAKE2B-Base58"
+                (Base58.raw_encode (B58_hashes.blake2b bytes))
+            ; hash "SHA256-Hex"
+                (let (`Hex x) =
+                   Hex.of_string (B58_hashes.B58_crypto.sha256 bytes) in
+                 x)
+            ; hash "SHA512-Hex"
+                (let (`Hex x) =
+                   Hex.of_string (B58_hashes.B58_crypto.sha512 bytes) in
+                 x)
+            ; hash "Script-ID-hash (big-map access)"
+                (B58_hashes.b58_script_id_hash bytes) ] in
+      let hrow c = H5.(tr [th ~a:[(* a_colspan (Reactive.pure 2) *)] [c]]) in
+      let row k v = H5.(tr [td [k; br (); v]]) in
+      let make_item k bytes hashes =
+        hrow (t k)
+        % list
+            (List.map hashes ~f:(fun hash ->
+                 let n, v = hash bytes in
+                 row (t n) (ct v))) in
+      let hash k b = (k, b) in
+      let ldgr bytes =
+        hash "Ledger-BLAKE2B-Base58"
+          (Base58.raw_encode (B58_hashes.blake2b bytes)) in
+      let sha256 bytes =
+        hash "SHA256-Hex"
+          (let (`Hex x) = Hex.of_string (B58_hashes.B58_crypto.sha256 bytes) in
+           x) in
+      let sha512 bytes =
+        hash "SHA512-Hex"
+          (let (`Hex x) = Hex.of_string (B58_hashes.B58_crypto.sha512 bytes) in
+           x) in
+      let expr58 bytes =
+        hash "Script-ID-hash (big-map access)"
+          (B58_hashes.b58_script_id_hash bytes) in
+      let items = ref [] in
+      let item k b h = items := make_item k b h :: !items in
+      item "Raw Input" input_bytes [ldgr; sha256; sha512] ;
+      ( if Poly.(kind = Format `Hex) then
+        try
+          let _, with05, hex_bytes = explode_hex input_bytes in
+          let bin = Hex.to_string (`Hex hex_bytes) in
+          item "Binary-Michelson-Expression (with watermark)"
+            (if with05 then "\x05" ^ bin else bin)
+            [ldgr; sha256; sha512; expr58]
+        with _ -> () ) ;
+      Bootstrap.Table.simple (list (List.rev !items)) in
+    Bootstrap.bordered ~kind:`Secondary
+      (Bootstrap.container (sizing % div hashes))
+
   let page ctxt =
     let content = State.editor_content ctxt in
     let guess_validate input =
@@ -1587,24 +1677,39 @@ module Editor = struct
             )
         | _ -> empty ()) in
     let result =
+      (* We keep the [make ()]s outside the bind to that they remember their
+         state: *)
+      let collapse_binary = Bootstrap.Collapse.make () in
+      let collapse_logs = Bootstrap.Collapse.make () in
       Reactive.bind format_result ~f:(fun (mode, (inp, kind, logs)) ->
           let show_logs, logs =
             match logs with
             | [] -> (empty (), empty ())
             | _ :: _ ->
                 let open Bootstrap.Collapse in
-                let collapse = make () in
-                ( make_button collapse ~kind:`Secondary
-                    ~style:(Reactive.pure (Fmt.str "width: 12em"))
-                    (Reactive.bind (state collapse) ~f:(function
+                ( make_button collapse_logs ~kind:`Secondary
+                    ~style:(Reactive.pure (Fmt.str "width: 8em"))
+                    (Reactive.bind (state collapse_logs) ~f:(function
                       | `Hiding | `Showing -> t "..🚸.."
                       | `Hidden -> t "Show Logs"
-                      | `Shown -> t "Collapse Logs"))
-                , make_div collapse
+                      | `Shown -> t "Hide Logs"))
+                , make_div collapse_logs
                     (Bootstrap.terminal_logs
                        (itemize (List.map logs ~f:(Message_html.render ctxt))))
                 ) in
-          let header = div (show_logs %% display_guess %% logs) in
+          let binary_info_button, binary_info =
+            let open Bootstrap.Collapse in
+            ( make_button collapse_binary ~kind:`Secondary
+                ~style:(Reactive.pure (Fmt.str "width: 12em"))
+                (Reactive.bind (state collapse_binary) ~f:(function
+                  | `Hiding | `Showing -> t "..🚸.."
+                  | `Hidden -> t "Show Binary Info"
+                  | `Shown -> t "Hide Binary Info"))
+            , make_div collapse_binary (show_binary_info ctxt kind inp) ) in
+          let header =
+            div
+              ( show_logs %% display_guess %% binary_info_button %% logs
+              %% binary_info ) in
           match kind with
           | Empty ->
               header
