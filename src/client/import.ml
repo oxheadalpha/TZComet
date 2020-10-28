@@ -157,7 +157,9 @@ module Browser_window = struct
     let width = Reactive.var (find_out ()) in
     Dom_html.window##.onresize :=
       Dom_html.handler (fun _ ->
-          Reactive.set width (find_out ()) ;
+          let current = Reactive.peek width in
+          let new_one = find_out () in
+          if Poly.(current <> new_one) then Reactive.set width new_one ;
           Js._true) ;
     {width}
 
