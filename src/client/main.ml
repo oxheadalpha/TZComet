@@ -1180,6 +1180,7 @@ let lwd_onload _ =
     let nodes = Query_nodes.create () in
     let fetcher = Contract_metadata.Uri.Fetcher.create () in
     let storage = Gui.Local_storage.create () in
+    let window = Gui.Browser_window.create () in
     object
       method system = sys
 
@@ -1190,6 +1191,8 @@ let lwd_onload _ =
       method fetcher = fetcher
 
       method storage = storage
+
+      method window = window
     end in
   Query_nodes.add_default_nodes state ;
   let doc = Gui.root_document state in

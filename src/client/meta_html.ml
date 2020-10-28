@@ -284,6 +284,34 @@ module Bootstrap = struct
         ~a:[classes ["navbar"; "navbar-expand-lg"; "navbar-light"; "bg-light"]]
   end
 
+  module Tab_bar = struct
+    type item =
+      { label: Html_types.a_content_fun H5.elt
+      ; active: bool Reactive.t
+      ; action: unit -> unit }
+
+    let item ~active ~action label = {label; action; active}
+
+    let make items =
+      H5.ul
+        ~a:[classes ["nav"; "nav-tabs"]]
+        (List.map items ~f:(fun {label; active; action} ->
+             let li = H5.li ~a:[classes ["nav-item"]] in
+             Reactive.bind active ~f:(function
+               | true ->
+                   li
+                     [ a
+                         ~a:
+                           [ classes ["nav-link"]
+                           ; H5.a_onclick
+                               (Tyxml_lwd.Lwdom.attr (fun ev ->
+                                    action () ; true)) ]
+                         label ]
+               | false ->
+                   (* in bootstrap active means currently already activated *)
+                   li [a ~a:[classes ["active"; "nav-link"]] label])))
+  end
+
   module Form = struct
     module Item = struct
       type input =

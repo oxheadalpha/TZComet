@@ -103,6 +103,29 @@ module Work_status = struct
           Bootstrap.bordered ~kind:`Danger (div e %% collapsing_logs ()))
 end
 
+module Browser_window = struct
+  type width_state = [`Thin | `Wide]
+  type t = {width: width_state option Reactive.var}
+
+  open Js_of_ocaml
+
+  let create ?(threshold = 992) () =
+    let find_out () =
+      match Js.Optdef.to_option Dom_html.window##.innerWidth with
+      | Some s when s >= threshold -> Some `Wide
+      | Some _ -> Some `Thin
+      | None -> None in
+    let width = Reactive.var (find_out ()) in
+    Dom_html.window##.onresize :=
+      Dom_html.handler (fun _ ->
+          Reactive.set width (find_out ()) ;
+          Js._true) ;
+    {width}
+
+  let get (c : < window: t ; .. > Context.t) = c#window
+  let width c = (get c).width |> Reactive.get
+end
+
 module Local_storage : sig
   type t
 
@@ -1613,7 +1636,35 @@ module Editor = struct
                              true)) ] ]) in
     div
       ~a:[classes ["row"]]
-      (div ~a:[classes ["col-6"]] editor % div ~a:[classes ["col-6"]] result)
+      (Reactive.bind (Browser_window.width ctxt) ~f:(function
+        | Some `Wide ->
+            div ~a:[classes ["col-6"]] editor
+            % div ~a:[classes ["col-6"]] result
+        | Some `Thin | None ->
+            let visible = Reactive.var `Editor in
+            let tabs =
+              let open Bootstrap.Tab_bar in
+              make
+                [ item (t "Editor")
+                    ~active:
+                      ( Reactive.get visible
+                      |> Reactive.map ~f:(function
+                           | `Editor -> false
+                           | `Result -> true) )
+                    ~action:(fun () -> Reactive.set visible `Editor)
+                ; item (t "Results")
+                    ~active:
+                      ( Reactive.get visible
+                      |> Reactive.map ~f:(function
+                           | `Editor -> true
+                           | `Result -> false) )
+                    ~action:(fun () -> Reactive.set visible `Result) ] in
+            div
+              ~a:[classes ["col-12"]]
+              ( tabs
+              %% Reactive.bind_var visible ~f:(function
+                   | `Editor -> editor
+                   | `Result -> result) )))
 end
 
 module Explorer = struct
