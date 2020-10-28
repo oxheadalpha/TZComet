@@ -1506,9 +1506,10 @@ module Editor = struct
     in
     (with_zero_x, with_zero_five, bytes)
 
+  let code_block s = pre (ct s)
+
   let show_hex ctxt bytes_code =
     let with_zero_x, with_zero_five, bytes = explode_hex bytes_code in
-    let block s = pre (code (t s)) in
     let header, result, valid_pack =
       match Michelson_bytes.parse_bytes bytes with
       | Ok (json, concrete) ->
@@ -1517,9 +1518,9 @@ module Editor = struct
           in
           let result =
             h4 (t "As Concrete Syntax")
-            % block concrete
+            % code_block concrete
             % h4 (t "As JSON")
-            % block (Ezjsonm.value_to_string ~minify:false json) in
+            % code_block (Ezjsonm.value_to_string ~minify:false json) in
           (header, result, true)
       | Error el ->
           ( big_answer `Error (t "There were parsing/validation errors:")
@@ -1547,7 +1548,50 @@ module Editor = struct
             % t "-ed expression." ) ] in
     header % itemize items % result
 
-  let show_michelson ctxt inp = t "TODO:show_michelson"
+  let process_micheline ctxt inp =
+    try
+      match Michelson.parse_micheline inp with
+      | Ok o ->
+          let concrete = Michelson.micheline_node_to_string o in
+          let json = Michelson.micheline_to_ezjsonm o in
+          let packed =
+            try
+              (* The packing can raise for missing primitives. *)
+              Ok (Michelson_bytes.pack_node_expression o)
+            with e -> Error e in
+          Ok (concrete, json, packed)
+      | Error e -> Error e
+    with e -> Error [Tezos_error_monad.Error_monad.Exn e]
+
+  let show_michelson ctxt inp =
+    let header, result =
+      match process_micheline ctxt inp with
+      | Ok (concrete, json, packed) ->
+          let header =
+            big_answer `Ok (t "This Micheline was successfully parsed 🥊")
+          in
+          let pack_result =
+            h4 (t "Serialization" %% parens (ct "PACK"))
+            %
+            match packed with
+            | Ok packed ->
+                code_block
+                  (let (`Hex hx) = Hex.of_string packed in
+                   "0x05" ^ hx)
+            | Error e ->
+                Bootstrap.color `Danger (bt "Failed:")
+                %% div (Errors_html.exception_html ctxt e) in
+          let result =
+            h4 (t "Reindented")
+            % code_block concrete
+            % h4 (t "As JSON")
+            % code_block (Ezjsonm.value_to_string ~minify:false json)
+            % pack_result in
+          (header, result)
+      | Error el ->
+          ( big_answer `Error (t "There were parsing/validation errors:")
+          , Tezos_html.error_trace ctxt el ) in
+    header % result
 
   let show_binary_info ctxt (kind : guess) input_bytes =
     let sizing =
