@@ -103,6 +103,49 @@ module Work_status = struct
           Bootstrap.bordered ~kind:`Danger (div e %% collapsing_logs ()))
 end
 
+module Local_storage : sig
+  type t
+
+  val create : unit -> t
+  val get : < storage: t ; .. > Context.t -> t
+  val available : < storage: t ; .. > Context.t -> bool
+  val read_file : < storage: t ; .. > Context.t -> string -> string option
+
+  val write_file :
+    < storage: t ; .. > Context.t -> string -> content:string -> unit
+
+  val remove_file : < storage: t ; .. > Context.t -> string -> unit
+end = struct
+  open Js_of_ocaml
+
+  type t = Js_of_ocaml.Dom_html.storage Js_of_ocaml.Js.t option
+
+  let create () : t =
+    Js.Optdef.case
+      Dom_html.window##.localStorage
+      (fun () -> dbgf "Local_storage: nope" ; None)
+      (fun x ->
+        dbgf "Local_storage: YES length: %d" x##.length ;
+        Some x)
+
+  let get (c : < storage: t ; .. > Context.t) = c#storage
+  let available c = get c |> Option.is_some
+
+  let read_file ctxt path =
+    get ctxt
+    |> Option.bind ~f:(fun sto ->
+           Js.Opt.to_option (sto##getItem (Js.string path))
+           |> Option.map ~f:Js.to_string)
+
+  let write_file ctxt path ~content =
+    get ctxt
+    |> Option.iter ~f:(fun sto ->
+           sto##setItem (Js.string path) (Js.string content))
+
+  let remove_file ctxt path =
+    get ctxt |> Option.iter ~f:(fun sto -> sto##removeItem (Js.string path))
+end
+
 module State = struct
   module Page = struct
     type t = Explorer | Settings | About | Editor
@@ -1501,6 +1544,30 @@ module Editor = struct
               header
               % h4 (t "Don't know how to validate this")
               % pre ~a:[classes ["pre-scrollable"]] (ct inp)) in
+    let local_storage_button =
+      let content = t "Local-Storage" in
+      let button_kind = `Light (* default for dropdowns *) in
+      match Local_storage.available ctxt with
+      | true ->
+          Bootstrap.Dropdown_menu.(
+            let filename = "tzcomet-editor-input" in
+            button content ~kind:button_kind
+              [ item
+                  ~action:(fun () ->
+                    Local_storage.write_file ctxt filename
+                      (Reactive.peek State.(get ctxt).editor_content))
+                  (t "Save")
+              ; item
+                  ~action:(fun () ->
+                    match Local_storage.read_file ctxt filename with
+                    | None -> State.set_editor_content ctxt ""
+                    | Some s -> State.set_editor_content ctxt s)
+                  (t "Load") ])
+      | false ->
+          Bootstrap.button ~kind:button_kind ~disabled:true ~action:Fn.ignore
+            (abbreviation
+               "Local storage is not available for this browser/site combo."
+               content) in
     let editor =
       div
         ( Examples_dropdown.editable ctxt ~action:(fun v ->
@@ -1518,7 +1585,7 @@ module Editor = struct
                        ( ct (State.Editor_mode.to_string m)
                        %% t "→"
                        %% State.Editor_mode.explain m )) ))
-        %% display_guess )
+        % local_storage_button %% display_guess )
       % H5.(
           div
             [ textarea
