@@ -19,8 +19,6 @@ module Context = struct type 'a t = 'a constraint 'a = < .. > end
 module Reactive = struct
   include Lwd
 
-  let map x ~f = map f x
-  let bind x ~f = bind x f
   let ( ** ) = pair
   let split_var v = (get v, set v)
   let bind_var : 'a var -> f:('a -> 'b t) -> 'b t = fun v ~f -> bind ~f (get v)

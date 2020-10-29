@@ -780,7 +780,7 @@ module Tezos_html = struct
                    match Z.of_string s with _ -> true | exception _ -> false )))
       | Leaf lf -> Reactive.(get lf.v |> map ~f:validate_micheline)
       | Pair {left; right} ->
-          Reactive.(map2 ( && ) (is_valid left) (is_valid right))
+          Reactive.(map2 ~f:( && ) (is_valid left) (is_valid right))
 
     let rec validity_error = function
       | Nat -> t "Invalid natural number."

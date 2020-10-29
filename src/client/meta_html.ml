@@ -5,7 +5,7 @@ type 'a t = 'a H5.elt (* list Lwd.t *)
 
 let t (s : string) : _ t = H5.(txt (Lwd.pure s))
 let empty () = Lwd.pure Lwd_seq.empty
-let ( % ) a b : _ t = Lwd.map2 Lwd_seq.concat a b
+let ( % ) a b : _ t = Lwd.map2 ~f:Lwd_seq.concat a b
 let ( %% ) a b : _ t = a % t " " % b
 let singletize f ?a x = f ?a [x]
 

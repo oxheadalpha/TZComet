@@ -50,6 +50,7 @@ ensure_vendors () {
         echo 'val raw_encode : ?alphabet:Alphabet.t -> string -> string' >> src/base58.mli
     )
     say "Vendoring Lwd++"
+    lwd_commit="d592e2f09baebe9a7e34a4098dc07171e5ae0fac"
     if [ -f "local-vendor/lwd/lwd.opam" ] ; then
         say "Already cloned"
     else
@@ -59,6 +60,9 @@ ensure_vendors () {
     (
         cd local-vendor/lwd
         git pull
+        git pull
+        git checkout "$lwd_commit"
+        git log --oneline -n 5
     )
 }
 
