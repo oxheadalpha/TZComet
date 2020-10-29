@@ -256,12 +256,12 @@ module State = struct
 
     let get state =
       let https_ok =
-        "https://raw.githubusercontent.com/tqtezos/TZComet/master/data/metadata_example0.json"
+        "https://raw.githubusercontent.com/tqtezos/TZComet/8d95f7b/data/metadata_example0.json"
       in
       let hash_of_https_ok =
         (* `sha256sum data/metadata_example0.json` → Achtung, the URL
            above takes about 5 minutes to be up to date with `master` *)
-        "7d961916f05d72afc765389a695458a9b451954419b41fa3cdd5fa816128b744" in
+        "5fba33eccc1b310add3e66a76fe7c9cd8267b519f2f78a88b72868936a5cb28d" in
       let sha256_https_ok =
         Fmt.str "sha256://0x%s/%s" hash_of_https_ok (Uri.pct_encode https_ok)
       in
@@ -282,15 +282,15 @@ module State = struct
              let mtb, mtb_dev, mtb_all = aggl () in
              let mby, mby_dev, mby_all = aggl () in
              let tzc, tzc_dev, tzc_all = aggl () in
-             kt1 "KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9"
-               "Contract with metadata on Carthagenet." ;
+             kt1 "KT1JshTANmZsQvQ45YGGaHfrUNiXZ1NsXe28"
+               "Contract with minimal metadata on Carthagenet." ;
              kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
                "Should not exist any where." ;
              kt1_dev "KT1Su4bveK3P3PFonoCzPgefQriwBtN1KAgJ"
                "Just a version string." ;
              kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
                "Has a URI that points nowhere." ;
-             kt1 "KT1VAieU3HoaKtywG2VwuZXBB6mViguWoibH"
+             kt1 "KT1R5cYuidmPgDU79WJ5yFV9uNyxvQaZooyL"
                "Has one off-chain-view." ;
              kt1_dev "KT1Ffua85vzkCyuHnYTr8iXAypMryh2fjaF5"
                "Event more weird off-chain-views." ;
@@ -309,6 +309,8 @@ module State = struct
                "An IPFS URI to metadata JSON." ;
              uri_dev "ipfs://ldisejdse-dlseidje" "An invalid IPFS URI." ;
              mtb "{}" "Empty, but valid, Metadata" ;
+             mtb {json|{"description": "This is just a description."}|json}
+               "Metadata with just a description." ;
              let all_mtb_from_lib =
                let open Tezos_contract_metadata.Metadata_contents in
                let rec go n =

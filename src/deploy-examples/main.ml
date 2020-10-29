@@ -250,7 +250,11 @@ let all ?only ~logfile () =
     self_host "Just a version."
       Ezjsonm.(dict [("version", string "tzcomet-example v0.0.42")]) ;
     self_describe "This contract has few more fields." basics ;
-    self_describe "This contract has a one off-chain-view."
+    self_describe
+      "This contract has a one off-chain-view, \n\
+       that does something.\n\n\
+       The off-chain-view (multiply-the-nat-in-storage) is actually reused in \
+       the error-translation “object”."
       (basics_and_views [multiply_the_nat]) ;
     self_describe "This contract has a couple of off-chain-views."
       (basics_and_views
