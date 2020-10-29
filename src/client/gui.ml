@@ -282,6 +282,7 @@ module State = struct
              let mtb, mtb_dev, mtb_all = aggl () in
              let mby, mby_dev, mby_all = aggl () in
              let tzc, tzc_dev, tzc_all = aggl () in
+             let kt1_one_view = "KT1R5cYuidmPgDU79WJ5yFV9uNyxvQaZooyL" in
              kt1 "KT1JshTANmZsQvQ45YGGaHfrUNiXZ1NsXe28"
                "Contract with minimal metadata on Carthagenet." ;
              kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
@@ -290,18 +291,19 @@ module State = struct
                "Just a version string." ;
              kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
                "Has a URI that points nowhere." ;
-             kt1 "KT1R5cYuidmPgDU79WJ5yFV9uNyxvQaZooyL"
-               "Has one off-chain-view." ;
+             kt1 kt1_one_view "Has one off-chain-view." ;
              kt1_dev "KT1Ffua85vzkCyuHnYTr8iXAypMryh2fjaF5"
                "Event more weird off-chain-views." ;
              uri https_ok "A valid HTTPS URI." ;
              uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
              uri_dev sha256_https_ko
                "A valid SHA256+HTTPS URI but the hash is not right." ;
-             uri "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9/here"
+             uri
+               (Fmt.str "tezos-storage://%s/contents" kt1_one_view)
                "An on-chain pointer to metadata." ;
              uri_dev
-               "tezos-storage://KT1XRT495WncnqNmqKn4tkuRiDJzEiR4N2C9.NetXrtZMmJmZSeb/here"
+               (Fmt.str "tezos-storage://%s.NetXrtZMmJmZSeb/contents"
+                  kt1_one_view)
                "An on-chain pointer to metadata with chain-id." ;
              uri_dev "tezos-storage:/here"
                "An on-chain pointer that requires a KT1 in context." ;
