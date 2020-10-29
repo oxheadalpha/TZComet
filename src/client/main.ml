@@ -45,10 +45,12 @@ let lwd_onload _ =
       let doc = Gui.root_document state in
       let root = Lwd.observe doc in
       Lwd.set_on_invalidate root (fun _ ->
-          dbgf "invalidate doc" ;
           ignore
             (Dom_html.window##requestAnimationFrame
-               (Js.wrap_callback (fun _ -> ignore (Lwd.quick_sample root))))) ;
+               (Js.wrap_callback (fun _ ->
+                    while Lwd.is_damaged root do
+                      ignore (Lwd.quick_sample root)
+                    done)))) ;
       List.iter ~f:(Dom.appendChild base_div)
         (Lwd_seq.to_list (Lwd.quick_sample root) : _ node list :> raw_node list) ;
       Lwt.return_unit) ;

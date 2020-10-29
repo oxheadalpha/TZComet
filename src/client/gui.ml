@@ -1698,6 +1698,16 @@ module Editor = struct
                 ~a:
                   [ a_style (Lwd.pure "font-family: monospace")
                   ; classes ["col-12"]; a_rows (Lwd.pure 50)
+                  ; Caml.Obj.magic
+                      ((* Textareas are broken w.r.t to their content
+                          in the specification, @let-def found out that
+                          the `value` attribute works, but of course, it
+                          doesn't type-check since it is not technically
+                          in the standard.
+                          A future version of Tyxml_lwd may make this
+                          work without the dirty magic. *)
+                       a_value
+                         (Reactive.Bidirectional.get content))
                   ; a_oninput
                       (Tyxml_lwd.Lwdom.attr
                          Js_of_ocaml.(
