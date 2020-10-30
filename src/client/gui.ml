@@ -76,7 +76,7 @@ module State = struct
   end
 
   type t =
-    { page: Page.t Reactive.var
+    { page: [`Page of Page.t | `Changing_to of Page.t] Reactive.var
     ; explorer_input: string Reactive.var
     ; explorer_go: bool Reactive.var
     ; explorer_went: bool Reactive.var
@@ -142,7 +142,7 @@ module State = struct
         |> Option.value ~default:`Guess in
       let explorer_go = true_in_query "go" in
       ( System.create ~dev_mode ()
-      , { page= Reactive.var page
+      , { page= Reactive.var (`Page page)
         ; explorer_input= Reactive.var explorer_input
         ; explorer_go= Reactive.var explorer_go
         ; explorer_went=
@@ -165,7 +165,8 @@ module State = struct
   let explorer_result ctxt = (get ctxt).explorer_result
 
   let current_page_is_not state p =
-    Reactive.get (get state).page |> Reactive.map ~f:Poly.(( <> ) p)
+    Reactive.get (get state).page
+    |> Reactive.map ~f:Poly.(function `Page pp | `Changing_to pp -> pp <> p)
 
   let dev_mode state = System.dev_mode state
   let dev_mode_bidirectional = System.dev_mode_bidirectional
@@ -192,7 +193,9 @@ module State = struct
     let open Js_of_ocaml.Url in
     let state = get ctxt in
     let dev = dev_mode ctxt in
-    let page = Reactive.get state.page in
+    let page =
+      Reactive.get state.page
+      |> Reactive.map ~f:(function `Page p | `Changing_to p -> p) in
     let explorer_input = Reactive.get state.explorer_input in
     let editor_input = Reactive.get state.editor_content in
     let explorer_go = Reactive.get state.explorer_go in
@@ -231,7 +234,7 @@ module State = struct
         ; H5.a_onclick
             (Tyxml_lwd.Lwdom.attr (fun _ ->
                  set_editor_content ctxt text ;
-                 set_page ctxt Page.Editor () ;
+                 set_page ctxt (`Changing_to Page.Editor) () ;
                  false)) ]
       content
 
@@ -375,7 +378,8 @@ let navigation_menu state =
          item
            (bt (Page.to_string p))
            ~active:(State.current_page_is_not state p)
-           ~action:(State.set_page state p) ~fragment:(fragment_page p) in
+           ~action:(State.set_page state (`Changing_to p))
+           ~fragment:(fragment_page p) in
        List.map ~f:of_page all_in_order))
 
 let about_page state =
@@ -1918,12 +1922,30 @@ end
 
 let root_document state =
   let open Meta_html in
+  let explorer = lazy (Explorer.page state) in
+  let editor = lazy (Editor.page state) in
+  let settings = lazy (Settings_page.render state) in
+  let about = lazy (about_page state) in
   Bootstrap.container ~suffix:"-fluid"
     ( navigation_menu state
     % Reactive.bind (State.page state)
         State.Page.(
           function
-          | Explorer -> Explorer.page state
-          | Editor -> Editor.page state
-          | Settings -> Settings_page.render state
-          | About -> about_page state) )
+          | `Changing_to p ->
+              Lwt.async
+                Lwt.Infix.(
+                  fun () ->
+                    Js_of_ocaml_lwt.Lwt_js.yield ()
+                    >>= fun () ->
+                    State.set_page state (`Page p) () ;
+                    Lwt.return_unit) ;
+              div
+                H5.(
+                  img ()
+                    ~a:[a_width (Reactive.pure 100)]
+                    ~src:(Reactive.pure "loading.gif")
+                    ~alt:(Reactive.pure "Loading spinner GIF"))
+          | `Page Explorer -> Lazy.force explorer
+          | `Page Editor -> Lazy.force editor
+          | `Page Settings -> Lazy.force settings
+          | `Page About -> Lazy.force about) )
