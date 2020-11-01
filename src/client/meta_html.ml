@@ -541,12 +541,12 @@ module Bootstrap = struct
       let (state : state Reactive.var) = Reactive.var `Hidden in
       let the_id_prim =
         Reactive.prim
-          ~acquire:(fun () ->
+          ~acquire:(fun _ ->
             let the_id = Fresh_id.of_option "collapse" id in
             Global_jquery_communication.ensure_handlers () ;
             Global_jquery_communication.register the_id state ;
             the_id)
-          ~release:(fun id -> Global_jquery_communication.unregister id) in
+          ~release:(fun _ id -> Global_jquery_communication.unregister id) in
       let the_id = Reactive.get_prim the_id_prim in
       {id= the_id; state}
 
