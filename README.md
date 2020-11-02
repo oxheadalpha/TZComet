@@ -1,26 +1,20 @@
 # TZComet: Tezos Contract Metadata
 
-<div>
-<a href="https://user-images.githubusercontent.com/617111/94707034-f59d0300-0310-11eb-805b-38cdc8038e30.gif"><img
-  width="33%"
-  src="https://user-images.githubusercontent.com/617111/94707034-f59d0300-0310-11eb-805b-38cdc8038e30.gif"
-></a>
-<a href="https://user-images.githubusercontent.com/617111/94707033-f5046c80-0310-11eb-9155-0d81ea5ed141.gif"><img width="33%"
- src="https://user-images.githubusercontent.com/617111/94707033-f5046c80-0310-11eb-9155-0d81ea5ed141.gif" ></a>
-<a href="https://user-images.githubusercontent.com/617111/94707030-f46bd600-0310-11eb-8bbb-a2552c6c7f7b.gif"><img width="33%"
- src="https://user-images.githubusercontent.com/617111/94707030-f46bd600-0310-11eb-8bbb-a2552c6c7f7b.gif" ></a>
-</div>
+<div><a href="https://user-images.githubusercontent.com/617111/97904884-235dd900-1d0f-11eb-9aae-28e60eb0af15.gif"><img
+ width="80%"
+  src="https://user-images.githubusercontent.com/617111/97904884-235dd900-1d0f-11eb-9aae-28e60eb0af15.gif"
+></a></div>
 
 … currently running at <https://tqtezos.github.io/TZComet/> …
 
 ## Build
 
-    ./please.sh ensure vendors  # Clones a branch of Tezos and vbmithr/ocaml-base58
+    ./please.sh ensure vendors  # Clones a branch of some deps (incl. Tezos)
     ./please.sh ensure setup    # Creates a local opam switch
     ./please.sh build all
    
 ⬑ if all goes well, last command should print out a link to open the app, like
-`file://$PWD/_build/default/src/client/index.html`.
+`file://$PWD/_build/default/website/index.html`.
 
 ## See Also
 
