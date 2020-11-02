@@ -368,9 +368,8 @@ let navigation_menu state =
       ~brand:
         (Bootstrap.label `Dark
            ( tzcomet_link ()
-           %% small
-                (Reactive.bind fragment_self (fun f ->
-                     link (t "ʘ") ~target:("#" ^ f)))
+           %% Reactive.bind fragment_self (fun f ->
+                  link (t "ʘ") ~target:("#" ^ f))
            %% Reactive.bind (State.dev_mode state) (function
                 | true -> it "(dev)"
                 | false -> empty ()) ))
@@ -1587,7 +1586,7 @@ module Editor = struct
     let display_guess =
       Reactive.bind format_result ~f:(function
         | `Guess, (inp, kind, logs) ->
-            let normal c = Bootstrap.color `Secondary (small c) in
+            let normal c = Bootstrap.color `Secondary c in
             div
               ~a:
                 [H5.a_style (Reactive.pure "width: 12em; display: inline-block")]
