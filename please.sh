@@ -18,7 +18,7 @@ ensure_vendors () {
     # We use the following pointer to the main repo's master branch:
     tezos_branch=smondet-contract-metadata
     tezos_remote=https://gitlab.com/smondet/tezos.git
-    tezos_commit="5c57bf7a80a68fa838704cb023b14ae2dff5ae22"
+    tezos_commit="46cae6f626e5b192fcbacb63da89f6a4fae004b7"
     say "Vendoring tezos @ %10s" "$tezos_branch"
     if [ -f "local-vendor/tezos/README.md" ] ; then
         say "Tezos already cloned"
@@ -49,7 +49,21 @@ ensure_vendors () {
         # We need to expose this for the Ledger-like hash:
         echo 'val raw_encode : ?alphabet:Alphabet.t -> string -> string' >> src/base58.mli
     )
-
+    say "Vendoring Lwd++"
+    lwd_commit="cba75b9b71afd15b1f80c507921b96f44495f3f4"
+    if [ -f "local-vendor/lwd/lwd.opam" ] ; then
+        say "Already cloned"
+    else
+        git clone --depth 10 https://github.com/let-def/lwd.git \
+            local-vendor/lwd
+    fi
+    (
+        cd local-vendor/lwd
+        git pull
+        git pull
+        git checkout "$lwd_commit"
+        git log --oneline -n 5
+    )
 }
 
 ensure_setup () {
@@ -70,20 +84,27 @@ ensure_setup () {
 eval $(opam env)
 
 build_all () {
-    dune build --profile release src/client/index.html
-    echo "Done: file://$PWD/_build/default/src/client/index.html?dev=true"
+    mkdir -p _build/website/
+    dune build --profile release src/client/main.bc.js
+    cp --no-preserve mode _build/default/src/client/main.bc.js _build/website/main-client.js
+    cp data/loading.gif _build/website/
+    dune exec src/gen-web/main.exe index "TZComet" > _build/website/index.html
+    echo "Done: file://$PWD/_build/website/index.html"
+    dune build src/deploy-examples/main.exe
 }
 build_ () {
     build_all
+}
+
+deploy_examples () {
+    dune exec src/deploy-examples/main.exe "$@"
 }
 
 deploy_website () {
     build_all
     dst="$1"
     mkdir -p "$dst"
-    cp _build/default/src/client/index.html "$dst/"
-    cp _build/default/src/client/main.bc.js "$dst/"
-    cp _build/default/src/client/loading.gif "$dst/"
+    cp _build/website/* "$dst/"
     chmod a+w "$dst/"*
     git describe --always HEAD > "$dst/VERSION"
     echo "Done → $dst"

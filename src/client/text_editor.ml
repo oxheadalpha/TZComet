@@ -7,19 +7,15 @@ type status = Non_initialized | Initialized
 type t =
   { id: string
   ; language: string
-  ; code: string Var.t
-  ; status: status Var.t
-  ; mutable text_area: Html_types.div RD.elt option }
+  ; code: string Reactive.Bidirectional.t
+  ; status: status Reactive.var
+  ; mutable text_area: Html_types.div Meta_html.t option }
 
 let create ?(language = "mllike") id ~code =
-  { id
-  ; language
-  ; code
-  ; text_area= None
-  ; status= Var.create (Fmt.str "text-editor-%s-status" id) Non_initialized }
+  {id; language; code; text_area= None; status= Reactive.var Non_initialized}
 
 let ensure te =
-  match Var.value te.status with
+  match Reactive.peek te.status with
   | Initialized -> ()
   | Non_initialized ->
       dbgf "Initializing %S" te.id ;
@@ -74,13 +70,13 @@ lang_script.onload = function () {
 |js}
           code_mirror code_mirror code_mirror te.language te.language te.id
           te.language te.id te.id te.id in
-      Var.set te.status Initialized
+      Reactive.set te.status Initialized
 
 let text_area te =
-  match te.text_area with
-  | Some s -> s
-  | None ->
-      let open RD in
+  match te.text_area with Some s -> s | None -> Fmt.failwith "TODO"
+
+(*
+let open RD in
       let css =
         {css|
 .editorcontainer { height: 50% }
@@ -112,7 +108,7 @@ let text_area te =
                   (txt (Var.value te.code)) ] ] in
       te.text_area <- Some area ;
       area
-
+      
 let editor_command_button te ~text command_name =
   let open RD in
   button [txt text]
@@ -132,8 +128,9 @@ let editor_command_button te ~text command_name =
                   "focus" [||] in
               true) ]
 
+ *)
 let set_code te ~code =
-  Var.set te.code code ;
+  Reactive.Bidirectional.set te.code code ;
   let _ =
     let open Js_of_ocaml in
     Js.Unsafe.meth_call
