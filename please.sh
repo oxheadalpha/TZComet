@@ -77,7 +77,7 @@ ensure_setup () {
          ocamlformat uri merlin ppx_deriving angstrom \
          zarith_stubs_js \
          digestif \
-         js_of_ocaml-compiler js_of_ocaml-tyxml js_of_ocaml-lwt
+         js_of_ocaml-compiler js_of_ocaml-lwt
 }
 
 
