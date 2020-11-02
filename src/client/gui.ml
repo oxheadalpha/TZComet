@@ -36,6 +36,31 @@ module Errors_html = struct
     bt "Error:" %% construct exn
 end
 
+module Block_explorer = struct
+  type vendor = Smartpy | Bcd
+
+  let all_vendors = [Smartpy; Bcd]
+
+  let kt1_url vendor kt1 =
+    match vendor with
+    | Smartpy -> Fmt.str "https://smartpy.io/dev/explorer.html?address=%s" kt1
+    | Bcd -> Fmt.str "https://better-call.dev/search?text=%s" kt1
+
+  let vendor_show_name = function Smartpy -> "SmartPy" | Bcd -> "BCD"
+
+  let kt1_display kt1 =
+    let open Meta_html in
+    let sep () = t ", " in
+    Bootstrap.monospace (bt kt1)
+    %% small
+         (parens
+            (list
+               (oxfordize_list ~map:Fn.id ~sep ~last_sep:sep
+                  (List.map all_vendors ~f:(fun v ->
+                       let target = kt1_url v kt1 in
+                       link ~target (t (vendor_show_name v)))))))
+end
+
 module State = struct
   module Page = struct
     type t = Explorer | Settings | About | Editor
@@ -703,8 +728,8 @@ module Tezos_html = struct
                      ~f:ct)
               ; field "Address"
                   (Option.value_map address ~default:(t "“Same contract”.")
-                     ~f:ct); field "Key in the big-map" (Fmt.kstr ct "%S" key)
-              ]
+                     ~f:Block_explorer.kt1_display)
+              ; field "Key in the big-map" (Fmt.kstr ct "%S" key) ]
       | Hash {kind= `Sha256; value; target} ->
           field_head "Hash checked URI"
           % itemize
@@ -1780,7 +1805,7 @@ module Explorer = struct
   let full_input_quick ctxt =
     let open Meta_html in
     function
-    | `KT1 k -> t "Contract" %% ct k
+    | `KT1 k -> t "Contract" %% Block_explorer.kt1_display k
     | `Uri (u, _) -> t "URI" %% ct u
     | `Error (m, _) -> t "Erroneous input:" %% Fmt.kstr ct "%S" m
 
