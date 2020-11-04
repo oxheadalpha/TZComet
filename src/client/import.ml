@@ -214,13 +214,6 @@ module Ezjsonm = struct
   module Stack_reimplementation = struct
     exception Escape of ((int * int) * (int * int)) * Jsonm.error
 
-    module List = struct
-      include List
-
-      (* Tail-recursive List.map *)
-      let map f l = rev (rev_map f l)
-    end
-
     let json_of_src src =
       let d = Jsonm.decoder src in
       let dec () =
@@ -251,8 +244,12 @@ module Ezjsonm = struct
           | #Ezjsonm.value as v -> pp_value ppf v) in
       let stack = ref [] in
       let fail_stack fmt =
-        Fmt.kstr (fun m -> Fmt.failwith "%s [stack: %a]" m pp_stack !stack) fmt
-      in
+        Fmt.kstr
+          (fun m ->
+            let (a, b), (c, d) = Jsonm.decoded_range d in
+            Fmt.failwith "%s [%d,%d - %d,%d stack: %a]" m a b c d pp_stack
+              !stack)
+          fmt in
       let rec go () =
         let stack_value (v : [< Ezjsonm.value]) =
           match !stack with
