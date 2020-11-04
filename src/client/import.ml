@@ -207,3 +207,101 @@ end = struct
   let remove_file ctxt path =
     get ctxt |> Option.iter ~f:(fun sto -> sto##removeItem (Js.string path))
 end
+
+module Ezjsonm = struct
+  include Ezjsonm
+
+  module Stack_reimplementation = struct
+    exception Escape of ((int * int) * (int * int)) * Jsonm.error
+
+    module List = struct
+      include List
+
+      (* Tail-recursive List.map *)
+      let map f l = rev (rev_map f l)
+    end
+
+    let json_of_src src =
+      let d = Jsonm.decoder src in
+      let dec () =
+        match Jsonm.decode d with
+        | `Lexeme l -> l
+        | `Error e -> raise (Escape (Jsonm.decoded_range d, e))
+        | `End | `Await -> assert false in
+      let pp_value ppf v = Fmt.pf ppf "%s" (Ezjsonm.value_to_string v) in
+      let module Stack_type = struct
+        type t =
+          [ `A of Ezjsonm.value List.t
+          | `Bool of bool
+          | `Float of float
+          | `In_array of Ezjsonm.value list
+          | `In_object of string option * (string * Ezjsonm.value) list
+          | `Null
+          | `O of (string * Ezjsonm.value) list
+          | `String of string ]
+      end in
+      let pp_stack =
+        let open Fmt in
+        list ~sep:(any " :: ") (fun ppf -> function
+          | `In_object (m, l) ->
+              pf ppf "(in-obj %a %a)" (Dump.option string) m
+                (list (pair ~sep:(any ":") string pp_value))
+                l
+          | `In_array l -> pf ppf "(in-array %a)" (list pp_value) l
+          | #Ezjsonm.value as v -> pp_value ppf v) in
+      let stack = ref [] in
+      let fail_stack fmt =
+        Fmt.kstr (fun m -> Fmt.failwith "%s [stack: %a]" m pp_stack !stack) fmt
+      in
+      let rec go () =
+        let stack_value (v : [< Ezjsonm.value]) =
+          match !stack with
+          | `In_array l :: more -> stack := `In_array (v :: l) :: more
+          | `In_object (Some n, l) :: more ->
+              stack := `In_object (None, (n, v) :: l) :: more
+          | [] -> stack := [(v :> Stack_type.t)]
+          | other -> fail_stack "wrong stack" in
+        let pop () =
+          match !stack with
+          | _ :: more -> stack := more
+          | [] -> fail_stack "cannot remove element from stack" in
+        ( match dec () with
+        | `Os -> stack := `In_object (None, []) :: !stack
+        | `Oe -> (
+          match !stack with
+          | `In_object (Some n, l) :: more -> fail_stack "name not none"
+          | `In_object (None, l) :: more ->
+              pop () ;
+              stack_value (`O (List.rev l))
+          | other ->
+              fail_stack "wrong stack, expecting in-object to close object" )
+        | `As -> stack := `In_array [] :: !stack
+        | `Ae -> (
+          match !stack with
+          | `In_array l :: more ->
+              pop () ;
+              stack_value (`A (List.rev l))
+          | _ -> fail_stack "array end not in array" )
+        | `Name n -> (
+          match !stack with
+          | `In_object (None, l) :: more ->
+              stack := `In_object (Some n, l) :: more
+          | other ->
+              fail_stack "wrong stack, expecting in-object for field-name" )
+        | (`Bool _ | `Null | `Float _ | `String _) as v -> stack_value v ) ;
+        match !stack with
+        | `In_array _ :: _ | `In_object _ :: _ -> go ()
+        | [(#Ezjsonm.value as one)] -> one
+        | [] -> fail_stack "stack is empty"
+        | _ :: _ :: _ -> go () in
+      try `JSON (go ()) with Escape (r, e) -> `Error (r, e)
+  end
+
+  let value_from_string s =
+    match Stack_reimplementation.json_of_src (`String s) with
+    | `JSON j -> j
+    | `Error (((a, b), (c, d)), err) ->
+        Fmt.failwith "JSON Parising error: (%d, %d):(%d, %d): %a" a b c d
+          Jsonm.pp_error err
+    | exception e -> Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
+end

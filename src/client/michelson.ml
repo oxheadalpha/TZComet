@@ -8,10 +8,12 @@ let micheline_of_ezjsonm json =
   Micheline.root mich
 
 let micheline_of_json s =
+  dbgf "micheline_of_json : %d bytes" (String.length s) ;
   let json =
     match Ezjsonm.value_from_string s with
     | `O (("code", code) :: _) -> code
     | other -> other in
+  dbgf "micheline_of_json: done parsing" ;
   micheline_of_ezjsonm json
 
 let micheline_to_ezjsonm mich =
