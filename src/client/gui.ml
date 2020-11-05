@@ -1354,7 +1354,7 @@ module Editor = struct
 
   let show_metadata ctxt inpo =
     let open Tezos_contract_metadata.Metadata_contents in
-    match of_json inpo with
+    match Contract_metadata.Content.of_json inpo with
     | Ok m ->
         let errs, warns =
           Validation.validate m ~protocol_hash_is_valid:(fun s ->
@@ -1871,7 +1871,7 @@ module Explorer = struct
             >>= fun json_code ->
             let open Tezos_contract_metadata.Metadata_contents in
             dbgf "before of-json" ;
-            match of_json json_code with
+            match Contract_metadata.Content.of_json json_code with
             | Ok metadata ->
                 Async_work.ok result
                   (uri_and_metadata_result ctxt ~full_input ~uri ~metadata) ;

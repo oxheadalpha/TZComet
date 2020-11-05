@@ -105,6 +105,15 @@ module Uri = struct
                 (Digestif.pp Digestif.sha256)
                 expected ) in
     resolve uri
-
 end
 
+module Content = struct
+  let of_json s =
+    try
+      let jsonm = Ezjsonm.value_from_string s in
+      let contents =
+        Json_encoding.destruct
+          Tezos_contract_metadata.Metadata_contents.encoding jsonm in
+      Ok contents
+    with e -> Tezos_error_monad.Error_monad.error_exn e
+end
