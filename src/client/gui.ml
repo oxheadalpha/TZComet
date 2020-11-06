@@ -16,7 +16,9 @@ end
 module Errors_html = struct
   open Meta_html
 
-  let exception_html ctxt exn =
+  type handler = exn -> (Html_types.li_content Meta_html.t * exn list) option
+
+  let exception_html ?(handlers : handler list = []) ctxt exn =
     let rec construct = function
       | Decorate_error.E {message; trace} ->
           let trace_part =
@@ -32,7 +34,11 @@ module Errors_html = struct
                   (fun () -> itemize (List.map more ~f:construct)) in
           Message_html.render ctxt message % trace_part
       | Failure s -> t "Failure:" %% t s
-      | e -> t "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e) in
+      | e -> (
+        match List.find_map handlers ~f:(fun f -> f e) with
+        | Some (m, []) -> m
+        | Some (m, more) -> m % itemize (List.map more ~f:construct)
+        | None -> t "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e) ) in
     bt "Error:" %% construct exn
 end
 
@@ -618,30 +624,58 @@ module Tezos_html = struct
     t "Failed to parse URI:" %% ct err.input % t ":"
     % itemize [details; exploded_uri]
 
-  let is_json_jencoding =
+  let json_encoding_error : Errors_html.handler =
+    let open Meta_html in
     let open Json_encoding in
+    let quote s = Fmt.kstr ct "%S" s in
+    let rec go = function
+      | Cannot_destruct ([], e) -> go e
+      | Cannot_destruct (path, e) ->
+          let p =
+            Fmt.kstr ct "%a"
+              (Json_query.print_path_as_json_path ~wildcards:true)
+              path in
+          t "At path" %% p % t ":" %% go e
+      | Unexpected (u, e) ->
+          let article s =
+            (* 90% heuristic :) *)
+            match s.[0] with
+            | 'a' | 'e' | 'i' | 'o' -> t "an"
+            | _ -> t "a"
+            | exception _ -> t "something" in
+          let with_article s = article s %% it s in
+          t "Expecting" %% with_article e %% t "but got" %% with_article u
+      | No_case_matched l ->
+          t "No case matched expectations:" %% itemize (List.map ~f:go l)
+      | Bad_array_size (u, e) ->
+          Fmt.kstr t "Expecting array of size %d but got %d" e u
+      | Missing_field field -> t "Missing field" %% quote field
+      | Unexpected_field field -> t "Unexpected field" %% quote field
+      | Bad_schema e -> t "Bad schema:" %% go e
+      | e -> raise e in
+    fun e -> match go e with m -> Some (m % t ".", []) | exception _ -> None
+
+  let simple_exns_handler : Errors_html.handler =
+    let open Meta_html in
+    let some m = Some (m, []) in
     function
-    | Cannot_destruct _ | Unexpected _ | No_case_matched _ | Bad_array_size _
-     |Missing_field _ | Unexpected_field _ | Bad_schema _ ->
-        true
-    | _ -> false
+    | Ezjsonm.Parse_error (json_value, msg) ->
+        some
+          ( Fmt.kstr t "JSON Parsing Error: %s, JSON:" msg
+          % pre (code (t (Ezjsonm.value_to_string ~minify:false json_value))) )
+    | Data_encoding.Binary.Read_error e ->
+        some
+          (Fmt.kstr t "Binary parsing error: %a."
+             Data_encoding.Binary.pp_read_error e)
+    | _ -> None
 
   let single_error ctxt =
     let open Meta_html in
     let open Tezos_error_monad.Error_monad in
     function
-    | Exn (Ezjsonm.Parse_error (json_value, msg)) ->
-        Fmt.kstr t "JSON Parsing Error: %s, JSON:" msg
-        % pre (code (t (Ezjsonm.value_to_string ~minify:false json_value)))
-    | Exn (Failure text) -> Fmt.kstr t "Failure: %a" Fmt.text text
-    | Exn (Data_encoding.Binary.Read_error e) ->
-        Fmt.kstr t "DataEncoding-Readerror: %a"
-          Data_encoding.Binary.pp_read_error e
-    | Exn json_enc when is_json_jencoding json_enc ->
-        Fmt.kstr t "JSON-Encoding: %a"
-          (Json_encoding.print_error ~print_unknown:Exn.pp)
-          json_enc
-    | Exn other_exn -> Errors_html.exception_html ctxt other_exn
+    | Exn other_exn ->
+        Errors_html.exception_html ctxt other_exn
+          ~handlers:[json_encoding_error; simple_exns_handler]
     | Tezos_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
         parsing_error ->
         uri_parsing_error parsing_error
