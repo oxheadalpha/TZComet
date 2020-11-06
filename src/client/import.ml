@@ -90,11 +90,14 @@ module Message = struct
     | List of t list
 
   let t s = Text s
+  let int f i : t = f (Int.to_string_hum ~delimiter:'_' i)
+  let kpp f pp x : t = Fmt.kstr f "%a" pp x
   let ct s = Inline_code s
   let code_block s = Code_block s
   let list l = List l
   let ( % ) a b = List [a; b]
   let ( %% ) a b = List [a; t " "; b]
+  let parens tt = list [t "("; tt; t ")"]
 end
 
 module Decorate_error = struct
@@ -297,8 +300,80 @@ module Ezjsonm = struct
   let value_from_string s =
     match Stack_reimplementation.json_of_src (`String s) with
     | `JSON j -> j
-    | `Error (((a, b), (c, d)), err) ->
-        Fmt.failwith "JSON Parising error: (%d, %d):(%d, %d): %a" a b c d
-          Jsonm.pp_error err
+    | `Error (((line, col), (eline, ecol)), err) ->
+        dbgf "Error l-%d c-%d -- l-%d c-%d" line col eline ecol ;
+        Decorate_error.raise
+          Message.(
+            (* Adapted from
+               https://github.com/dbuenzli/jsonm/blob/master/src/jsonm.ml *)
+            let control_char u = Fmt.kstr ct "U+%04X" u in
+            let uchar u =
+              let module Uchar = Caml.Uchar in
+              if Uchar.to_int u <= 0x1F (* most control chars *) then
+                control_char (Uchar.to_int u)
+              else
+                let b = Buffer.create 4 in
+                Uutf.Buffer.add_utf_8 b u ;
+                Fmt.kstr t "“%s” (=" (Buffer.contents b)
+                %% control_char (Uchar.to_int u)
+                % t ")" in
+            let err_message =
+              let pp = Fmt.kstr in
+              let ppf = t in
+              match err with
+              | `Illegal_BOM ->
+                  pp ppf
+                    "Illegal initial Byte-Order-Mark (BOM) in character stream."
+              | `Illegal_escape r -> (
+                  pp ppf "Illegal escape:"
+                  %%
+                  match r with
+                  | `Not_hex_uchar u -> uchar u %% t "is not a hex-digit"
+                  | `Not_esc_uchar u ->
+                      uchar u %% t "is not an escape character"
+                  | `Lone_lo_surrogate p ->
+                      control_char p %% t "lone low surrogate"
+                  | `Lone_hi_surrogate p ->
+                      control_char p %% t "lone high surrogate"
+                  | `Not_lo_surrogate p ->
+                      control_char p %% t "not a low surrogate" )
+              | `Illegal_string_uchar u ->
+                  t "Illegal character in JSON string:" %% uchar u
+              | `Illegal_bytes bs ->
+                  let l = String.length bs in
+                  let (`Hex hx) = Hex.of_string bs in
+                  t "Illegal bytes in character stream ("
+                  % Fmt.kstr ct "0x%s" hx % t ", length:" %% int ct l % t ")"
+              | `Illegal_number n -> t "Illegal number:" %% ct n
+              | `Illegal_literal l -> t "Illegal literal:" %% ct l
+              | `Unclosed r -> (
+                  t "Unclosed"
+                  %%
+                  match r with
+                  | `As -> t "array"
+                  | `Os -> t "object"
+                  | `String -> t "string"
+                  | `Comment -> t "comment" )
+              | `Expected r -> (
+                  let value_sep = t "value separator" %% parens (ct ",") in
+                  let tor = t "or" in
+                  let array_end = t "end of array" %% parens (ct "]") in
+                  let object_end = t "end of object" %% parens (ct "}") in
+                  let field_name = t "field name" %% parens (ct "\"…\"") in
+                  t "Expected "
+                  %%
+                  match r with
+                  | `Comment -> t "JavaScript comment"
+                  | `Value -> t "JSON value"
+                  | `Name -> field_name
+                  | `Name_sep -> t "field-name separator" %% parens (ct ":")
+                  | `Aval true -> t "JSON-value" %% tor %% array_end
+                  | `Aval false -> value_sep %% tor %% array_end
+                  | `Omem true -> field_name %% tor %% object_end
+                  | `Omem false -> value_sep %% tor %% object_end
+                  | `Json -> t "JSON value"
+                  | `Eoi -> t "end of input" ) in
+            t "JSON Parsing: at line" %% int ct line %% t ", column"
+            %% int ct col % t ":" %% err_message % t ".")
     | exception e -> Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
 end
