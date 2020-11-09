@@ -1441,8 +1441,15 @@ module Editor = struct
 
   let show_hex ctxt bytes_code =
     let with_zero_x, with_zero_five, bytes = explode_hex bytes_code in
+    let bytes_summary =
+      match String.length bytes with
+      | m when m < 20 -> bytes
+      | m ->
+          Fmt.str "%s…%s"
+            (String.sub bytes ~pos:0 ~len:8)
+            (String.sub bytes ~pos:(m - 8) ~len:8) in
     let header, result, valid_pack =
-      match Michelson_bytes.parse_bytes bytes with
+      match Michelson_bytes.parse_hex_bytes bytes with
       | Ok (json, concrete) ->
           let header =
             big_answer `Ok (t "This hexa-blob was successfully parsed 🏆")
@@ -1455,15 +1462,9 @@ module Editor = struct
           (header, result, true)
       | Error el ->
           ( big_answer `Error (t "There were parsing/validation errors:")
-          , Tezos_html.error_trace ctxt el
+          , Bootstrap.p_lead (t "Failed to parse" %% ct bytes_summary % t ":")
+            %% Tezos_html.error_trace ctxt el
           , false ) in
-    let bytes_summary =
-      match String.length bytes with
-      | m when m < 20 -> bytes
-      | m ->
-          Fmt.str "%s…%s"
-            (String.sub bytes ~pos:0 ~len:8)
-            (String.sub bytes ~pos:(m - 8) ~len:8) in
     let items =
       let opt_if c v = if c then Some v else None in
       List.filter_opt
