@@ -113,7 +113,8 @@ module State = struct
     ; explorer_went: bool Reactive.var
     ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Async_work.t
     ; editor_content: string Reactive.var
-    ; editor_mode: Editor_mode.t Reactive.var }
+    ; editor_mode: Editor_mode.t Reactive.var
+    ; check_micheline_indentation: bool Reactive.var }
 
   let get (state : < gui: t ; .. > Context.t) = state#gui
 
@@ -125,7 +126,7 @@ module State = struct
       Fmt.str "/%s" (Page.to_string page |> String.lowercase)
 
     let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go
-        ~editor_mode =
+        ~editor_mode ~check_micheline_indentation =
       let query =
         match explorer_input with
         | "" -> []
@@ -136,6 +137,9 @@ module State = struct
         | more -> ("editor-input", [more]) :: query in
       let query = if not dev_mode then query else ("dev", ["true"]) :: query in
       let query = if not explorer_go then query else ("go", ["true"]) :: query in
+      let query =
+        if not check_micheline_indentation then query
+        else ("check-micheline-indentation", ["true"]) :: query in
       let query =
         match editor_mode with
         | `Guess -> query
@@ -158,6 +162,7 @@ module State = struct
       let true_in_query q =
         match in_query q with Some ["true"] -> true | _ -> false in
       let dev_mode = true_in_query "dev" in
+      let mich_indent = true_in_query "check-micheline-indentation" in
       let explorer_input =
         match in_query "explorer-input" with Some [one] -> one | _ -> "" in
       let editor_input =
@@ -182,7 +187,8 @@ module State = struct
             Reactive.var Poly.(page <> Page.Explorer)
         ; explorer_result= Async_work.empty ()
         ; editor_content= Reactive.var editor_input
-        ; editor_mode= Reactive.var editor_mode } )
+        ; editor_mode= Reactive.var editor_mode
+        ; check_micheline_indentation= Reactive.var mich_indent } )
   end
 
   (* in
@@ -215,6 +221,9 @@ module State = struct
   let editor_mode ctxt = Reactive.get (get ctxt).editor_mode
   let set_editor_mode ctxt = Reactive.set (get ctxt).editor_mode
 
+  let check_micheline_indentation ctxt =
+    Reactive.peek (get ctxt).check_micheline_indentation
+
   let make_fragment ?(side_effects = true) ctxt =
     (* WARNING: for now it is important for this to be attached "somewhere"
        in the DOM.
@@ -232,13 +241,16 @@ module State = struct
     let explorer_go = Reactive.get state.explorer_go in
     Reactive.(
       dev ** page ** explorer_input ** explorer_go ** editor_input
-      ** get state.editor_mode)
+      ** get state.editor_mode
+      ** get state.check_micheline_indentation)
     |> Reactive.map
          ~f:(fun
               ( dev_mode
               , ( page
-                , (explorer_input, (explorer_go, (editor_input, editor_mode)))
-                ) )
+                , ( explorer_input
+                  , ( explorer_go
+                    , (editor_input, (editor_mode, check_micheline_indentation))
+                    ) ) ) )
             ->
            let now =
              Fragment.(
@@ -246,7 +258,7 @@ module State = struct
                  if String.length editor_input < 40 then editor_input else ""
                in
                make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input
-                 ~editor_mode) in
+                 ~editor_mode ~check_micheline_indentation) in
            if side_effects then (
              let current = Js_of_ocaml.Url.Current.get_fragment () in
              dbgf "Updating fragment %S → %a" current Fragment.pp now ;
@@ -834,7 +846,9 @@ module Tezos_html = struct
       | Pair {left; right} -> Fmt.str "(Pair %s %s)" (peek left) (peek right)
 
     let validate_micheline m =
-      match Michelson.parse_micheline m with Ok _ -> true | Error _ -> false
+      match Michelson.parse_micheline ~check_indentation:false m with
+      | Ok _ -> true
+      | Error _ -> false
 
     let rec is_valid = function
       | Leaf {t= Nat | Mutez; v; _} ->
@@ -988,8 +1002,12 @@ module Tezos_html = struct
                     let parameter =
                       let open Michelson in
                       match parameter_input with
-                      | Some mf -> Michelson_form.peek mf |> parse_micheline_exn
-                      | None -> parse_micheline_exn "Unit" in
+                      | Some mf ->
+                          Michelson_form.peek mf
+                          |> parse_micheline_exn ~check_indentation:false
+                      | None ->
+                          parse_micheline_exn ~check_indentation:false "Unit"
+                    in
                     Query_nodes.call_off_chain_view ctxt ~log
                       ~address:(Reactive.peek address) ~view ~parameter
                     >>= function
@@ -1482,7 +1500,11 @@ module Editor = struct
 
   let process_micheline ctxt inp =
     try
-      match Michelson.parse_micheline inp with
+      match
+        Michelson.parse_micheline
+          ~check_indentation:(State.check_micheline_indentation ctxt)
+          inp
+      with
       | Ok o ->
           let concrete = Michelson.micheline_node_to_string o in
           let json = Michelson.micheline_to_ezjsonm o in

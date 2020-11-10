@@ -22,16 +22,16 @@ let micheline_to_ezjsonm mich =
   let json = Data_encoding.Json.construct enc (Micheline.strip_locations mich) in
   json
 
-let parse_micheline m =
+let parse_micheline ~check_indentation m =
   match Micheline_parser.tokenize m with
   | tokens, [] -> (
-    match Micheline_parser.parse_expression tokens with
+    match Micheline_parser.parse_expression ~check:check_indentation tokens with
     | node, [] -> Ok node
     | _, errs -> Error errs )
   | _, errs -> Error errs
 
-let parse_micheline_exn m =
-  match parse_micheline m with
+let parse_micheline_exn ~check_indentation m =
+  match parse_micheline ~check_indentation m with
   | Ok o -> o
   | Error e ->
       Fmt.failwith "parse_micheline: %a"
