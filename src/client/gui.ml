@@ -224,6 +224,9 @@ module State = struct
   let check_micheline_indentation ctxt =
     Reactive.peek (get ctxt).check_micheline_indentation
 
+  let check_micheline_indentation_bidirectional ctxt =
+    Reactive.Bidirectional.of_var (get ctxt).check_micheline_indentation
+
   let make_fragment ?(side_effects = true) ctxt =
     (* WARNING: for now it is important for this to be attached "somewhere"
        in the DOM.
@@ -564,6 +567,14 @@ module Settings_page = struct
                 (t
                    "Shows things that regular users should not see and \
                     artificially slows down the application.")
+          ; check_box
+              (State.check_micheline_indentation_bidirectional ctxt)
+              ~label:(t "Check Micheline Indentation")
+              ~help:
+                ( t
+                    "Make the Micheline parser (in the Editor) also check \
+                     for proper indentation like"
+                %% ct "tezos-client" %% t "does." )
           ; input
               ~placeholder:(Reactive.pure "Number of seconds (with decimals).")
               ~help:
