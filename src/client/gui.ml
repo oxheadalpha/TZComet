@@ -16,7 +16,9 @@ end
 module Errors_html = struct
   open Meta_html
 
-  let exception_html ctxt exn =
+  type handler = exn -> (Html_types.li_content Meta_html.t * exn list) option
+
+  let exception_html ?(handlers : handler list = []) ctxt exn =
     let rec construct = function
       | Decorate_error.E {message; trace} ->
           let trace_part =
@@ -32,7 +34,11 @@ module Errors_html = struct
                   (fun () -> itemize (List.map more ~f:construct)) in
           Message_html.render ctxt message % trace_part
       | Failure s -> t "Failure:" %% t s
-      | e -> t "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e) in
+      | e -> (
+        match List.find_map handlers ~f:(fun f -> f e) with
+        | Some (m, []) -> m
+        | Some (m, more) -> m % itemize (List.map more ~f:construct)
+        | None -> t "Exception:" % pre (Fmt.kstr ct "%a" Exn.pp e) ) in
     bt "Error:" %% construct exn
 end
 
@@ -107,7 +113,8 @@ module State = struct
     ; explorer_went: bool Reactive.var
     ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Async_work.t
     ; editor_content: string Reactive.var
-    ; editor_mode: Editor_mode.t Reactive.var }
+    ; editor_mode: Editor_mode.t Reactive.var
+    ; check_micheline_indentation: bool Reactive.var }
 
   let get (state : < gui: t ; .. > Context.t) = state#gui
 
@@ -119,7 +126,7 @@ module State = struct
       Fmt.str "/%s" (Page.to_string page |> String.lowercase)
 
     let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go
-        ~editor_mode =
+        ~editor_mode ~check_micheline_indentation =
       let query =
         match explorer_input with
         | "" -> []
@@ -130,6 +137,9 @@ module State = struct
         | more -> ("editor-input", [more]) :: query in
       let query = if not dev_mode then query else ("dev", ["true"]) :: query in
       let query = if not explorer_go then query else ("go", ["true"]) :: query in
+      let query =
+        if not check_micheline_indentation then query
+        else ("check-micheline-indentation", ["true"]) :: query in
       let query =
         match editor_mode with
         | `Guess -> query
@@ -152,6 +162,7 @@ module State = struct
       let true_in_query q =
         match in_query q with Some ["true"] -> true | _ -> false in
       let dev_mode = true_in_query "dev" in
+      let mich_indent = true_in_query "check-micheline-indentation" in
       let explorer_input =
         match in_query "explorer-input" with Some [one] -> one | _ -> "" in
       let editor_input =
@@ -176,7 +187,8 @@ module State = struct
             Reactive.var Poly.(page <> Page.Explorer)
         ; explorer_result= Async_work.empty ()
         ; editor_content= Reactive.var editor_input
-        ; editor_mode= Reactive.var editor_mode } )
+        ; editor_mode= Reactive.var editor_mode
+        ; check_micheline_indentation= Reactive.var mich_indent } )
   end
 
   (* in
@@ -209,6 +221,12 @@ module State = struct
   let editor_mode ctxt = Reactive.get (get ctxt).editor_mode
   let set_editor_mode ctxt = Reactive.set (get ctxt).editor_mode
 
+  let check_micheline_indentation ctxt =
+    Reactive.peek (get ctxt).check_micheline_indentation
+
+  let check_micheline_indentation_bidirectional ctxt =
+    Reactive.Bidirectional.of_var (get ctxt).check_micheline_indentation
+
   let make_fragment ?(side_effects = true) ctxt =
     (* WARNING: for now it is important for this to be attached "somewhere"
        in the DOM.
@@ -226,13 +244,16 @@ module State = struct
     let explorer_go = Reactive.get state.explorer_go in
     Reactive.(
       dev ** page ** explorer_input ** explorer_go ** editor_input
-      ** get state.editor_mode)
+      ** get state.editor_mode
+      ** get state.check_micheline_indentation)
     |> Reactive.map
          ~f:(fun
               ( dev_mode
               , ( page
-                , (explorer_input, (explorer_go, (editor_input, editor_mode)))
-                ) )
+                , ( explorer_input
+                  , ( explorer_go
+                    , (editor_input, (editor_mode, check_micheline_indentation))
+                    ) ) ) )
             ->
            let now =
              Fragment.(
@@ -240,7 +261,7 @@ module State = struct
                  if String.length editor_input < 40 then editor_input else ""
                in
                make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input
-                 ~editor_mode) in
+                 ~editor_mode ~check_micheline_indentation) in
            if side_effects then (
              let current = Js_of_ocaml.Url.Current.get_fragment () in
              dbgf "Updating fragment %S → %a" current Fragment.pp now ;
@@ -546,6 +567,14 @@ module Settings_page = struct
                 (t
                    "Shows things that regular users should not see and \
                     artificially slows down the application.")
+          ; check_box
+              (State.check_micheline_indentation_bidirectional ctxt)
+              ~label:(t "Check Micheline Indentation")
+              ~help:
+                ( t
+                    "Make the Micheline parser (in the Editor) also check \
+                     for proper indentation like"
+                %% ct "tezos-client" %% t "does." )
           ; input
               ~placeholder:(Reactive.pure "Number of seconds (with decimals).")
               ~help:
@@ -618,30 +647,58 @@ module Tezos_html = struct
     t "Failed to parse URI:" %% ct err.input % t ":"
     % itemize [details; exploded_uri]
 
-  let is_json_jencoding =
+  let json_encoding_error : Errors_html.handler =
+    let open Meta_html in
     let open Json_encoding in
+    let quote s = Fmt.kstr ct "%S" s in
+    let rec go = function
+      | Cannot_destruct ([], e) -> go e
+      | Cannot_destruct (path, e) ->
+          let p =
+            Fmt.kstr ct "%a"
+              (Json_query.print_path_as_json_path ~wildcards:true)
+              path in
+          t "At path" %% p % t ":" %% go e
+      | Unexpected (u, e) ->
+          let article s =
+            (* 90% heuristic :) *)
+            match s.[0] with
+            | 'a' | 'e' | 'i' | 'o' -> t "an"
+            | _ -> t "a"
+            | exception _ -> t "something" in
+          let with_article s = article s %% it s in
+          t "Expecting" %% with_article e %% t "but got" %% with_article u
+      | No_case_matched l ->
+          t "No case matched expectations:" %% itemize (List.map ~f:go l)
+      | Bad_array_size (u, e) ->
+          Fmt.kstr t "Expecting array of size %d but got %d" e u
+      | Missing_field field -> t "Missing field" %% quote field
+      | Unexpected_field field -> t "Unexpected field" %% quote field
+      | Bad_schema e -> t "Bad schema:" %% go e
+      | e -> raise e in
+    fun e -> match go e with m -> Some (m % t ".", []) | exception _ -> None
+
+  let simple_exns_handler : Errors_html.handler =
+    let open Meta_html in
+    let some m = Some (m, []) in
     function
-    | Cannot_destruct _ | Unexpected _ | No_case_matched _ | Bad_array_size _
-     |Missing_field _ | Unexpected_field _ | Bad_schema _ ->
-        true
-    | _ -> false
+    | Ezjsonm.Parse_error (json_value, msg) ->
+        some
+          ( Fmt.kstr t "JSON Parsing Error: %s, JSON:" msg
+          % pre (code (t (Ezjsonm.value_to_string ~minify:false json_value))) )
+    | Data_encoding.Binary.Read_error e ->
+        some
+          (Fmt.kstr t "Binary parsing error: %a."
+             Data_encoding.Binary.pp_read_error e)
+    | _ -> None
 
   let single_error ctxt =
     let open Meta_html in
     let open Tezos_error_monad.Error_monad in
     function
-    | Exn (Ezjsonm.Parse_error (json_value, msg)) ->
-        Fmt.kstr t "JSON Parsing Error: %s, JSON:" msg
-        % pre (code (t (Ezjsonm.value_to_string ~minify:false json_value)))
-    | Exn (Failure text) -> Fmt.kstr t "Failure: %a" Fmt.text text
-    | Exn (Data_encoding.Binary.Read_error e) ->
-        Fmt.kstr t "DataEncoding-Readerror: %a"
-          Data_encoding.Binary.pp_read_error e
-    | Exn json_enc when is_json_jencoding json_enc ->
-        Fmt.kstr t "JSON-Encoding: %a"
-          (Json_encoding.print_error ~print_unknown:Exn.pp)
-          json_enc
-    | Exn other_exn -> Errors_html.exception_html ctxt other_exn
+    | Exn other_exn ->
+        Errors_html.exception_html ctxt other_exn
+          ~handlers:[json_encoding_error; simple_exns_handler]
     | Tezos_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
         parsing_error ->
         uri_parsing_error parsing_error
@@ -800,7 +857,9 @@ module Tezos_html = struct
       | Pair {left; right} -> Fmt.str "(Pair %s %s)" (peek left) (peek right)
 
     let validate_micheline m =
-      match Michelson.parse_micheline m with Ok _ -> true | Error _ -> false
+      match Michelson.parse_micheline ~check_indentation:false m with
+      | Ok _ -> true
+      | Error _ -> false
 
     let rec is_valid = function
       | Leaf {t= Nat | Mutez; v; _} ->
@@ -954,8 +1013,12 @@ module Tezos_html = struct
                     let parameter =
                       let open Michelson in
                       match parameter_input with
-                      | Some mf -> Michelson_form.peek mf |> parse_micheline_exn
-                      | None -> parse_micheline_exn "Unit" in
+                      | Some mf ->
+                          Michelson_form.peek mf
+                          |> parse_micheline_exn ~check_indentation:false
+                      | None ->
+                          parse_micheline_exn ~check_indentation:false "Unit"
+                    in
                     Query_nodes.call_off_chain_view ctxt ~log
                       ~address:(Reactive.peek address) ~view ~parameter
                     >>= function
@@ -1354,7 +1417,7 @@ module Editor = struct
 
   let show_metadata ctxt inpo =
     let open Tezos_contract_metadata.Metadata_contents in
-    match of_json inpo with
+    match Contract_metadata.Content.of_json inpo with
     | Ok m ->
         let errs, warns =
           Validation.validate m ~protocol_hash_is_valid:(fun s ->
@@ -1407,8 +1470,15 @@ module Editor = struct
 
   let show_hex ctxt bytes_code =
     let with_zero_x, with_zero_five, bytes = explode_hex bytes_code in
+    let bytes_summary =
+      match String.length bytes with
+      | m when m < 20 -> bytes
+      | m ->
+          Fmt.str "%s…%s"
+            (String.sub bytes ~pos:0 ~len:8)
+            (String.sub bytes ~pos:(m - 8) ~len:8) in
     let header, result, valid_pack =
-      match Michelson_bytes.parse_bytes bytes with
+      match Michelson_bytes.parse_hex_bytes bytes with
       | Ok (json, concrete) ->
           let header =
             big_answer `Ok (t "This hexa-blob was successfully parsed 🏆")
@@ -1421,15 +1491,9 @@ module Editor = struct
           (header, result, true)
       | Error el ->
           ( big_answer `Error (t "There were parsing/validation errors:")
-          , Tezos_html.error_trace ctxt el
+          , Bootstrap.p_lead (t "Failed to parse" %% ct bytes_summary % t ":")
+            %% Tezos_html.error_trace ctxt el
           , false ) in
-    let bytes_summary =
-      match String.length bytes with
-      | m when m < 20 -> bytes
-      | m ->
-          Fmt.str "%s…%s"
-            (String.sub bytes ~pos:0 ~len:8)
-            (String.sub bytes ~pos:(m - 8) ~len:8) in
     let items =
       let opt_if c v = if c then Some v else None in
       List.filter_opt
@@ -1447,7 +1511,11 @@ module Editor = struct
 
   let process_micheline ctxt inp =
     try
-      match Michelson.parse_micheline inp with
+      match
+        Michelson.parse_micheline
+          ~check_indentation:(State.check_micheline_indentation ctxt)
+          inp
+      with
       | Ok o ->
           let concrete = Michelson.micheline_node_to_string o in
           let json = Michelson.micheline_to_ezjsonm o in
@@ -1871,7 +1939,7 @@ module Explorer = struct
             >>= fun json_code ->
             let open Tezos_contract_metadata.Metadata_contents in
             dbgf "before of-json" ;
-            match of_json json_code with
+            match Contract_metadata.Content.of_json json_code with
             | Ok metadata ->
                 Async_work.ok result
                   (uri_and_metadata_result ctxt ~full_input ~uri ~metadata) ;
