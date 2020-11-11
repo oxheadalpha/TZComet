@@ -340,6 +340,10 @@ module State = struct
                "Just a version string." ;
              kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
                "Has a URI that points nowhere." ;
+             kt1_dev "KT19JZXi6RJt3TPbmJYKTUsE4jhAec4Fe4Ra"
+               "Has a URI that is invalid." ;
+             kt1_dev "KT1Eh2q5W5r4FTkJA8k5Kv6TgGYgapVrfnQX"
+               "Points to invalid metdaata." ;
              kt1 kt1_one_view "Has one off-chain-view." ;
              kt1_dev "KT1Ffua85vzkCyuHnYTr8iXAypMryh2fjaF5"
                "Event more weird off-chain-views." ;
@@ -572,8 +576,8 @@ module Settings_page = struct
               ~label:(t "Check Micheline Indentation")
               ~help:
                 ( t
-                    "Make the Micheline parser (in the Editor) also check \
-                     for proper indentation like"
+                    "Make the Micheline parser (in the Editor) also check for \
+                     proper indentation like"
                 %% ct "tezos-client" %% t "does." )
           ; input
               ~placeholder:(Reactive.pure "Number of seconds (with decimals).")
