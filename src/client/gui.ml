@@ -1900,13 +1900,14 @@ module Explorer = struct
     (* Tezos_contract_metadata.Metadata_uri.pp uri *)
     % h4 (t "Metadata Location")
     % Tezos_html.metadata_uri ctxt uri
+    % h4 (t "Wrong Metadata Content")
     %% pre (ct metadata_json)
     %% Tezos_html.error_trace ctxt error
 
   let uri_there_but_wrong ctxt ~full_input ~uri_string ~error =
     let open Meta_html in
     full_input_bloc ctxt full_input
-    % Fmt.kstr ct "Failed to parse URI: %S" uri_string
+    % h4 (t "Invalid URI")
     %% Tezos_html.error_trace ctxt error
 
   let uri_failed_to_fetch ctxt ~uri ~error ~full_input =
@@ -1914,6 +1915,7 @@ module Explorer = struct
     full_input_bloc ctxt full_input
     % h4 (t "Metadata Location")
     % Tezos_html.metadata_uri ctxt uri
+    % h4 (t "Failed To Resolve URI")
     % Errors_html.exception_html ctxt error
 
   let go_action ctxt =
