@@ -8,7 +8,7 @@ jobs:
       matrix:
         operating-system: [ubuntu-latest]
         # operating-system: [macos-latest, ubuntu-latest, windows-latest]
-        ocaml-version: [ '4.09.1', '4.10.1', '4.11.1' ]
+        ocaml-version: [ '4.09.1' ] # for now , '4.10.1', '4.11.1' ]
     steps:
     - uses: actions/checkout@v2
     - name: Cache
@@ -25,3 +25,10 @@ jobs:
     - run: ./please.sh ensure vendors
     - run: global_switch=true ./please.sh  ensure setup
     - run: ./please.sh build all
+    - run: ./please.sh deploy website deploy/
+    - name: Archive deployed TZComet
+      uses: actions/upload-artifact@v2
+      with:
+        name: deployed-website
+        path: deploy/
+
