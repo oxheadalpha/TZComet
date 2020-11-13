@@ -331,21 +331,19 @@ module State = struct
              let mtb, mtb_dev, mtb_all = aggl () in
              let mby, mby_dev, mby_all = aggl () in
              let tzc, tzc_dev, tzc_all = aggl () in
-             let kt1_one_view = "KT1R5cYuidmPgDU79WJ5yFV9uNyxvQaZooyL" in
-             kt1 "KT1JshTANmZsQvQ45YGGaHfrUNiXZ1NsXe28"
-               "Contract with minimal metadata on Carthagenet." ;
+             let kt1_one_view = "KT1GPDQvmV37orH1XH3SZmVVKFaMuzzqsmN7" in
              kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
                "Should not exist any where." ;
-             kt1_dev "KT1Su4bveK3P3PFonoCzPgefQriwBtN1KAgJ"
-               "Just a version string." ;
-             kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
+             kt1 "KT1TLvewkn73Hb1YTDyX6pE6oD8qVKGTZax3"
+               "Just a version string as metadata." ;
+             kt1_dev "KT1UYx6muzchTo6CGMcHwDowCQJMNoUPPBLp"
                "Has a URI that points nowhere." ;
-             kt1_dev "KT19JZXi6RJt3TPbmJYKTUsE4jhAec4Fe4Ra"
+             kt1_dev "KT1Peb7x8DfBMnHyyzdSDgpSyAvaZXLuTz5g"
                "Has a URI that is invalid." ;
-             kt1_dev "KT1Eh2q5W5r4FTkJA8k5Kv6TgGYgapVrfnQX"
+             kt1_dev "KT1Dkn2fHtjtfLJ6SeTRQ7BujKEPk1pGjBAE"
                "Points to invalid metdaata." ;
              kt1 kt1_one_view "Has one off-chain-view." ;
-             kt1_dev "KT1Ffua85vzkCyuHnYTr8iXAypMryh2fjaF5"
+             kt1_dev "KT1RyihALYEsVCcKP7Ya6teCHs9ii5ZHQxvj"
                "Event more weird off-chain-views." ;
              uri https_ok "A valid HTTPS URI." ;
              uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
@@ -1580,7 +1578,7 @@ module Editor = struct
       else None in
     let sizing =
       Bootstrap.Table.simple
-        ~header_row:[empty (); t "Size"; t "Carthage Burn"; t "Delphi Burn"]
+        ~header_row:[empty (); t "Size"; t "Delphi Burn"]
         (let row l = H5.tr (List.map ~f:td l) in
          let sizes =
            let lif c k v = try if c then [(k, v ())] else [] with _ -> [] in
@@ -1610,7 +1608,6 @@ module Editor = struct
              prev
              % row
                  [ t label; Fmt.kstr t "%a B" ppbig bytes
-                 ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 1000)
                  ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 250) ])) in
     let hashes =
       let _item k bytes =
