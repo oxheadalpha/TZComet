@@ -194,8 +194,9 @@ let add_node ?dev ctxt nod =
 
 let default_nodes =
   List.rev
-    [ Node.create "Carthagenet-GigaNode" "https://testnet-tezos.giganode.io"
+    [ Node.create "Delphinet-GigaNode" "https://delphinet-tezos.giganode.io"
     ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
+    ; Node.create "Current-Testnet-GigaNode" "https://testnet-tezos.giganode.io"
     ; Node.create "Dalphanet-GigaNode" "https://dalphanet-tezos.giganode.io"
     ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
     ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
