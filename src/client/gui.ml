@@ -1580,7 +1580,7 @@ module Editor = struct
       else None in
     let sizing =
       Bootstrap.Table.simple
-        ~header_row:[empty (); t "Size"; t "Carthage Burn"; t "Delphi Burn"]
+        ~header_row:[empty (); t "Size"; t "Delphi Burn"]
         (let row l = H5.tr (List.map ~f:td l) in
          let sizes =
            let lif c k v = try if c then [(k, v ())] else [] with _ -> [] in
@@ -1610,7 +1610,6 @@ module Editor = struct
              prev
              % row
                  [ t label; Fmt.kstr t "%a B" ppbig bytes
-                 ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 1000)
                  ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 250) ])) in
     let hashes =
       let _item k bytes =
