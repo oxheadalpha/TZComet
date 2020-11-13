@@ -340,6 +340,10 @@ module State = struct
                "Just a version string." ;
              kt1_dev "KT1AzpTM7aM5N3hAd9RVd7FVmVN72BWkqKXh"
                "Has a URI that points nowhere." ;
+             kt1_dev "KT19JZXi6RJt3TPbmJYKTUsE4jhAec4Fe4Ra"
+               "Has a URI that is invalid." ;
+             kt1_dev "KT1Eh2q5W5r4FTkJA8k5Kv6TgGYgapVrfnQX"
+               "Points to invalid metdaata." ;
              kt1 kt1_one_view "Has one off-chain-view." ;
              kt1_dev "KT1Ffua85vzkCyuHnYTr8iXAypMryh2fjaF5"
                "Event more weird off-chain-views." ;
@@ -572,8 +576,8 @@ module Settings_page = struct
               ~label:(t "Check Micheline Indentation")
               ~help:
                 ( t
-                    "Make the Micheline parser (in the Editor) also check \
-                     for proper indentation like"
+                    "Make the Micheline parser (in the Editor) also check for \
+                     proper indentation like"
                 %% ct "tezos-client" %% t "does." )
           ; input
               ~placeholder:(Reactive.pure "Number of seconds (with decimals).")
@@ -1896,13 +1900,14 @@ module Explorer = struct
     (* Tezos_contract_metadata.Metadata_uri.pp uri *)
     % h4 (t "Metadata Location")
     % Tezos_html.metadata_uri ctxt uri
+    % h4 (t "Wrong Metadata Content")
     %% pre (ct metadata_json)
     %% Tezos_html.error_trace ctxt error
 
   let uri_there_but_wrong ctxt ~full_input ~uri_string ~error =
     let open Meta_html in
     full_input_bloc ctxt full_input
-    % Fmt.kstr ct "Failed to parse URI: %S" uri_string
+    % h4 (t "Invalid URI")
     %% Tezos_html.error_trace ctxt error
 
   let uri_failed_to_fetch ctxt ~uri ~error ~full_input =
@@ -1910,6 +1915,7 @@ module Explorer = struct
     full_input_bloc ctxt full_input
     % h4 (t "Metadata Location")
     % Tezos_html.metadata_uri ctxt uri
+    % h4 (t "Failed To Resolve URI")
     % Errors_html.exception_html ctxt error
 
   let go_action ctxt =

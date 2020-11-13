@@ -260,6 +260,9 @@ let all ?only ~logfile () =
       (basics_and_views
          [ empty_view_01; failwith_01; multiply_the_nat; call_balance
          ; identity_01; view_with_too_much_code; call_self_address ]) ;
+    simple "Has a URI that is invalid." [root "tezos-storage:onekey/with/slash"] ;
+    self_host "Point to invalid metadata."
+      Ezjsonm.(dict [("version", list string ["tzcomet-example v0.0.42"])]) ;
     () in
   many () ; ()
 
