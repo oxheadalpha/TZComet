@@ -24,6 +24,7 @@ jobs:
         ocaml-version: ${{ matrix.ocaml-version }}
     - run: ./please.sh ensure vendors
     - run: global_switch=true ./please.sh  ensure setup
+    - run: ./please.sh ensure linting
     - run: ./please.sh build all
     - run: ./please.sh deploy website deploy/
     - name: Archive deployed TZComet

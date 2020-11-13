@@ -1,4 +1,3 @@
 (executable
-  (name main)
-  (libraries fmt base hex ezjsonm)
-  )
+ (name main)
+ (libraries fmt base hex ezjsonm))

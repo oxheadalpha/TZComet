@@ -115,11 +115,15 @@ deploy_website () {
     echo "Done → $dst"
 }
 
+ensure_linting () {
+    dune build @src/fmt --auto-promote
+}
+
 {
     case "$1" in
         "" | "--help" | "help" | "usage" )
             usage ;;
-        "ensure" | "build" | "deploy" )
+        "ensure" | "build" | "deploy"  )
             cmd="$1_$2"
             shift 2
             "$cmd" "$@" ;;
