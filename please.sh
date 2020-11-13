@@ -91,8 +91,9 @@ eval $(opam env)
 build_all () {
     mkdir -p _build/website/
     dune build --profile release src/client/main.bc.js
-    cp --no-preserve mode _build/default/src/client/main.bc.js _build/website/main-client.js
+    cp _build/default/src/client/main.bc.js _build/website/main-client.js
     cp data/loading.gif _build/website/
+    chmod 600 _build/website/*
     dune exec src/gen-web/main.exe index "TZComet" > _build/website/index.html
     echo "Done: file://$PWD/_build/website/index.html"
     dune build src/deploy-examples/main.exe

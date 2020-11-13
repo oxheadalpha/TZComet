@@ -6,9 +6,9 @@ jobs:
     runs-on: ${{ matrix.operating-system }}
     strategy:
       matrix:
-        operating-system: [ubuntu-latest]
-        # operating-system: [macos-latest, ubuntu-latest, windows-latest]
-        ocaml-version: [ '4.09.1' ] # for now , '4.10.1', '4.11.1' ]
+        #operating-system: [ubuntu-latest]
+        operating-system: [macos-latest, ubuntu-latest] #, windows-latest]
+        ocaml-version: [ '4.09.1' , '4.10.1', '4.11.1' ]
     steps:
     - uses: actions/checkout@v2
     - name: Cache
@@ -17,13 +17,14 @@ jobs:
         # A directory to store and save the cache
         path: ~/.opam
         # An explicit key for restoring and saving the cache
-        key: ${{ matrix.os }}-${{ matrix.ocaml-version }}-${{ hashFiles('*.opam') }}-build
+        key: ${{ matrix.operating-system }}-${{ matrix.ocaml-version }}-${{ hashFiles('please.sh', '**/dune') }}-build
     - name: Set up OCaml ${{ matrix.ocaml-version }}
       uses: avsm/setup-ocaml@v1
       with:
         ocaml-version: ${{ matrix.ocaml-version }}
     - run: ./please.sh ensure vendors
     - run: global_switch=true ./please.sh  ensure setup
+    - run: opam exec -- dune --version
     - run: ./please.sh ensure linting
     - run: ./please.sh build all
     - run: ./please.sh deploy website deploy/
