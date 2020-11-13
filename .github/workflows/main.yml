@@ -1,0 +1,27 @@
+name: build
+on: [push, pull_request]
+jobs:
+  run:
+    name: Build
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: [ubuntu-latest]
+        # operating-system: [macos-latest, ubuntu-latest, windows-latest]
+        ocaml-version: [ '4.09.1', '4.10.1', '4.11.1' ]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Cache
+      uses: actions/cache@v2
+      with:
+        # A directory to store and save the cache
+        path: ~/.opam
+        # An explicit key for restoring and saving the cache
+        key: ${{ matrix.os }}-${{ matrix.ocaml-version }}-${{ hashFiles('*.opam') }}-build
+    - name: Set up OCaml ${{ matrix.ocaml-version }}
+      uses: avsm/setup-ocaml@v1
+      with:
+        ocaml-version: ${{ matrix.ocaml-version }}
+    - run: ./please.sh ensure vendors
+    - run: global_switch=true ./please.sh  ensure setup
+    - run: ./please.sh build all

@@ -67,12 +67,17 @@ ensure_vendors () {
 }
 
 ensure_setup () {
-    if ! [ -d _opam/ ] ; then
-        opam switch create . ocaml-base-compiler.4.09.1
+    if [ "$global_switch" = "true" ] ; then
+        say "Assuming Global Opam Switch is set"
+    else
+        if ! [ -d _opam/ ] ; then
+            opam switch create . ocaml-base-compiler.4.09.1
+        fi
     fi
     eval $(opam env)
     opam install --deps-only \
          local-vendor/tezos/src/lib_contract_metadata/core/tezos-contract-metadata.opam
+    opam pin add -n digestif 0.9.0
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          zarith_stubs_js \
