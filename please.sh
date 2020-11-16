@@ -67,12 +67,17 @@ ensure_vendors () {
 }
 
 ensure_setup () {
-    if ! [ -d _opam/ ] ; then
-        opam switch create . ocaml-base-compiler.4.09.1
+    if [ "$global_switch" = "true" ] ; then
+        say "Assuming Global Opam Switch is set"
+    else
+        if ! [ -d _opam/ ] ; then
+            opam switch create . ocaml-base-compiler.4.09.1
+        fi
     fi
     eval $(opam env)
     opam install --deps-only \
          local-vendor/tezos/src/lib_contract_metadata/core/tezos-contract-metadata.opam
+    opam pin add -n digestif 0.9.0
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          zarith_stubs_js \
@@ -86,8 +91,9 @@ eval $(opam env)
 build_all () {
     mkdir -p _build/website/
     dune build --profile release src/client/main.bc.js
-    cp --no-preserve mode _build/default/src/client/main.bc.js _build/website/main-client.js
+    cp _build/default/src/client/main.bc.js _build/website/main-client.js
     cp data/loading.gif _build/website/
+    chmod 600 _build/website/*
     dune exec src/gen-web/main.exe index "TZComet" > _build/website/index.html
     echo "Done: file://$PWD/_build/website/index.html"
     dune build src/deploy-examples/main.exe
@@ -110,11 +116,15 @@ deploy_website () {
     echo "Done → $dst"
 }
 
+ensure_linting () {
+    dune build @src/fmt --auto-promote
+}
+
 {
     case "$1" in
         "" | "--help" | "help" | "usage" )
             usage ;;
-        "ensure" | "build" | "deploy" )
+        "ensure" | "build" | "deploy"  )
             cmd="$1_$2"
             shift 2
             "$cmd" "$@" ;;

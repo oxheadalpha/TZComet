@@ -1,4 +1,3 @@
 (executable
-  (name main)
-  (libraries fmt base)
-  )
+ (name main)
+ (libraries fmt base))
