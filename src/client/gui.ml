@@ -1610,22 +1610,17 @@ module Editor = struct
                  [ t label; Fmt.kstr t "%a B" ppbig bytes
                  ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 250) ])) in
     let hashes =
-      let _item k bytes =
-        let hash n v = Fmt.kstr it "%s:" n %% ct v in
-        t k
-        % itemize
-            [ hash "Ledger-BLAKE2B-Base58"
-                (Base58.raw_encode (B58_hashes.blake2b bytes))
-            ; hash "SHA256-Hex"
-                (let (`Hex x) =
-                   Hex.of_string (B58_hashes.B58_crypto.sha256 bytes) in
-                 x)
-            ; hash "SHA512-Hex"
-                (let (`Hex x) =
-                   Hex.of_string (B58_hashes.B58_crypto.sha512 bytes) in
-                 x)
-            ; hash "Script-ID-hash (big-map access)"
-                (B58_hashes.b58_script_id_hash bytes) ] in
+      (* let _item k bytes =
+         let hash n v = Fmt.kstr it "%s:" n %% ct v in
+         t k
+         % itemize
+             [ hash "Ledger-BLAKE2B-Base58"
+                 (Base58.raw_encode (B58_hashes.blake2b bytes))
+             ; hash "BLAKE2B-Hex" (hex (B58_hashes.blake2b bytes))
+             ; hash "SHA256-Hex" (hex (B58_hashes.B58_crypto.sha256 bytes))
+             ; hash "SHA512-Hex" (hex (B58_hashes.B58_crypto.sha512 bytes))
+             ; hash "Script-ID-hash (big-map access)"
+                 (B58_hashes.b58_script_id_hash bytes) ] in *)
       let hrow c = H5.(tr [th ~a:[ (* a_colspan (Reactive.pure 2) *) ] [c]]) in
       let row k v = H5.(tr [td [k; br (); v]]) in
       let make_item k bytes hashes =
@@ -1635,29 +1630,29 @@ module Editor = struct
                  let n, v = hash bytes in
                  row (t n) (ct v))) in
       let hash k b = (k, b) in
+      let hex s =
+        let (`Hex x) = Hex.of_string s in
+        x in
       let ldgr bytes =
         hash "Ledger-BLAKE2B-Base58"
           (Base58.raw_encode (B58_hashes.blake2b bytes)) in
+      let blake2b bytes = hash "BLAKE2B-Hex" (hex (B58_hashes.blake2b bytes)) in
       let sha256 bytes =
-        hash "SHA256-Hex"
-          (let (`Hex x) = Hex.of_string (B58_hashes.B58_crypto.sha256 bytes) in
-           x) in
+        hash "SHA256-Hex" (hex (B58_hashes.B58_crypto.sha256 bytes)) in
       let sha512 bytes =
-        hash "SHA512-Hex"
-          (let (`Hex x) = Hex.of_string (B58_hashes.B58_crypto.sha512 bytes) in
-           x) in
+        hash "SHA512-Hex" (hex (B58_hashes.B58_crypto.sha512 bytes)) in
       let expr58 bytes =
         hash "Script-ID-hash (big-map access)"
           (B58_hashes.b58_script_id_hash bytes) in
       let items = ref [] in
       let item k b h = items := make_item k b h :: !items in
-      item "Raw Input" input_bytes [ldgr; sha256; sha512] ;
+      item "Raw Input" input_bytes [ldgr; blake2b; sha256; sha512] ;
       Option.iter binary_from_hex ~f:(fun bin ->
           item "Binary-Michelson-Expression (with watermark)" bin
-            [ldgr; sha256; sha512; expr58]) ;
+            [ldgr; blake2b; sha256; sha512; expr58]) ;
       Option.iter packed_mich ~f:(fun packed ->
           item "Binary-Michelson-Expression (with watermark)" packed
-            [ldgr; sha256; sha512; expr58]) ;
+            [ldgr; blake2b; sha256; sha512; expr58]) ;
       Bootstrap.Table.simple (list (List.rev !items)) in
     Bootstrap.bordered ~kind:`Secondary
       (Bootstrap.container (sizing % div hashes))
