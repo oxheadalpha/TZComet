@@ -1169,8 +1169,23 @@ module Tezos_html = struct
         it l.name
         % Option.value_map ~default:(empty ()) l.details ~f:(fun d ->
               Fmt.kstr t " → %s" d) in
+      let url_elt u = url ct u in
       let authors_elt l =
-        oxfordize_list l ~map:ct
+        let author s =
+          try
+            match String.split (String.strip s) ~on:'<' with
+            | [name; id] -> (
+              match String.lsplit2 id ~on:'>' with
+              | Some (u, "") when String.is_prefix u ~prefix:"http" ->
+                  t name %% parens (url_elt u)
+              | Some (u, "")
+              (* we won't get into email address regexps here, sorry *)
+                when String.mem u '@' ->
+                  t name %% parens (link ~target:("mailto:" ^ u) (ct u))
+              | _ -> failwith "" )
+            | _ -> failwith ""
+          with _ -> ct s in
+        oxfordize_list l ~map:author
           ~sep:(fun () -> t ", ")
           ~last_sep:(fun () -> t ", and ")
         |> list in
@@ -1233,7 +1248,6 @@ module Tezos_html = struct
                   list_field name v.implementations implementations ) ) in
       let views_elt (views : View.t list) =
         itemize (List.map views ~f:(fun v -> view v)) in
-      let url_elt u = url t u in
       let source_elt source =
         let open Source in
         itemize
