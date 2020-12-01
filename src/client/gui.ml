@@ -1201,7 +1201,7 @@ module Tezos_html = struct
         let open View in
         let purity =
           if v.is_pure then Bootstrap.color `Success (t "pure")
-          else Bootstrap.color `Warning (t "inpure") in
+          else Bootstrap.color `Warning (t "impure") in
         let implementations impls =
           let open Implementation in
           itemize
