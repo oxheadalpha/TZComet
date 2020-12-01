@@ -1907,6 +1907,7 @@ module Explorer = struct
     % h4 (t "Metadata Location")
     % Tezos_html.metadata_uri ctxt uri
     % h4 (t "Wrong Metadata Content")
+    %% Tezos_html.open_in_editor ctxt metadata_json
     %% pre (ct metadata_json)
     %% Tezos_html.error_trace ctxt error
 
