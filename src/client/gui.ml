@@ -802,16 +802,15 @@ module Tezos_html = struct
     % div (go uri)
 
   module Michelson_form = struct
-    type type_expression =
-      | Any of string Tezos_micheline.Micheline.canonical
-      | Nat
-      | Mutez
-
+    type type_kind = Any | Nat | Mutez
     type leaf = string Reactive.var
 
     type t =
       | Leaf of
-          {t: type_expression; v: leaf; description: (string * string) option}
+          { raw: string Tezos_micheline.Micheline.canonical
+          ; kind: type_kind
+          ; v: leaf
+          ; description: (string * string) option }
       | Pair of {left: t; right: t}
 
     open Tezos_contract_metadata.Metadata_contents.View.Implementation
@@ -823,22 +822,21 @@ module Tezos_html = struct
       let describe annot =
         List.find view_annots ~f:(fun (k, v) ->
             List.mem annot k ~equal:String.equal) in
-      let rec go = function
+      let rec go tp =
+        let raw = strip_locations tp in
+        match tp with
         | Prim (_, "nat", [], annot) ->
-            Leaf {t= Nat; v= Reactive.var ""; description= describe annot}
+            Leaf
+              {raw; kind= Nat; v= Reactive.var ""; description= describe annot}
         | Prim (_, "mutez", [], annot) ->
-            Leaf {t= Mutez; v= Reactive.var ""; description= describe annot}
+            Leaf
+              {raw; kind= Mutez; v= Reactive.var ""; description= describe annot}
         | Prim (_, "pair", [l; r], _) -> Pair {left= go l; right= go r}
-        | Prim (_, _, _, annot) as tp ->
+        | Prim (_, _, _, annot) ->
             Leaf
-              { t= Any (strip_locations tp)
-              ; v= Reactive.var ""
-              ; description= describe annot }
-        | tp ->
-            Leaf
-              { t= Any (strip_locations tp)
-              ; v= Reactive.var ""
-              ; description= None } in
+              {kind= Any; raw; v= Reactive.var ""; description= describe annot}
+        | tp -> Leaf {raw; kind= Any; v= Reactive.var ""; description= None}
+      in
       go (root m)
 
     let rec fill_with_value mf node =
@@ -867,7 +865,7 @@ module Tezos_html = struct
       | Error _ -> false
 
     let rec is_valid = function
-      | Leaf {t= Nat | Mutez; v; _} ->
+      | Leaf {kind= Nat | Mutez; v; _} ->
           Reactive.(
             get v
             |> map ~f:(function
@@ -881,31 +879,30 @@ module Tezos_html = struct
     let rec validity_error = function
       | Nat -> t "Invalid natural number."
       | Mutez -> t "Invalid μꜩ value."
-      | Any _ -> t "Invalid Micheline syntax."
+      | Any -> t "Invalid Micheline syntax."
 
     let rec to_form_items mf =
       let open Meta_html in
       let open Bootstrap.Form in
-      let type_expr = function
-        | Nat -> b (ct "nat")
-        | Mutez -> b (ct "mutez")
-        | Any m -> Fmt.kstr ct "%s" (Michelson.micheline_canonical_to_string m)
-      in
+      let type_expr m =
+        Fmt.kstr ct "%s" (Michelson.micheline_canonical_to_string m) in
       match mf with
       | Pair {left; right} -> to_form_items left @ to_form_items right
       | Leaf leaf ->
           [ input
               ~label:
                 ( match leaf.description with
-                | None -> t "The parameter of type" %% type_expr leaf.t % t "."
+                | None ->
+                    t "The parameter of type" %% type_expr leaf.raw % t "."
                 | Some (an, s) ->
                     t "The parameter called " % ct an %% t "of type"
-                    %% type_expr leaf.t % t ":" %% it s )
+                    %% type_expr leaf.raw % t ":" %% it s )
               ~help:
                 Reactive.(
                   bind (is_valid mf) ~f:(function
                     | true -> Bootstrap.color `Success (t "OK")
-                    | false -> Bootstrap.color `Danger (validity_error leaf.t)))
+                    | false ->
+                        Bootstrap.color `Danger (validity_error leaf.kind)))
               ~placeholder:(Reactive.pure "Some decent Michelson right here")
               (Reactive.Bidirectional.of_var leaf.v) ]
 
