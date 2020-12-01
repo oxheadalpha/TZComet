@@ -859,7 +859,10 @@ module Tezos_html = struct
       | Pair {left; right} -> Fmt.str "(Pair %s %s)" (peek left) (peek right)
 
     let validate_micheline m =
-      match Michelson.parse_micheline ~check_indentation:false m with
+      match
+        Michelson.parse_micheline ~check_indentation:false
+          ~check_primitives:true m
+      with
       | Ok _ -> true
       | Error _ -> false
 
@@ -1018,9 +1021,10 @@ module Tezos_html = struct
                       | Some mf ->
                           Michelson_form.peek mf
                           |> parse_micheline_exn ~check_indentation:false
+                               ~check_primitives:false
                       | None ->
                           parse_micheline_exn ~check_indentation:false "Unit"
-                    in
+                            ~check_primitives:false in
                     Query_nodes.call_off_chain_view ctxt ~log
                       ~address:(Reactive.peek address) ~view ~parameter
                     >>= function
@@ -1530,7 +1534,7 @@ module Editor = struct
       match
         Michelson.parse_micheline
           ~check_indentation:(State.check_micheline_indentation ctxt)
-          inp
+          ~check_primitives:false inp
       with
       | Ok o ->
           let concrete = Michelson.micheline_node_to_string o in

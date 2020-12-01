@@ -22,16 +22,32 @@ let micheline_to_ezjsonm mich =
   let json = Data_encoding.Json.construct enc (Micheline.strip_locations mich) in
   json
 
-let parse_micheline ~check_indentation m =
+let parse_micheline ~check_indentation ~check_primitives m =
+  let rec primitive_check =
+    let open Tezos_micheline.Micheline in
+    function
+    | Prim (_, s, args, _) ->
+        ( match
+            List.find Michelson_bytes.primitives ~f:(fun (p, _) ->
+                String.equal p s)
+          with
+        | Some _ -> ()
+        | None -> Fmt.failwith "Unknown primitive: %S" s ) ;
+        List.iter args ~f:primitive_check
+    | _ -> () in
   match Micheline_parser.tokenize m with
   | tokens, [] -> (
     match Micheline_parser.parse_expression ~check:check_indentation tokens with
-    | node, [] -> Ok node
+    | node, [] -> (
+      try
+        if check_primitives then primitive_check node ;
+        Ok node
+      with e -> Error [Tezos_error_monad.Error_monad.Exn e] )
     | _, errs -> Error errs )
   | _, errs -> Error errs
 
-let parse_micheline_exn ~check_indentation m =
-  match parse_micheline ~check_indentation m with
+let parse_micheline_exn ~check_indentation ~check_primitives m =
+  match parse_micheline ~check_indentation ~check_primitives m with
   | Ok o -> o
   | Error e ->
       Fmt.failwith "parse_micheline: %a"
