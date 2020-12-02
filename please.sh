@@ -78,6 +78,7 @@ ensure_setup () {
     opam install --deps-only \
          local-vendor/tezos/src/lib_contract_metadata/core/tezos-contract-metadata.opam
     opam pin add -n digestif 0.9.0
+    opam pin add -n ocamlformat 0.15.0
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          zarith_stubs_js \
@@ -117,6 +118,7 @@ deploy_website () {
 }
 
 ensure_linting () {
+    echo "OCamlFormat version: $(ocamlformat --version)"
     dune build @src/fmt --auto-promote
 }
 

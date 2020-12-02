@@ -63,6 +63,12 @@ module Micheline_views = struct
     dict [("prim", string p); ("args", `A l); ("annots", strings annotations)]
 
   let int i = dict [("int", string (Int.to_string i))]
+  let michstring s = dict [("string", string s)]
+
+  let michbytes b =
+    let (`Hex hex) = Hex.of_string b in
+    dict [("bytes", string hex)]
+
   let seq l = list Fn.id l
   let nat = prim "nat" []
   let mutez = prim "mutez" []
@@ -240,6 +246,12 @@ let all ?only ~logfile () =
         [ ( "%ret"
           , "The address of the (any) contract, re-obtained in Michelson." ) ]
   in
+  let unit_to_bytes name value =
+    let code =
+      [prim "DROP" []; prim "PUSH" [prim "bytes" []; michbytes value]] in
+    view_with_code name code
+      ~return_type:(prim "bytes" [] ~annotations:["%returnedBytes"])
+      ~annotations:[("%returnedBytes", "A bytes constant.")] in
   let basics_and_views l = Ezjsonm.(basics @ [("views", list Fn.id l)]) in
   let many () =
     originate ~logfile ~description:"Empty contract" ~name:"de0"
@@ -263,6 +275,34 @@ let all ?only ~logfile () =
     simple "Has a URI that is invalid." [root "tezos-storage:onekey/with/slash"] ;
     self_host "Point to invalid metadata."
       Ezjsonm.(dict [("version", list string ["tzcomet-example v0.0.42"])]) ;
+    self_describe "This contract has bytes-returning off-chain-views."
+      (basics_and_views
+         [ unit_to_bytes "empty-bytes" ""
+         ; unit_to_bytes "some-json"
+             Ezjsonm.(
+               value_to_string ~minify:true
+                 (dict
+                    [ ("hello", string "world")
+                    ; ( "more"
+                      , dict
+                          [ ("lorem", int 42)
+                          ; ("ipsum", strings [""; "one"; "2"]) ] ) ]))
+         ; unit_to_bytes "some-text"
+             {text|
+Here is some text.
+Лорем ипсум долор сит амет, алияуид инцоррупте тхеопхрастус еу сеа, ин
+еум солута оптион дефинитионем. Ат меа симул оффициис молестиае, еос
+яуаеяуе инвидунт цонвенире ид. Ат солеат волутпат вел. Сед еи инермис
+веритус
+
+직전대통령이 없을 때에는 대통령이 지명한다, 그 정치적 중립성은
+준수된다. 국가는 법률이 정하는 바에 의하여 정당운영에 필요한 자금을
+보조할 수 있다, 군사법원의 조직·권한 및 재판관의 자격은 법률로 정한다.
+|text}
+         ; unit_to_bytes "200-random-characters"
+             (String.init 200 ~f:(fun _ -> Random.char ()))
+         ; unit_to_bytes "1000-random-characters"
+             (String.init 1000 ~f:(fun _ -> Random.char ())) ]) ;
     () in
   many () ; ()
 
