@@ -725,6 +725,14 @@ module Tezos_html = struct
 
   open Meta_html
 
+  let bytes_summary ?(threshold = 25) ?(left = 10) ?(right = 10) bytes =
+    match String.length bytes with
+    | m when m < threshold -> bytes
+    | m ->
+        Fmt.str "%s…%s"
+          (String.sub bytes ~pos:0 ~len:left)
+          (String.sub bytes ~pos:(m - right) ~len:right)
+
   let field_head name =
     Fmt.kstr (fun s -> Bootstrap.color `Info (t s)) "%s:" name
 
@@ -802,7 +810,7 @@ module Tezos_html = struct
     % div (go uri)
 
   module Michelson_form = struct
-    type type_kind = Any | Nat | Mutez
+    type type_kind = Any | Nat | Mutez | Bytes
     type leaf = string Reactive.var
 
     type t =
@@ -824,19 +832,16 @@ module Tezos_html = struct
             List.mem annot k ~equal:String.equal) in
       let rec go tp =
         let raw = strip_locations tp in
+        let leaf ?annot kind =
+          let description = Option.bind ~f:describe annot in
+          Leaf {raw; kind; v= Reactive.var ""; description} in
         match tp with
-        | Prim (_, "nat", [], annot) ->
-            Leaf
-              {raw; kind= Nat; v= Reactive.var ""; description= describe annot}
-        | Prim (_, "mutez", [], annot) ->
-            Leaf
-              {raw; kind= Mutez; v= Reactive.var ""; description= describe annot}
+        | Prim (_, "nat", [], annot) -> leaf Nat ~annot
+        | Prim (_, "mutez", [], annot) -> leaf Mutez ~annot
+        | Prim (_, "bytes", [], annot) -> leaf Bytes ~annot
         | Prim (_, "pair", [l; r], _) -> Pair {left= go l; right= go r}
-        | Prim (_, _, _, annot) ->
-            Leaf
-              {kind= Any; raw; v= Reactive.var ""; description= describe annot}
-        | tp -> Leaf {raw; kind= Any; v= Reactive.var ""; description= None}
-      in
+        | Prim (_, _, _, annot) -> leaf Any ~annot
+        | tp -> leaf Any in
       go (root m)
 
     let rec fill_with_value mf node =
@@ -872,6 +877,18 @@ module Tezos_html = struct
                  | "" -> false
                  | s -> (
                    match Z.of_string s with _ -> true | exception _ -> false )))
+      | Leaf {kind= Bytes; v; _} ->
+          Reactive.(
+            get v
+            |> map ~f:(function
+                 | "" -> false
+                 | s -> (
+                   match String.chop_prefix (String.strip s) ~prefix:"0x" with
+                   | None -> false
+                   | Some s -> (
+                     match Hex.to_string (`Hex s) with
+                     | _ -> true
+                     | exception _ -> false ) )))
       | Leaf lf -> Reactive.(get lf.v |> map ~f:validate_micheline)
       | Pair {left; right} ->
           Reactive.(map2 ~f:( && ) (is_valid left) (is_valid right))
@@ -879,6 +896,7 @@ module Tezos_html = struct
     let rec validity_error = function
       | Nat -> t "Invalid natural number."
       | Mutez -> t "Invalid μꜩ value."
+      | Bytes -> t "Invalid bytes value."
       | Any -> t "Invalid Micheline syntax."
 
     let rec to_form_items mf =
@@ -907,11 +925,77 @@ module Tezos_html = struct
               (Reactive.Bidirectional.of_var leaf.v) ]
 
     let rec render mf =
+      let desc description =
+        Option.value_map description ~default:(empty ()) ~f:(fun (k, v) ->
+            t ":" %% it v %% parens (ct k)) in
+      let bytes_guesses bytes =
+        try
+          let hex = String.chop_prefix_exn bytes ~prefix:"0x" in
+          let raw = Hex.to_string (`Hex hex) in
+          let json = try Some (Ezjsonm.value_from_string raw) with _ -> None in
+          match json with
+          | Some s -> `Json s
+          | None -> (
+              let valid_utf8 =
+                let nl = Uchar.of_char '\n' in
+                let folder (count, max_per_line) _ = function
+                  | `Uchar n when Uchar.equal n nl -> (0, max count max_per_line)
+                  | `Uchar _ -> (count + 1, max_per_line)
+                  | `Malformed _ -> Fmt.failwith "nop" in
+                try
+                  let c, m = Uutf.String.fold_utf_8 folder (0, 0) raw in
+                  Some (max c m)
+                with _ -> None in
+              let lines =
+                match raw with "" -> [] | _ -> String.split ~on:'\n' raw in
+              match valid_utf8 with
+              | Some maxperline -> `Valid_utf_8 (maxperline, lines)
+              | None -> `Just_hex hex )
+        with _ -> `Dont_know in
       match mf with
-      | Leaf leaf ->
-          [ ct (Reactive.peek leaf.v)
-            % Option.value_map leaf.description ~default:(empty ())
-                ~f:(fun (k, v) -> t ":" %% it v %% parens (ct k)) ]
+      | Leaf ({kind= Bytes; _} as leaf) ->
+          let content = Reactive.peek leaf.v in
+          let show_content name f =
+            let collapse = Bootstrap.Collapse.make () in
+            Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
+              collapse ~width:"12em" ~kind:`Secondary
+              ~button:(function
+                | true -> t "Show" %% t name | false -> t "Hide" %% t name)
+              f in
+          [ ( ct (content |> bytes_summary ~threshold:30 ~left:15 ~right:15)
+            % desc leaf.description
+            %%
+            match bytes_guesses content with
+            | `Just_hex hex ->
+                show_content "Hex Dump" (fun () ->
+                    pre (ct (Hex.hexdump_s (`Hex hex))))
+            | `Json v ->
+                t "→"
+                %% Bootstrap.color `Success (t "It is valid JSON!")
+                %% show_content "Indented JSON" (fun () ->
+                       pre (ct (Ezjsonm.value_to_string ~minify:false v)))
+            | `Valid_utf_8 (maxperline, lines) ->
+                t "→"
+                %% Bootstrap.color `Success
+                     (let lnnb = List.length lines in
+                      match lnnb with
+                      | 0 -> t "It's just empty."
+                      | _ ->
+                          Fmt.kstr t
+                            "It is valid UTF-8 text, %d line%s %d characters!"
+                            lnnb
+                            (if lnnb <> 1 then "s, each ≤" else ",")
+                            maxperline)
+                %%
+                if maxperline = 0 then empty ()
+                else
+                  show_content "Text" (fun () ->
+                      div
+                        (let sep () = H5.br () in
+                         List.fold lines ~init:(empty ()) ~f:(fun p l ->
+                             p % sep () % t l)))
+            | `Dont_know -> empty () ) ]
+      | Leaf leaf -> [ct (Reactive.peek leaf.v) % desc leaf.description]
       | Pair {left; right} -> render left @ render right
   end
 
@@ -1487,13 +1571,6 @@ module Editor = struct
 
   let show_hex ctxt bytes_code =
     let with_zero_x, with_zero_five, bytes = explode_hex bytes_code in
-    let bytes_summary =
-      match String.length bytes with
-      | m when m < 20 -> bytes
-      | m ->
-          Fmt.str "%s…%s"
-            (String.sub bytes ~pos:0 ~len:8)
-            (String.sub bytes ~pos:(m - 8) ~len:8) in
     let header, result, valid_pack =
       match Michelson_bytes.parse_hex_bytes bytes with
       | Ok (json, concrete) ->
@@ -1508,7 +1585,10 @@ module Editor = struct
           (header, result, true)
       | Error el ->
           ( big_answer `Error (t "There were parsing/validation errors:")
-          , Bootstrap.p_lead (t "Failed to parse" %% ct bytes_summary % t ":")
+          , Bootstrap.p_lead
+              ( t "Failed to parse"
+              %% ct (Tezos_html.bytes_summary bytes)
+              % t ":" )
             %% Tezos_html.error_trace ctxt el
           , false ) in
     let items =
@@ -1522,8 +1602,9 @@ module Editor = struct
             %% t "is the standard prefix/watermark for Michelson expressions."
             )
         ; opt_if valid_pack
-            ( t "The bytes" %% ct bytes_summary %% t "are a valid" %% ct "PACK"
-            % t "-ed expression." ) ] in
+            ( t "The bytes"
+            %% ct (Tezos_html.bytes_summary bytes)
+            %% t "are a valid" %% ct "PACK" % t "-ed expression." ) ] in
     header % itemize items % result
 
   let process_micheline ctxt inp =
