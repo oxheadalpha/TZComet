@@ -343,6 +343,8 @@ module State = struct
              kt1_dev "KT1Dkn2fHtjtfLJ6SeTRQ7BujKEPk1pGjBAE"
                "Points to invalid metdaata." ;
              kt1 kt1_one_view "Has one off-chain-view." ;
+             kt1_dev "KT191tWhzxUvx3ziu1sMYrDweZLrQfgbvGC5"
+               "Has a few views that return bytes (JSON, UTF-8, binary …)" ;
              kt1_dev "KT1RyihALYEsVCcKP7Ya6teCHs9ii5ZHQxvj"
                "Event more weird off-chain-views." ;
              uri https_ok "A valid HTTPS URI." ;
