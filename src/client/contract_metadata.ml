@@ -116,4 +116,25 @@ module Content = struct
           Tezos_contract_metadata.Metadata_contents.encoding jsonm in
       Ok contents
     with e -> Tezos_error_monad.Error_monad.error_exn e
+
+  type metadata = Tezos_contract_metadata.Metadata_contents.t
+  type classified = Tzip_16 of metadata | Tzip_12 of {metadata: metadata}
+
+  let classify : metadata -> classified =
+    let open Tezos_contract_metadata.Metadata_contents in
+    let looks_like_tzip_12 ~found ({interfaces; unknown; _} as metadata) =
+      let interface_claim =
+        List.find interfaces ~f:(String.is_prefix ~prefix:"TZIP-12") in
+      let tokens_field =
+        List.find_map unknown ~f:(function
+          | "tokens", json -> Some json
+          | _ -> None) in
+      if Option.is_none interface_claim && Option.is_none tokens_field then ()
+      else found (Tzip_12 {metadata}) in
+    let exception Found of classified in
+    fun metadata ->
+      try
+        looks_like_tzip_12 ~found:(fun x -> raise (Found x)) metadata ;
+        Tzip_16 metadata
+      with Found x -> x
 end

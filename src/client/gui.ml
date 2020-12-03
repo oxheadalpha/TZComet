@@ -1390,10 +1390,18 @@ module Tezos_html = struct
           (List.map kv ~f:(fun (k, v) ->
                ct k %% pre (ct (Ezjsonm.value_to_string ~minify:false v))))
       in
-      ( if open_in_editor_link then
-        open_in_editor ctxt
-          (Tezos_contract_metadata.Metadata_contents.to_json metadata)
-      else empty () )
+      div
+        Contract_metadata.Content.(
+          match classify metadata with
+          | Tzip_16 _ ->
+              t
+                "This metadata blob was classified at “Just some random \
+                 TZIP-16” implementation."
+          | Tzip_12 _ -> t "This looks like a TZIP-12 contract (a.k.a. FA2).")
+      %% ( if open_in_editor_link then
+           open_in_editor ctxt
+             (Tezos_contract_metadata.Metadata_contents.to_json metadata)
+         else empty () )
       % itemize
           ( option_field "Name" name ct
           @ option_field "Version" version ct
