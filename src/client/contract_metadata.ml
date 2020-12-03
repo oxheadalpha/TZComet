@@ -118,19 +118,106 @@ module Content = struct
     with e -> Tezos_error_monad.Error_monad.error_exn e
 
   type metadata = Tezos_contract_metadata.Metadata_contents.t
-  type classified = Tzip_16 of metadata | Tzip_12 of {metadata: metadata}
+
+  type classified =
+    | Tzip_16 of metadata
+    | Tzip_12 of
+        { metadata: metadata
+        ; interface_claim:
+            [`Invalid of string | `Just_interface | `Version of string] option
+        ; logs: ([`Error | `Info | `Success] * Message.t) list }
 
   let classify : metadata -> classified =
     let open Tezos_contract_metadata.Metadata_contents in
-    let looks_like_tzip_12 ~found ({interfaces; unknown; _} as metadata) =
+    let looks_like_tzip_12 ~found metadata =
+      let logs = ref [] in
+      let log l = logs := (`Info, l) :: !logs in
+      let error l = logs := (`Error, l) :: !logs in
+      let success l = logs := (`Success, l) :: !logs in
       let interface_claim =
-        List.find interfaces ~f:(String.is_prefix ~prefix:"TZIP-12") in
+        List.find metadata.interfaces ~f:(String.is_prefix ~prefix:"TZIP-12")
+        |> Option.map ~f:(function
+             | "TZIP-12" -> `Just_interface
+             | itf -> (
+               match String.chop_prefix itf ~prefix:"TZIP-12-" with
+               | None -> `Invalid itf
+               | Some v -> `Version v )) in
       let tokens_field =
-        List.find_map unknown ~f:(function
-          | "tokens", json -> Some json
+        List.find_map metadata.unknown ~f:(function
+          | "tokens", json ->
+              log Message.(t "Found a" %% ct "\"tokens\"" %% t "field.") ;
+              Some json
           | _ -> None) in
       if Option.is_none interface_claim && Option.is_none tokens_field then ()
-      else found (Tzip_12 {metadata}) in
+      else
+        let views_validation =
+          let _get_balance =
+            List.find_map metadata.views ~f:(function
+              | view when String.equal view.name "get_balance" -> (
+                  List.find view.implementations ~f:(function
+                    | Rest_api_query _ -> false
+                    | Michelson_storage impl ->
+                        let param_ok =
+                          match impl.parameter with
+                          | Some p -> (
+                              Michelson.Partial_type.(
+                                match of_type p with
+                                | Pair
+                                    { left= Leaf {kind= Nat; _}
+                                    ; right= Leaf {kind= Address; _} } ->
+                                    log
+                                      Message.(
+                                        ct "get_balance"
+                                        %% t "has the right parameter type.") ;
+                                    true
+                                | _ ->
+                                    error
+                                      Message.(
+                                        t "View" %% ct "get_balance"
+                                        %% t "has not the right parameter type.") ;
+                                    false) )
+                          | None ->
+                              error
+                                Message.(
+                                  t "View" %% ct "get_balance"
+                                  %% t "has no parameter type.") ;
+                              false in
+                        let result_ok =
+                          Michelson.Partial_type.(
+                            match of_type impl.return_type with
+                            | Leaf {kind= Nat; _} ->
+                                log
+                                  Message.(
+                                    ct "get_balance"
+                                    %% t "has the right return type.") ;
+                                true
+                            | _ ->
+                                error
+                                  Message.(
+                                    t "View" %% ct "get_balance"
+                                    %% t "has not the right return type.") ;
+                                false) in
+                        param_ok && result_ok)
+                  |> function
+                  | Some v -> Some ()
+                  | None ->
+                      error
+                        Message.(
+                          t "View" %% ct "get_balance"
+                          %% t "has no valid Michelson implementation.") ;
+                      None )
+              | _ -> None)
+            |> function
+            | Some _ ->
+                success
+                  Message.(t "View" %% ct "get_balance" %% t "seems valid.")
+            | None ->
+                error
+                  Message.(t "View" %% ct "get_balance" %% t "seems invalid.")
+          in
+          () in
+        ignore views_validation ;
+        found (Tzip_12 {metadata; interface_claim; logs= List.rev !logs}) in
     let exception Found of classified in
     fun metadata ->
       try
