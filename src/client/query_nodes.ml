@@ -309,6 +309,30 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   find_node_with_contract ctxt address
   >>= fun node ->
   logf "Found contract with node %S" node.name ;
+  Fmt.kstr (Node.rpc_get ctxt node) "/chains/main/blocks/head/protocols"
+  >>= fun protocols ->
+  let protocol_kind, protocol_hash =
+    let hash =
+      match Ezjsonm.value_from_string protocols with
+      | `O l ->
+          List.find_map l ~f:(function
+            | "protocol", `String p -> Some p
+            | _ -> None)
+      | _ | (exception _) -> None in
+    match hash with
+    | None ->
+        Decorate_error.raise
+          Message.(
+            t "Cannot understand answer from “protocols” RPC:"
+            %% code_block protocols)
+    | Some p when String.is_prefix p ~prefix:"PsCARTHA" -> (`Carthage, p)
+    | Some p when String.is_prefix p ~prefix:"PsDELPH1" -> (`Delphi, p)
+    | Some p when String.is_prefix p ~prefix:"PtEdoTez" -> (`Edo, p)
+    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Edo, p)
+    | Some p ->
+        logf "Can't recognize protocol: `%s` assuming Delphi-like." p ;
+        (`Delphi, p) in
+  logf "Protocol is `%s`" protocol_hash ;
   Fmt.kstr (Node.rpc_get ctxt node)
     "/chains/main/blocks/head/context/contracts/%s/storage" address
   >>= fun storage ->
@@ -368,11 +392,16 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline view_storage ;
   let constructed =
     let open Ezjsonm in
-    dict
+    let normal_fields =
       [ ("script", Michelson.micheline_to_ezjsonm view_contract)
       ; ("storage", Michelson.micheline_to_ezjsonm view_storage)
       ; ("input", Michelson.micheline_to_ezjsonm view_input)
       ; ("amount", string "0"); ("chain_id", string chain_id) ] in
+    let fields =
+      match protocol_kind with
+      | `Edo -> normal_fields @ [("balance", string "0")]
+      | _ -> normal_fields in
+    dict fields in
   Node.rpc_post ctxt node
     ~body:(Ezjsonm.value_to_string constructed)
     "/chains/main/blocks/head/helpers/scripts/run_code"
