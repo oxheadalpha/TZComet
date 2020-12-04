@@ -1234,15 +1234,40 @@ module Tezos_html = struct
               t
                 "This metadata blob was classified at “Just some random \
                  TZIP-16” implementation."
-          | Tzip_12 {metadata; interface_claim; logs} ->
-              t "This looks like a TZIP-12 contract (a.k.a. FA2). Logs:"
-              % itemize
-                  (List.map logs ~f:(fun (level, m) ->
-                       ( match level with
-                       | `Success -> t "✔"
-                       | `Error -> t "❌"
-                       | `Info -> t "💡" )
-                       %% Message_html.render ctxt m)))
+          | Tzip_12 {metadata; interface_claim; logs; get_balance; total_supply}
+            ->
+              let tzip_12_block =
+                let interface_claim =
+                  t "Interface claim is"
+                  %%
+                  match interface_claim with
+                  | None -> t "missing."
+                  | Some (`Invalid s) -> t "invalid: " %% ct s
+                  | Some (`Version s) ->
+                      t "valid, and defines version as" %% ct s
+                  | Some `Just_interface -> t "valid" in
+                let view_validation ?(mandatory = false) name
+                    (v : view_validation) =
+                  match v with
+                  | Missing when not mandatory ->
+                      t "View" %% ct name %% t "is not there."
+                  | Missing -> t "View" %% ct name %% t "is missing."
+                  | Invalid _ | No_michelson_implementation _ ->
+                      t "View" %% ct name %% t "is invalid"
+                  | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
+                t "This looks like a TZIP-12 contract (a.k.a. FA2). Logs:"
+                % itemize
+                    [ interface_claim
+                    ; view_validation "get_balance" get_balance ~mandatory:true
+                    ; view_validation "total_supply" total_supply ]
+                % itemize
+                    (List.map logs ~f:(fun (level, m) ->
+                         ( match level with
+                         | `Success -> t "✔"
+                         | `Error -> t "❌"
+                         | `Info -> t "💡" )
+                         %% Message_html.render ctxt m)) in
+              Bootstrap.bordered tzip_12_block)
       %% ( if open_in_editor_link then
            open_in_editor ctxt
              (Tezos_contract_metadata.Metadata_contents.to_json metadata)
