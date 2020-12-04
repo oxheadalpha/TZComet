@@ -114,9 +114,12 @@ module State = struct
     ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Async_work.t
     ; editor_content: string Reactive.var
     ; editor_mode: Editor_mode.t Reactive.var
+    ; editor_load: bool Reactive.var
+    ; editor_should_load: bool Reactive.var
     ; check_micheline_indentation: bool Reactive.var }
 
   let get (state : < gui: t ; .. > Context.t) = state#gui
+  let local_storage_filename = "tzcomet-editor-input"
 
   module Fragment = struct
     let to_string = Uri.to_string
@@ -126,7 +129,7 @@ module State = struct
       Fmt.str "/%s" (Page.to_string page |> String.lowercase)
 
     let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go
-        ~editor_mode ~check_micheline_indentation =
+        ~editor_mode ~check_micheline_indentation ~editor_load =
       let query =
         match explorer_input with
         | "" -> []
@@ -144,6 +147,8 @@ module State = struct
         match editor_mode with
         | `Guess -> query
         | other -> ("editor-mode", [Editor_mode.to_string other]) :: query in
+      let query =
+        if editor_load then ("load-storage", ["true"]) :: query else query in
       Uri.make () ~path:(page_to_path page) ~query
 
     let change_for_page t page = Uri.with_path t (page_to_path page)
@@ -165,8 +170,6 @@ module State = struct
       let mich_indent = true_in_query "check-micheline-indentation" in
       let explorer_input =
         match in_query "explorer-input" with Some [one] -> one | _ -> "" in
-      let editor_input =
-        match in_query "editor-input" with Some [one] -> one | _ -> "" in
       let editor_mode =
         Option.bind (in_query "editor-mode") (function
           | [] -> None
@@ -177,6 +180,9 @@ module State = struct
                     (one |> String.lowercase)))
         |> Option.value ~default:`Guess in
       let explorer_go = true_in_query "go" in
+      let editor_load = true_in_query "load-storage" in
+      let editor_input =
+        match in_query "editor-input" with Some [one] -> one | _ -> "" in
       ( System.create ~dev_mode ()
       , { page= Reactive.var (`Page page)
         ; explorer_input= Reactive.var explorer_input
@@ -188,6 +194,9 @@ module State = struct
         ; explorer_result= Async_work.empty ()
         ; editor_content= Reactive.var editor_input
         ; editor_mode= Reactive.var editor_mode
+        ; editor_load= Reactive.var editor_load
+        ; editor_should_load=
+            Reactive.var (editor_load && String.is_empty editor_input)
         ; check_micheline_indentation= Reactive.var mich_indent } )
   end
 
@@ -214,12 +223,34 @@ module State = struct
   let explorer_input_bidirectional state =
     (get state).explorer_input |> Reactive.Bidirectional.of_var
 
-  let editor_content state =
-    (get state).editor_content |> Reactive.Bidirectional.of_var
+  let save_editor_content ctxt =
+    Local_storage.write_file ctxt local_storage_filename
+      (Reactive.peek (get ctxt).editor_content)
 
   let set_editor_content state v = Reactive.set (get state).editor_content v
+
+  let load_editor_content ctxt =
+    match Local_storage.read_file ctxt local_storage_filename with
+    | None -> set_editor_content ctxt ""
+    | Some s -> set_editor_content ctxt s
+
+  let editor_content ctxt =
+    let s = get ctxt in
+    if Reactive.peek s.editor_should_load then (
+      load_editor_content ctxt ;
+      Reactive.set s.editor_should_load false ) ;
+    (get ctxt).editor_content |> Reactive.Bidirectional.of_var
+
   let editor_mode ctxt = Reactive.get (get ctxt).editor_mode
   let set_editor_mode ctxt = Reactive.set (get ctxt).editor_mode
+
+  (*
+     Automatic saving to make one day?
+        let variable = (get ctxt).editor_content in
+        Reactive.Bidirectional.make (Reactive.get variable) (fun v ->
+           Local_storage.write_file ctxt local_storage_filename v ;
+           Reactive.set variable v)
+  *)
 
   let check_micheline_indentation ctxt =
     Reactive.peek (get ctxt).check_micheline_indentation
@@ -245,15 +276,17 @@ module State = struct
     Reactive.(
       dev ** page ** explorer_input ** explorer_go ** editor_input
       ** get state.editor_mode
-      ** get state.check_micheline_indentation)
+      ** get state.check_micheline_indentation
+      ** get state.editor_load)
     |> Reactive.map
          ~f:(fun
               ( dev_mode
               , ( page
                 , ( explorer_input
                   , ( explorer_go
-                    , (editor_input, (editor_mode, check_micheline_indentation))
-                    ) ) ) )
+                    , ( editor_input
+                      , (editor_mode, (check_micheline_indentation, editor_load))
+                      ) ) ) ) )
             ->
            let now =
              Fragment.(
@@ -261,7 +294,7 @@ module State = struct
                  if String.length editor_input < 40 then editor_input else ""
                in
                make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input
-                 ~editor_mode ~check_micheline_indentation) in
+                 ~editor_mode ~check_micheline_indentation ~editor_load) in
            if side_effects then (
              let current = Js_of_ocaml.Url.Current.get_fragment () in
              dbgf "Updating fragment %S → %a" current Fragment.pp now ;
@@ -1665,18 +1698,12 @@ module Editor = struct
       match Local_storage.available ctxt with
       | true ->
           Bootstrap.Dropdown_menu.(
-            let filename = "tzcomet-editor-input" in
             button label ~kind:button_kind
               [ item
-                  ~action:(fun () ->
-                    Local_storage.write_file ctxt filename
-                      (Reactive.peek State.(get ctxt).editor_content))
+                  ~action:(fun () -> State.save_editor_content ctxt)
                   (t "Save")
               ; item
-                  ~action:(fun () ->
-                    match Local_storage.read_file ctxt filename with
-                    | None -> Reactive.Bidirectional.set content ""
-                    | Some s -> Reactive.Bidirectional.set content s)
+                  ~action:(fun () -> State.load_editor_content ctxt)
                   (t "Load") ])
       | false ->
           Bootstrap.button ~kind:button_kind ~disabled:true ~action:Fn.ignore
