@@ -145,6 +145,7 @@ module Content = struct
             [`Invalid of string | `Just_interface | `Version of string] option
         ; get_balance: view_validation
         ; total_supply: view_validation
+        ; all_tokens: view_validation
         ; logs: ([`Error | `Info | `Success] * Message.t) list }
 
   let find_michelson_view metadata ~view_name =
@@ -165,13 +166,13 @@ module Content = struct
     let param =
       match (Option.map ~f:of_type impl.parameter, check_parameter) with
       | None, None -> (`Ok, None)
-      | Some p, Some check when check p -> (`Ok, Some p)
+      | Some p, Some check when check p.structure -> (`Ok, Some p)
       | Some p, Some _ -> (`Wrong, Some p)
       | Some p, None -> (`Unchecked_Parameter, Some p)
       | None, Some _ -> (`Missing_parameter, None) in
     let result =
       match of_type impl.return_type with
-      | p when check_return p -> (`Ok, Some p)
+      | p when check_return p.structure -> (`Ok, Some p)
       | p -> (`Wrong, Some p) in
     (param, result)
 
@@ -213,11 +214,11 @@ module Content = struct
       if Option.is_none interface_claim && Option.is_none tokens_field then ()
       else
         let check_nat =
-          Michelson.Partial_type.(
+          Michelson.Partial_type.Structure.(
             function Leaf {kind= Nat; _} -> true | _ -> false) in
         let get_balance =
           let check_parameter =
-            Michelson.Partial_type.(
+            Michelson.Partial_type.Structure.(
               function
               | Pair {left= Leaf {kind= Nat; _}; right= Leaf {kind= Address; _}}
                 ->
@@ -228,12 +229,18 @@ module Content = struct
         let total_supply =
           validate_view metadata ~view_name:"total_supply"
             ~check_parameter:check_nat ~check_return:check_nat in
+        let all_tokens =
+          let check_return =
+            Michelson.Partial_type.Structure.(
+              function Leaf {kind= List Nat; _} -> true | _ -> false) in
+          validate_view metadata ~view_name:"all_tokens" ~check_return in
         found
           (Tzip_12
              { metadata
              ; interface_claim
              ; get_balance
              ; total_supply
+             ; all_tokens
              ; logs= List.rev !logs }) in
     let exception Found of classified in
     fun metadata ->

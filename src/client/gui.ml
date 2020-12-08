@@ -869,8 +869,13 @@ module Tezos_html = struct
               t
                 "This metadata blob was classified at “Just some random \
                  TZIP-16” implementation."
-          | Tzip_12 {metadata; interface_claim; logs; get_balance; total_supply}
-            ->
+          | Tzip_12
+              { metadata
+              ; interface_claim
+              ; logs
+              ; get_balance
+              ; total_supply
+              ; all_tokens } ->
               let tzip_12_block =
                 let interface_claim =
                   t "Interface claim is"
@@ -885,16 +890,52 @@ module Tezos_html = struct
                     (v : view_validation) =
                   match v with
                   | Missing when not mandatory ->
-                      t "View" %% ct name %% t "is not there."
-                  | Missing -> t "View" %% ct name %% t "is missing."
-                  | Invalid _ | No_michelson_implementation _ ->
-                      t "View" %% ct name %% t "is invalid"
+                      t "Optional View" %% ct name %% t "is not there."
+                  | Missing -> t "Mandatory View" %% ct name %% t "is missing."
+                  | No_michelson_implementation _ ->
+                      t "View" %% ct name
+                      %% t
+                           "is invalid: it is missing a Michelson \
+                            implementation."
+                  | Invalid {parameter_status; return_status; _} ->
+                      t "View" %% ct name %% t "is invalid:"
+                      %% itemize
+                           [ ( t "Parameter type"
+                             %%
+                             match parameter_status with
+                             | `Ok, _ -> t "is ok."
+                             | `Wrong, None ->
+                                 (* This should not happen. *)
+                                 t "is wrong: not found."
+                             | `Wrong, Some pt ->
+                                 t "is wrong:"
+                                 %% ct
+                                      (Michelson.micheline_canonical_to_string
+                                         pt.original)
+                             | `Unchecked_Parameter, None ->
+                                 t "is expectedly not defined."
+                             | `Unchecked_Parameter, Some _ ->
+                                 t "is defined while it shouldn't."
+                             | `Missing_parameter, _ -> t "is missing." )
+                           ; ( t "Return type"
+                             %%
+                             match return_status with
+                             | `Ok, _ -> t "is ok."
+                             | `Wrong, None ->
+                                 (* This should not happen. *)
+                                 t "is wrong: not found."
+                             | `Wrong, Some pt ->
+                                 t "is wrong:"
+                                 %% ct
+                                      (Michelson.micheline_canonical_to_string
+                                         pt.original) ) ]
                   | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
                 t "This looks like a TZIP-12 contract (a.k.a. FA2). Logs:"
                 % itemize
                     [ interface_claim
                     ; view_validation "get_balance" get_balance ~mandatory:true
-                    ; view_validation "total_supply" total_supply ]
+                    ; view_validation "total_supply" total_supply
+                    ; view_validation "all_tokens" all_tokens ]
                 % itemize
                     (List.map logs ~f:(fun (level, m) ->
                          ( match level with
