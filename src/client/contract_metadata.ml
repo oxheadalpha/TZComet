@@ -146,6 +146,7 @@ module Content = struct
         ; get_balance: view_validation
         ; total_supply: view_validation
         ; all_tokens: view_validation
+        ; is_operator: view_validation
         ; logs: ([`Error | `Info | `Success] * Message.t) list }
 
   let find_michelson_view metadata ~view_name =
@@ -234,6 +235,23 @@ module Content = struct
             Michelson.Partial_type.Structure.(
               function Leaf {kind= List Nat; _} -> true | _ -> false) in
           validate_view metadata ~view_name:"all_tokens" ~check_return in
+        let is_operator =
+          let check_parameter =
+            Michelson.Partial_type.Structure.(
+              function
+              | Pair
+                  { left= Leaf {kind= Nat; _}
+                  ; right=
+                      Pair
+                        { left= Leaf {kind= Address; _}
+                        ; right= Leaf {kind= Address; _} } } ->
+                  true
+              | _ -> false) in
+          let check_return =
+            Michelson.Partial_type.Structure.(
+              function Leaf {kind= Bool; _} -> true | _ -> false) in
+          validate_view metadata ~view_name:"is_operator" ~check_parameter
+            ~check_return in
         found
           (Tzip_12
              { metadata
@@ -241,6 +259,7 @@ module Content = struct
              ; get_balance
              ; total_supply
              ; all_tokens
+             ; is_operator
              ; logs= List.rev !logs }) in
     let exception Found of classified in
     fun metadata ->

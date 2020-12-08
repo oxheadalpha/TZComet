@@ -62,7 +62,15 @@ let micheline_node_to_string node =
 
 module Partial_type = struct
   module Structure = struct
-    type type_kind = Any | Nat | Mutez | Bytes | Address | List of type_kind
+    type type_kind =
+      | Any
+      | Nat
+      | Mutez
+      | Bytes
+      | Address
+      | Bool
+      | List of type_kind
+
     type leaf = string Reactive.var
 
     type t =
@@ -98,6 +106,7 @@ module Partial_type = struct
       | Prim (_, "mutez", [], annot) -> leaf Mutez ~annot
       | Prim (_, "bytes", [], annot) -> leaf Bytes ~annot
       | Prim (_, "address", [], annot) -> leaf Address ~annot
+      | Prim (_, "bool", [], annot) -> leaf Bool ~annot
       | Prim (_, "pair", [l; r], _) -> Pair {left= go l; right= go r}
       | Prim (_, "list", [Prim (_, "nat", [], _)], annot) ->
           leaf (List Nat) ~annot
@@ -166,6 +175,7 @@ module Partial_type = struct
     | Mutez -> t "Invalid μꜩ value."
     | Bytes -> t "Invalid bytes value."
     | Address -> t "Invalid address."
+    | Bool -> t "Invalid boolean."
     | Any | List _ -> t "Invalid Micheline syntax."
 
   let to_form_items mf =

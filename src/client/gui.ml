@@ -875,7 +875,8 @@ module Tezos_html = struct
               ; logs
               ; get_balance
               ; total_supply
-              ; all_tokens } ->
+              ; all_tokens
+              ; is_operator } ->
               let tzip_12_block =
                 let interface_claim =
                   t "Interface claim is"
@@ -935,7 +936,8 @@ module Tezos_html = struct
                     [ interface_claim
                     ; view_validation "get_balance" get_balance ~mandatory:true
                     ; view_validation "total_supply" total_supply
-                    ; view_validation "all_tokens" all_tokens ]
+                    ; view_validation "all_tokens" all_tokens
+                    ; view_validation "is_operator" is_operator ]
                 % itemize
                     (List.map logs ~f:(fun (level, m) ->
                          ( match level with
