@@ -876,7 +876,8 @@ module Tezos_html = struct
               ; get_balance
               ; total_supply
               ; all_tokens
-              ; is_operator } ->
+              ; is_operator
+              ; permissions_descriptor } ->
               let tzip_12_block =
                 let interface_claim =
                   t "Interface claim is"
@@ -931,13 +932,24 @@ module Tezos_html = struct
                                       (Michelson.micheline_canonical_to_string
                                          pt.original) ) ]
                   | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
+                let show_permissions_descriptor pd =
+                  match pd with
+                  | None ->
+                      t
+                        "Permissions-descriptor is not present (assuming \
+                         default permissions)."
+                  | Some (Ok _) -> t "Permissions-descriptor is valid."
+                  | Some (Error e) ->
+                      t "Permissions-descriptor is invalid:"
+                      %% error_trace ctxt e in
                 t "This looks like a TZIP-12 contract (a.k.a. FA2). Logs:"
                 % itemize
                     [ interface_claim
                     ; view_validation "get_balance" get_balance ~mandatory:true
                     ; view_validation "total_supply" total_supply
                     ; view_validation "all_tokens" all_tokens
-                    ; view_validation "is_operator" is_operator ]
+                    ; view_validation "is_operator" is_operator
+                    ; show_permissions_descriptor permissions_descriptor ]
                 % itemize
                     (List.map logs ~f:(fun (level, m) ->
                          ( match level with

@@ -117,6 +117,61 @@ module Content = struct
       Ok contents
     with e -> Tezos_error_monad.Error_monad.error_exn e
 
+  module Permissions_descriptor = struct
+    type address = string
+
+    type operator_transfer_policy =
+      | No_transfer
+      | Owner_transfer
+      | Owner_or_operator_transfer
+
+    type owner_hook_policy =
+      | Owner_no_hook
+      | Optional_owner_hook
+      | Required_owner_hook
+
+    type custom_permission_policy = {tag: string; config_api: address option}
+
+    type t =
+      { operator: operator_transfer_policy
+      ; receiver: owner_hook_policy
+      ; sender: owner_hook_policy
+      ; custom: custom_permission_policy option }
+
+    let encoding =
+      let open Json_encoding in
+      let operator_transfer_policy =
+        string_enum
+          [ ("no-transfer", No_transfer); ("owner-transfer", Owner_transfer)
+          ; ("owner-or-operator-transfer", Owner_or_operator_transfer) ] in
+      let owner_transfer_policy =
+        string_enum
+          [ ("owner-no-hook", Owner_no_hook)
+          ; ("optional-owner-hook", Optional_owner_hook)
+          ; ("required-owner-hook", Required_owner_hook) ] in
+      let custom_permission_policy =
+        conv
+          (fun {tag; config_api} -> (tag, config_api))
+          (fun (tag, config_api) -> {tag; config_api})
+          (obj2 (req "tag" string) (opt "config-api" string)) in
+      conv
+        (fun {operator; receiver; sender; custom} ->
+          (operator, receiver, sender, custom))
+        (fun (operator, receiver, sender, custom) ->
+          {operator; receiver; sender; custom})
+        (obj4
+           (req "operator" operator_transfer_policy)
+           (req "receiver" owner_transfer_policy)
+           (req "sender" owner_transfer_policy)
+           (opt "custom" custom_permission_policy))
+
+    let of_json jsonm =
+      try
+        let contents = Json_encoding.destruct encoding jsonm in
+        Ok contents
+      with e -> Tezos_error_monad.Error_monad.error_exn e
+  end
+
   open Tezos_contract_metadata
 
   type metadata = Metadata_contents.t
@@ -147,6 +202,11 @@ module Content = struct
         ; total_supply: view_validation
         ; all_tokens: view_validation
         ; is_operator: view_validation
+        ; permissions_descriptor:
+            ( Permissions_descriptor.t
+            , Tezos_error_monad.Error_monad.tztrace )
+            Result.t
+            Option.t
         ; logs: ([`Error | `Info | `Success] * Message.t) list }
 
   let find_michelson_view metadata ~view_name =
@@ -206,12 +266,16 @@ module Content = struct
                match String.chop_prefix itf ~prefix:"TZIP-12-" with
                | None -> `Invalid itf
                | Some v -> `Version v )) in
-      let tokens_field =
+      let find_extra name =
         List.find_map metadata.unknown ~f:(function
-          | "tokens", json ->
-              log Message.(t "Found a" %% ct "\"tokens\"" %% t "field.") ;
-              Some json
+          | n, json when String.equal name n -> Some json
           | _ -> None) in
+      let tokens_field =
+        match find_extra "tokens" with
+        | Some s ->
+            log Message.(t "Found a" %% ct "\"tokens\"" %% t "field.") ;
+            Some s
+        | _ -> None in
       if Option.is_none interface_claim && Option.is_none tokens_field then ()
       else
         let check_nat =
@@ -252,6 +316,10 @@ module Content = struct
               function Leaf {kind= Bool; _} -> true | _ -> false) in
           validate_view metadata ~view_name:"is_operator" ~check_parameter
             ~check_return in
+        let permissions_descriptor =
+          match find_extra "permissions" with
+          | None -> None
+          | Some j -> Some (Permissions_descriptor.of_json j) in
         found
           (Tzip_12
              { metadata
@@ -260,6 +328,7 @@ module Content = struct
              ; total_supply
              ; all_tokens
              ; is_operator
+             ; permissions_descriptor
              ; logs= List.rev !logs }) in
     let exception Found of classified in
     fun metadata ->
