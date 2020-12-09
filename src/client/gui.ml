@@ -917,7 +917,6 @@ module Tezos_html = struct
           | Tzip_12
               { metadata
               ; interface_claim
-              ; logs
               ; get_balance
               ; total_supply
               ; all_tokens
@@ -1021,15 +1020,7 @@ module Tezos_html = struct
                     ; view_validation "is_operator" is_operator
                     ; show_permissions_descriptor permissions_descriptor
                     ; show_tokens_field tokens
-                    ; show_tokens_metadata_views token_metadata_views ]
-                % t "Logs:"
-                % itemize
-                    (List.map logs ~f:(fun (level, m) ->
-                         ( match level with
-                         | `Success -> t "✔"
-                         | `Error -> t "❌"
-                         | `Info -> t "💡" )
-                         %% Message_html.render ctxt m)) in
+                    ; show_tokens_metadata_views token_metadata_views ] in
               (metadata, [field "TZIP-12 Implementation" tzip_12_block])) in
       ( if open_in_editor_link then
         open_in_editor ctxt

@@ -270,8 +270,7 @@ module Content = struct
             Result.t
             Option.t
         ; token_metadata_views:
-            (string * [`Local of view_validation | `Foreign of string]) list
-        ; logs: ([`Error | `Info | `Success] * Message.t) list }
+            (string * [`Local of view_validation | `Foreign of string]) list }
 
   let find_michelson_view metadata ~view_name =
     let open Metadata_contents in
@@ -318,10 +317,6 @@ module Content = struct
   let classify : metadata -> classified =
     let open Metadata_contents in
     let looks_like_tzip_12 ~found metadata =
-      let logs = ref [] in
-      let log l = logs := (`Info, l) :: !logs in
-      (* let error l = logs := (`Error, l) :: !logs in
-         let success l = logs := (`Success, l) :: !logs in *)
       let interface_claim =
         List.find metadata.interfaces ~f:(String.is_prefix ~prefix:"TZIP-12")
         |> Option.map ~f:(function
@@ -336,9 +331,7 @@ module Content = struct
           | _ -> None) in
       let tokens =
         match find_extra "tokens" with
-        | Some s ->
-            log Message.(t "Found a" %% ct "\"tokens\"" %% t "field.") ;
-            Some (Token_metadata_specification.of_json s)
+        | Some s -> Some (Token_metadata_specification.of_json s)
         | _ -> None in
       if Option.is_none interface_claim && Option.is_none tokens then ()
       else
@@ -422,8 +415,7 @@ module Content = struct
              ; is_operator
              ; permissions_descriptor
              ; tokens
-             ; token_metadata_views
-             ; logs= List.rev !logs }) in
+             ; token_metadata_views }) in
     let exception Found of classified in
     fun metadata ->
       try
