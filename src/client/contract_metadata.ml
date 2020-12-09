@@ -320,6 +320,12 @@ module Content = struct
           match find_extra "permissions" with
           | None -> None
           | Some j -> Some (Permissions_descriptor.of_json j) in
+        let metadata =
+          { metadata with
+            unknown=
+              List.filter metadata.unknown ~f:(function
+                | "permissions", _ | "tokens", _ -> false
+                | _ -> true) } in
         found
           (Tzip_12
              { metadata

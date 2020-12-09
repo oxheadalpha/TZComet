@@ -711,17 +711,7 @@ module Tezos_html = struct
 
   let metadata_contents ?(open_in_editor_link = true) ctxt =
     let open Tezos_contract_metadata.Metadata_contents in
-    fun ( { name
-          ; description
-          ; version
-          ; license
-          ; authors
-          ; homepage
-          ; source
-          ; interfaces
-          ; errors
-          ; views
-          ; unknown } as metadata ) ->
+    fun (*  as *) metadata ->
       let ct = monot in
       let license_elt l =
         let open License in
@@ -864,7 +854,7 @@ module Tezos_html = struct
                 |> list )
               % t "." )
           :: option_field "Location" source.location url_elt ) in
-      let errors_elt errors =
+      let errors_elt ~views errors =
         let open Errors.Translation in
         let langs = function
           | None -> empty ()
@@ -909,13 +899,21 @@ module Tezos_html = struct
           (List.map kv ~f:(fun (k, v) ->
                ct k %% pre (ct (Ezjsonm.value_to_string ~minify:false v))))
       in
-      div
+      let ( { name
+            ; description
+            ; version
+            ; license
+            ; authors
+            ; homepage
+            ; source
+            ; interfaces
+            ; errors
+            ; views
+            ; unknown }
+          , sub_standards ) =
         Contract_metadata.Content.(
           match classify metadata with
-          | Tzip_16 _ ->
-              t
-                "This metadata blob was classified at “Just some random \
-                 TZIP-16” implementation."
+          | Tzip_16 t -> (t, [])
           | Tzip_12
               { metadata
               ; interface_claim
@@ -989,7 +987,7 @@ module Tezos_html = struct
                   | Some (Error e) ->
                       t "Permissions-descriptor is invalid:"
                       %% error_trace ctxt e in
-                t "This looks like a TZIP-12 contract (a.k.a. FA2). Logs:"
+                t "This looks like a TZIP-12 contract (a.k.a. FA2)."
                 % itemize
                     [ interface_claim
                     ; view_validation "get_balance" get_balance ~mandatory:true
@@ -997,6 +995,7 @@ module Tezos_html = struct
                     ; view_validation "all_tokens" all_tokens
                     ; view_validation "is_operator" is_operator
                     ; show_permissions_descriptor permissions_descriptor ]
+                % t "Logs:"
                 % itemize
                     (List.map logs ~f:(fun (level, m) ->
                          ( match level with
@@ -1004,21 +1003,22 @@ module Tezos_html = struct
                          | `Error -> t "❌"
                          | `Info -> t "💡" )
                          %% Message_html.render ctxt m)) in
-              Bootstrap.bordered tzip_12_block)
-      %% ( if open_in_editor_link then
-           open_in_editor ctxt
-             (Tezos_contract_metadata.Metadata_contents.to_json metadata)
-         else empty () )
+              (metadata, [field "TZIP-12 Implementation" tzip_12_block])) in
+      ( if open_in_editor_link then
+        open_in_editor ctxt
+          (Tezos_contract_metadata.Metadata_contents.to_json metadata)
+      else empty () )
       % itemize
           ( option_field "Name" name ct
           @ option_field "Version" version ct
           @ option_field "Description" description paragraphs
+          @ list_field "Interfaces" interfaces interfaces_elt
+          @ sub_standards
           @ option_field "License" license license_elt
           @ option_field "Homepage" homepage url_elt
           @ option_field "Source" source source_elt
           @ list_field "Authors" authors authors_elt
-          @ list_field "Interfaces" interfaces interfaces_elt
-          @ option_field "Errors" errors errors_elt
+          @ option_field "Errors" errors (errors_elt ~views)
           @ list_field "Views" views views_elt
           @ list_field "Extra/Unknown" unknown unknown_extras )
 end
