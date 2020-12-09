@@ -172,6 +172,63 @@ module Content = struct
       with e -> Tezos_error_monad.Error_monad.error_exn e
   end
 
+  module Token_metadata_specification = struct
+    type token_metadata = {symbol: string; name: string; decimals: int}
+    type static = {token_id: int; token_metadata: token_metadata}
+    type uri_of_id = {token_placeholder: string; uri: string}
+    type token_metadata_view = {name: string; address: string option}
+    type dynamic_access = Uri_of_id of uri_of_id | View of token_metadata_view
+    type dynamic = {access: dynamic_access; indirect: bool}
+    type t = {static: static list; dynamic: dynamic list}
+
+    let encoding =
+      let open Json_encoding in
+      let token_metadata =
+        conv
+          (fun {symbol; name; decimals} -> (symbol, name, decimals))
+          (fun (symbol, name, decimals) -> {symbol; name; decimals})
+          (obj3 (req "symbol" string) (req "name" string) (req "decimals" int))
+      in
+      let static =
+        conv
+          (fun {token_id; token_metadata} -> (token_id, token_metadata))
+          (fun (token_id, token_metadata) -> {token_id; token_metadata})
+          (obj2 (req "token-id" int) (req "token-metadata" token_metadata))
+      in
+      let dynamic =
+        let uri_of_id =
+          conv
+            (fun {token_placeholder; uri} -> (token_placeholder, uri))
+            (fun (token_placeholder, uri) -> {token_placeholder; uri})
+            (obj2 (req "token-placeholder" string) (req "uri" string)) in
+        conv
+          (fun {access; indirect} -> (access, indirect))
+          (fun (access, indirect) -> {access; indirect})
+          (union
+             [ case ~title:"uri-of-id"
+                 (obj2 (req "uri-of-id" uri_of_id) (dft "indirect" bool false))
+                 (function Uri_of_id u, i -> Some (u, i) | _ -> None)
+                 (fun (u, i) -> (Uri_of_id u, i))
+             ; case ~title:"view"
+                 (obj3 (req "view" string)
+                    (dft "indirect" bool false)
+                    (opt "address" string))
+                 (function
+                   | View {name; address}, i -> Some (name, i, address)
+                   | _ -> None)
+                 (fun (name, i, address) -> (View {name; address}, i)) ]) in
+      conv
+        (fun {static; dynamic} -> (static, dynamic))
+        (fun (static, dynamic) -> {static; dynamic})
+        (obj2 (dft "static" (list static) []) (dft "dynamic" (list dynamic) []))
+
+    let of_json jsonm =
+      try
+        let contents = Json_encoding.destruct encoding jsonm in
+        Ok contents
+      with e -> Tezos_error_monad.Error_monad.error_exn e
+  end
+
   open Tezos_contract_metadata
 
   type metadata = Metadata_contents.t
@@ -207,6 +264,13 @@ module Content = struct
             , Tezos_error_monad.Error_monad.tztrace )
             Result.t
             Option.t
+        ; tokens:
+            ( Token_metadata_specification.t
+            , Tezos_error_monad.Error_monad.tztrace )
+            Result.t
+            Option.t
+        ; token_metadata_views:
+            (string * [`Local of view_validation | `Foreign of string]) list
         ; logs: ([`Error | `Info | `Success] * Message.t) list }
 
   let find_michelson_view metadata ~view_name =
@@ -270,13 +334,13 @@ module Content = struct
         List.find_map metadata.unknown ~f:(function
           | n, json when String.equal name n -> Some json
           | _ -> None) in
-      let tokens_field =
+      let tokens =
         match find_extra "tokens" with
         | Some s ->
             log Message.(t "Found a" %% ct "\"tokens\"" %% t "field.") ;
-            Some s
+            Some (Token_metadata_specification.of_json s)
         | _ -> None in
-      if Option.is_none interface_claim && Option.is_none tokens_field then ()
+      if Option.is_none interface_claim && Option.is_none tokens then ()
       else
         let check_nat =
           Michelson.Partial_type.Structure.(
@@ -320,6 +384,28 @@ module Content = struct
           match find_extra "permissions" with
           | None -> None
           | Some j -> Some (Permissions_descriptor.of_json j) in
+        let token_metadata_views =
+          match tokens with
+          | Some (Ok toks) ->
+              let open Token_metadata_specification in
+              List.filter_map toks.dynamic ~f:(function
+                | {access= Uri_of_id _; _} -> None
+                | {access= View {name; address= None}; _} ->
+                    let validation =
+                      let check_return =
+                        Michelson.Partial_type.Structure.(
+                          function
+                          | Pair
+                              { left= Leaf {kind= Nat; _}
+                              ; right= Leaf {kind= Bytes; _} } ->
+                              true
+                          | _ -> false) in
+                      validate_view metadata ~view_name:name
+                        ~check_parameter:check_nat ~check_return in
+                    Some (name, `Local validation)
+                | {access= View {name; address= Some addr}; _} ->
+                    Some (name, `Foreign addr))
+          | Some (Error _) | None -> [] in
         let metadata =
           { metadata with
             unknown=
@@ -335,6 +421,8 @@ module Content = struct
              ; all_tokens
              ; is_operator
              ; permissions_descriptor
+             ; tokens
+             ; token_metadata_views
              ; logs= List.rev !logs }) in
     let exception Found of classified in
     fun metadata ->

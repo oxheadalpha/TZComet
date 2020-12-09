@@ -922,6 +922,8 @@ module Tezos_html = struct
               ; total_supply
               ; all_tokens
               ; is_operator
+              ; tokens
+              ; token_metadata_views
               ; permissions_descriptor } ->
               let tzip_12_block =
                 let interface_claim =
@@ -987,6 +989,29 @@ module Tezos_html = struct
                   | Some (Error e) ->
                       t "Permissions-descriptor is invalid:"
                       %% error_trace ctxt e in
+                let show_tokens_field tt =
+                  match tt with
+                  | None ->
+                      t
+                        "The token-metadata-access field is not present, this \
+                         is wrong."
+                  | Some (Ok _) -> t "The token-metadata-access field is valid."
+                  | Some (Error e) ->
+                      t "The token-metadata-access field is invalid:"
+                      %% error_trace ctxt e in
+                let show_tokens_metadata_views vl =
+                  match vl with
+                  | [] -> t "No extra views"
+                  | more ->
+                      t "Views required by the token-metadata-access field:"
+                      %% itemize
+                           (List.map more ~f:(function
+                             | name, `Local valid -> view_validation name valid
+                             | name, `Foreign addr ->
+                                 t "I won't validate further: the view"
+                                 %% ct name
+                                 %% t "should be available with contract"
+                                 %% ct addr % t ".")) in
                 t "This looks like a TZIP-12 contract (a.k.a. FA2)."
                 % itemize
                     [ interface_claim
@@ -994,7 +1019,9 @@ module Tezos_html = struct
                     ; view_validation "total_supply" total_supply
                     ; view_validation "all_tokens" all_tokens
                     ; view_validation "is_operator" is_operator
-                    ; show_permissions_descriptor permissions_descriptor ]
+                    ; show_permissions_descriptor permissions_descriptor
+                    ; show_tokens_field tokens
+                    ; show_tokens_metadata_views token_metadata_views ]
                 % t "Logs:"
                 % itemize
                     (List.map logs ~f:(fun (level, m) ->
