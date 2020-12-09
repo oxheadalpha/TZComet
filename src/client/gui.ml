@@ -826,9 +826,39 @@ module Tezos_html = struct
         itemize (List.map views ~f:(fun v -> view ~collapsing v)) in
       let source_elt source =
         let open Source in
+        let tool s =
+          let links =
+            [ ("michelson", "https://tezos.gitlab.io")
+            ; ("smartpy", "https://smartpy.io")
+            ; ("flextesa", "https://tezos.gitlab.io/flextesa")
+            ; ("dune", "https://dune.build")
+            ; ("archetype", "https://archetype-lang.org/")
+            ; ("ligo", "https://ligolang.org/")
+            ; ("cameligo", "https://ligolang.org/")
+            ; ("pascaligo", "https://ligolang.org/")
+            ; ("reasonligo", "https://ligolang.org/")
+            ; ("morley", "https://gitlab.com/morley-framework/morley")
+            ; ("lorentz", "https://serokell.io/project-lorentz-indigo")
+            ; ("indigo", "https://serokell.io/project-lorentz-indigo") ] in
+          let splitted = String.split ~on:' ' s in
+          match splitted with
+          | [] | [""] -> t "Empty Tool 👎"
+          | one :: more ->
+              let uncap = String.lowercase one in
+              List.find_map links ~f:(fun (prefix, target) ->
+                  if String.equal uncap prefix then
+                    Some
+                      ( link ~target (bt one)
+                      %
+                      match more with
+                      | [] -> empty ()
+                      | _ -> t " " % parens (ct (String.concat ~sep:" " more))
+                      )
+                  else None)
+              |> Option.value ~default:(bt s) in
         itemize
           ( field "Tools"
-              ( ( oxfordize_list source.tools ~map:ct
+              ( ( oxfordize_list source.tools ~map:tool
                     ~sep:(fun () -> t ", ")
                     ~last_sep:(fun () -> t ", and ")
                 |> list )
