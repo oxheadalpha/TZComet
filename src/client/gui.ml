@@ -771,7 +771,7 @@ module Tezos_html = struct
         List.map l ~f:interface |> List.intersperse ~sep:(t ", ") |> list in
       let _todo l = Fmt.kstr t "todo: %d items" (List.length l) in
       let view_id s = Fmt.str "view-%s" s in
-      let view v =
+      let view ?(collapsing = false) v =
         let open View in
         let purity =
           if v.is_pure then Bootstrap.color `Success (t "pure")
@@ -791,22 +791,39 @@ module Tezos_html = struct
                            (Fmt.kstr ct "%s"
                               (Cohttp.Code.string_of_method raq.meth)) ))))
         in
+        let maybe_collapse content =
+          if collapsing then
+            let open Bootstrap.Collapse in
+            let collapse = make () in
+            let btn =
+              make_button collapse ~kind:`Secondary
+                ~style:(Reactive.pure (Fmt.str "width: 8em"))
+                (Reactive.bind (collapsed_state collapse) ~f:(function
+                  | true -> t "Expand"
+                  | false -> t "Collapse")) in
+            let dv = make_div collapse (fun () -> content) in
+            btn %% dv
+          else content in
         div
           ~a:[H5.a_id (Lwd.pure (view_id v.name))]
           ( bt v.name %% t "(" % purity % t "):"
-          % itemize
-              ( option_field "Description" v.description paragraphs
-              @
-              match v.implementations with
-              | [] ->
-                  [Bootstrap.color `Danger (t "There are no implementations.")]
-              | l ->
-                  let name =
-                    Fmt.str "Implementation%s"
-                      (if List.length l = 1 then "" else "s") in
-                  list_field name v.implementations implementations ) ) in
+          % maybe_collapse
+              (itemize
+                 ( option_field "Description" v.description paragraphs
+                 @
+                 match v.implementations with
+                 | [] ->
+                     [ Bootstrap.color `Danger
+                         (t "There are no implementations.") ]
+                 | l ->
+                     let name =
+                       Fmt.str "Implementation%s"
+                         (if List.length l = 1 then "" else "s") in
+                     list_field name v.implementations implementations )) )
+      in
       let views_elt (views : View.t list) =
-        itemize (List.map views ~f:(fun v -> view v)) in
+        let collapsing = List.length views >= 3 in
+        itemize (List.map views ~f:(fun v -> view ~collapsing v)) in
       let source_elt source =
         let open Source in
         itemize
