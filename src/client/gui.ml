@@ -925,12 +925,13 @@ module Tezos_html = struct
               ; token_metadata_views
               ; permissions_descriptor } ->
               let tzip_12_block =
+                let errorify c = Bootstrap.color `Danger c in
                 let interface_claim =
                   t "Interface claim is"
                   %%
                   match interface_claim with
-                  | None -> t "missing."
-                  | Some (`Invalid s) -> t "invalid: " %% ct s
+                  | None -> t "missing." |> errorify
+                  | Some (`Invalid s) -> t "invalid: " %% ct s |> errorify
                   | Some (`Version s) ->
                       t "valid, and defines version as" %% ct s
                   | Some `Just_interface -> t "valid" in
@@ -939,14 +940,17 @@ module Tezos_html = struct
                   match v with
                   | Missing when not mandatory ->
                       t "Optional View" %% ct name %% t "is not there."
-                  | Missing -> t "Mandatory View" %% ct name %% t "is missing."
+                  | Missing ->
+                      t "Mandatory View" %% ct name %% t "is missing."
+                      |> errorify
                   | No_michelson_implementation _ ->
                       t "View" %% ct name
                       %% t
                            "is invalid: it is missing a Michelson \
                             implementation."
+                      |> errorify
                   | Invalid {parameter_status; return_status; _} ->
-                      t "View" %% ct name %% t "is invalid:"
+                      errorify (t "View" %% ct name %% t "is invalid:")
                       %% itemize
                            [ ( t "Parameter type"
                              %%
@@ -954,29 +958,32 @@ module Tezos_html = struct
                              | `Ok, _ -> t "is ok."
                              | `Wrong, None ->
                                  (* This should not happen. *)
-                                 t "is wrong: not found."
+                                 errorify (t "is wrong: not found.")
                              | `Wrong, Some pt ->
-                                 t "is wrong:"
-                                 %% ct
-                                      (Michelson.micheline_canonical_to_string
-                                         pt.original)
+                                 errorify
+                                   ( t "is wrong:"
+                                   %% ct
+                                        (Michelson.micheline_canonical_to_string
+                                           pt.original) )
                              | `Unchecked_Parameter, None ->
-                                 t "is expectedly not defined."
+                                 errorify (t "is expectedly not defined.")
                              | `Unchecked_Parameter, Some _ ->
-                                 t "is defined while it shouldn't."
-                             | `Missing_parameter, _ -> t "is missing." )
+                                 errorify (t "is defined while it shouldn't.")
+                             | `Missing_parameter, _ ->
+                                 errorify (t "is missing.") )
                            ; ( t "Return type"
                              %%
                              match return_status with
                              | `Ok, _ -> t "is ok."
                              | `Wrong, None ->
                                  (* This should not happen. *)
-                                 t "is wrong: not found."
+                                 errorify (t "is wrong: not found.")
                              | `Wrong, Some pt ->
-                                 t "is wrong:"
-                                 %% ct
-                                      (Michelson.micheline_canonical_to_string
-                                         pt.original) ) ]
+                                 errorify
+                                   ( t "is wrong:"
+                                   %% ct
+                                        (Michelson.micheline_canonical_to_string
+                                           pt.original) ) ) ]
                   | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
                 let show_permissions_descriptor pd =
                   match pd with
@@ -986,18 +993,19 @@ module Tezos_html = struct
                          default permissions)."
                   | Some (Ok _) -> t "Permissions-descriptor is valid."
                   | Some (Error e) ->
-                      t "Permissions-descriptor is invalid:"
-                      %% error_trace ctxt e in
+                      errorify (t "Permissions-descriptor is invalid:")
+                      %% div (error_trace ctxt e) in
                 let show_tokens_field tt =
                   match tt with
                   | None ->
-                      t
-                        "The token-metadata-access field is not present, this \
-                         is wrong."
+                      errorify
+                        (t
+                           "The token-metadata-access field is not present, \
+                            this is wrong.")
                   | Some (Ok _) -> t "The token-metadata-access field is valid."
                   | Some (Error e) ->
-                      t "The token-metadata-access field is invalid:"
-                      %% error_trace ctxt e in
+                      errorify (t "The token-metadata-access field is invalid:")
+                      %% div (error_trace ctxt e) in
                 let show_tokens_metadata_views vl =
                   match vl with
                   | [] -> t "No extra views"
