@@ -69,7 +69,9 @@ module Partial_type = struct
       | Bytes
       | Address
       | Bool
+      | String
       | List of type_kind
+      | Map of type_kind * type_kind
 
     type leaf = string Reactive.var
 
@@ -105,11 +107,18 @@ module Partial_type = struct
       | Prim (_, "nat", [], annot) -> leaf Nat ~annot
       | Prim (_, "mutez", [], annot) -> leaf Mutez ~annot
       | Prim (_, "bytes", [], annot) -> leaf Bytes ~annot
+      | Prim (_, "string", [], annot) -> leaf String ~annot
       | Prim (_, "address", [], annot) -> leaf Address ~annot
       | Prim (_, "bool", [], annot) -> leaf Bool ~annot
       | Prim (_, "pair", [l; r], _) -> Pair {left= go l; right= go r}
       | Prim (_, "list", [Prim (_, "nat", [], _)], annot) ->
           leaf (List Nat) ~annot
+      | Prim
+          ( _
+          , "map"
+          , [Prim (_, "string", [], _); Prim (_, "bytes", [], _)]
+          , annot ) ->
+          leaf (Map (String, Bytes)) ~annot
       | Prim (_, _, _, annot) -> leaf Any ~annot
       | tp -> leaf Any in
     {original= m; structure= go (root m)}
@@ -174,9 +183,10 @@ module Partial_type = struct
     | Nat -> t "Invalid natural number."
     | Mutez -> t "Invalid μꜩ value."
     | Bytes -> t "Invalid bytes value."
+    | String -> t "Invalid string value."
     | Address -> t "Invalid address."
     | Bool -> t "Invalid boolean."
-    | Any | List _ -> t "Invalid Micheline syntax."
+    | Any | List _ | Map _ -> t "Invalid Micheline syntax."
 
   let to_form_items mf =
     let open Meta_html in

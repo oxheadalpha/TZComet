@@ -310,8 +310,9 @@ module Content = struct
           let check_return =
             Michelson.Partial_type.Structure.(
               function
-              | Pair {left= Leaf {kind= Nat; _}; right= Leaf {kind= Bytes; _}}
-                ->
+              | Pair
+                  { left= Leaf {kind= Nat; _}
+                  ; right= Leaf {kind= Map (String, Bytes); _} } ->
                   true
               | _ -> false) in
           validate_view metadata ~view_name:"token_metadata"
