@@ -921,8 +921,7 @@ module Tezos_html = struct
               ; total_supply
               ; all_tokens
               ; is_operator
-              ; tokens
-              ; token_metadata_views
+              ; token_metadata
               ; permissions_descriptor } ->
               let tzip_12_block =
                 let errorify c = Bootstrap.color `Danger c in
@@ -935,11 +934,12 @@ module Tezos_html = struct
                   | Some (`Version s) ->
                       t "valid, and defines version as" %% ct s
                   | Some `Just_interface -> t "valid" in
-                let view_validation ?(mandatory = false) name
-                    (v : view_validation) =
+                let view_validation ?(missing_add_on = empty)
+                    ?(mandatory = false) name (v : view_validation) =
                   match v with
                   | Missing when not mandatory ->
                       t "Optional View" %% ct name %% t "is not there."
+                      %% missing_add_on ()
                   | Missing ->
                       t "Mandatory View" %% ct name %% t "is missing."
                       |> errorify
@@ -995,30 +995,13 @@ module Tezos_html = struct
                   | Some (Error e) ->
                       errorify (t "Permissions-descriptor is invalid:")
                       %% div (error_trace ctxt e) in
-                let show_tokens_field tt =
-                  match tt with
-                  | None ->
-                      errorify
-                        (t
-                           "The token-metadata-access field is not present, \
-                            this is wrong.")
-                  | Some (Ok _) -> t "The token-metadata-access field is valid."
-                  | Some (Error e) ->
-                      errorify (t "The token-metadata-access field is invalid:")
-                      %% div (error_trace ctxt e) in
-                let show_tokens_metadata_views vl =
-                  match vl with
-                  | [] -> t "No extra views"
-                  | more ->
-                      t "Views required by the token-metadata-access field:"
-                      %% itemize
-                           (List.map more ~f:(function
-                             | name, `Local valid -> view_validation name valid
-                             | name, `Foreign addr ->
-                                 t "I won't validate further: the view"
-                                 %% ct name
-                                 %% t "should be available with contract"
-                                 %% ct addr % t ".")) in
+                let show_tokens_metadata tm =
+                  view_validation "token_metadata" tm ~missing_add_on:(fun () ->
+                      t
+                        "This means that the contract must provide \
+                         token-specific metadata using a big-map annotated \
+                         with"
+                      %% ct "%token_metadata" % t ".") in
                 t "This looks like a TZIP-12 contract (a.k.a. FA2)."
                 % itemize
                     [ interface_claim
@@ -1026,9 +1009,8 @@ module Tezos_html = struct
                     ; view_validation "total_supply" total_supply
                     ; view_validation "all_tokens" all_tokens
                     ; view_validation "is_operator" is_operator
-                    ; show_permissions_descriptor permissions_descriptor
-                    ; show_tokens_field tokens
-                    ; show_tokens_metadata_views token_metadata_views ] in
+                    ; show_tokens_metadata token_metadata
+                    ; show_permissions_descriptor permissions_descriptor ] in
               (metadata, [field "TZIP-12 Implementation" tzip_12_block])) in
       ( if open_in_editor_link then
         open_in_editor ctxt
