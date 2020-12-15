@@ -209,6 +209,22 @@ module Content = struct
             Option.t
         ; token_metadata: view_validation }
 
+  let is_valid = function
+    | Tzip_16 _ -> true
+    | Tzip_12 t12 -> (
+        ( match t12.interface_claim with
+        | Some `Just_interface | Some (`Version _) -> true
+        | _ -> false )
+        && List.for_all
+             [ t12.get_balance; t12.total_supply; t12.all_tokens; t12.is_operator
+             ; t12.token_metadata ] ~f:(function
+             | Missing | Valid _ -> true
+             | _ -> false)
+        &&
+        match t12.permissions_descriptor with
+        | None | Some (Ok _) -> true
+        | _ -> false )
+
   let find_michelson_view metadata ~view_name =
     let open Metadata_contents in
     List.find_map metadata.views ~f:(function
