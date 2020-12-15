@@ -922,7 +922,7 @@ module Tezos_html = struct
               ; all_tokens
               ; is_operator
               ; token_metadata
-              ; permissions_descriptor } ->
+              ; permissions_descriptor } as t12 ->
               let tzip_12_block =
                 let errorify c = Bootstrap.color `Danger c in
                 let interface_claim =
@@ -1002,10 +1002,14 @@ module Tezos_html = struct
                          token-specific metadata using a big-map annotated \
                          with"
                       %% ct "%token_metadata" % t ".") in
-                t "This looks like a TZIP-12 contract (a.k.a. FA2)."
+                let global_validity = Contract_metadata.Content.is_valid t12 in
+                t "This looks like a TZIP-12 contract (a.k.a. FA2);"
+                %% ( match global_validity with
+                   | true -> Bootstrap.color `Success (t "it seems valid.")
+                   | false -> Bootstrap.color `Danger (t "it is invalid.") )
                 % itemize
                     [ interface_claim
-                    ; view_validation "get_balance" get_balance ~mandatory:true
+                    ; view_validation "get_balance" get_balance ~mandatory:false
                     ; view_validation "total_supply" total_supply
                     ; view_validation "all_tokens" all_tokens
                     ; view_validation "is_operator" is_operator
