@@ -93,7 +93,7 @@ module Node = struct
     >>= fun () ->
     Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/script" address
     >>= fun script_string ->
-    log "Got raw script: %s…" (String.prefix script_string 30) ;
+    log "Got raw script: %s…" (ellipsize_string script_string ~max_length:30) ;
     let mich_storage_type =
       Michelson.micheline_of_json script_string
       |> Tezos_micheline.Micheline.strip_locations
@@ -347,7 +347,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   Fmt.kstr (Node.rpc_get ctxt node) "/chains/main/chain_id"
   >>= fun chain_id ->
   let chain_id = Ezjsonm.(value_from_string chain_id |> get_string) in
-  logf "Got the script: %s" script ;
+  logf "Got the script: %s" (ellipsize_string script ~max_length:30) ;
   let contract_storage = Michelson.micheline_of_json storage in
   let `Contract view_contract, `Input view_input, `Storage view_storage =
     let code_mich = Michelson.micheline_of_json script in
