@@ -709,6 +709,122 @@ module Tezos_html = struct
              %% michelson_instruction "ADDRESS" )
         %% t "in off-chain-views."
 
+  let metadata_substandards ctxt metadata =
+    Contract_metadata.Content.(
+      match classify metadata with
+      | Tzip_16 t -> (t, [])
+      | Tzip_12
+          { metadata
+          ; interface_claim
+          ; get_balance
+          ; total_supply
+          ; all_tokens
+          ; is_operator
+          ; token_metadata
+          ; permissions_descriptor } as t12 ->
+          let tzip_12_block =
+            let errorify c = Bootstrap.color `Danger c in
+            let interface_claim =
+              t "Interface claim is"
+              %%
+              match interface_claim with
+              | None -> t "missing." |> errorify
+              | Some (`Invalid s) -> t "invalid: " %% ct s |> errorify
+              | Some (`Version s) -> t "valid, and defines version as" %% ct s
+              | Some `Just_interface -> t "valid" in
+            let view_validation ?(missing_add_on = empty) ?(mandatory = false)
+                name (v : view_validation) =
+              match v with
+              | Missing when not mandatory ->
+                  t "Optional View" %% ct name %% t "is not there."
+                  %% missing_add_on ()
+              | Missing ->
+                  t "Mandatory View" %% ct name %% t "is missing." |> errorify
+              | No_michelson_implementation _ ->
+                  t "View" %% ct name
+                  %% t "is invalid: it is missing a Michelson implementation."
+                  |> errorify
+              | Invalid {parameter_status; return_status; _} ->
+                  errorify (t "View" %% ct name %% t "is invalid:")
+                  %% itemize
+                       [ ( t "Parameter type"
+                         %%
+                         match parameter_status with
+                         | `Ok, _ -> t "is ok."
+                         | `Wrong, None ->
+                             (* This should not happen. *)
+                             errorify (t "is wrong: not found.")
+                         | `Wrong, Some pt ->
+                             errorify
+                               ( t "is wrong:"
+                               %% ct
+                                    (Michelson.micheline_canonical_to_string
+                                       pt.original) )
+                         | `Unchecked_Parameter, None ->
+                             errorify (t "is expectedly not defined.")
+                         | `Unchecked_Parameter, Some _ ->
+                             errorify (t "is defined while it shouldn't.")
+                         | `Missing_parameter, _ -> errorify (t "is missing.")
+                         )
+                       ; ( t "Return type"
+                         %%
+                         match return_status with
+                         | `Ok, _ -> t "is ok."
+                         | `Wrong, None ->
+                             (* This should not happen. *)
+                             errorify (t "is wrong: not found.")
+                         | `Wrong, Some pt ->
+                             errorify
+                               ( t "is wrong:"
+                               %% ct
+                                    (Michelson.micheline_canonical_to_string
+                                       pt.original) ) ) ]
+              | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
+            let show_permissions_descriptor pd =
+              match pd with
+              | None ->
+                  t
+                    "Permissions-descriptor is not present (assuming default \
+                     permissions)."
+              | Some (Ok _) -> t "Permissions-descriptor is valid."
+              | Some (Error e) ->
+                  errorify (t "Permissions-descriptor is invalid:")
+                  %% div (error_trace ctxt e) in
+            let show_tokens_metadata tm =
+              view_validation "token_metadata" tm ~missing_add_on:(fun () ->
+                  t
+                    "This means that the contract must provide token-specific \
+                     metadata using a big-map annotated with"
+                  %% ct "%token_metadata" % t ".") in
+            let global_validity = Contract_metadata.Content.is_valid t12 in
+            let show_validity_btn, validity_div =
+              let validity_details () =
+                itemize
+                  [ interface_claim
+                  ; view_validation "get_balance" get_balance ~mandatory:false
+                  ; view_validation "total_supply" total_supply
+                  ; view_validation "all_tokens" all_tokens
+                  ; view_validation "is_operator" is_operator
+                  ; show_tokens_metadata token_metadata
+                  ; show_permissions_descriptor permissions_descriptor ] in
+              let open Bootstrap.Collapse in
+              let collapse = make () in
+              let btn =
+                make_button collapse
+                  ~kind:(if global_validity then `Secondary else `Danger)
+                  (* ~style:(Reactive.pure (Fmt.str "width: 8em")) *)
+                  (Reactive.bind (collapsed_state collapse) ~f:(function
+                    | true -> t "Expand Validity Info"
+                    | false -> t "Collapse Validity Info")) in
+              let dv = make_div collapse (fun () -> validity_details ()) in
+              (btn, dv) in
+            t "This looks like a TZIP-12 contract (a.k.a. FA2);"
+            %% ( match global_validity with
+               | true -> Bootstrap.color `Success (t "it seems valid.")
+               | false -> Bootstrap.color `Danger (t "it is invalid.") )
+            % div (show_validity_btn % validity_div) in
+          (metadata, [field "TZIP-12 Implementation" tzip_12_block]))
+
   let metadata_contents ?(open_in_editor_link = true) ctxt =
     let open Tezos_contract_metadata.Metadata_contents in
     fun (*  as *) metadata ->
@@ -911,111 +1027,7 @@ module Tezos_html = struct
             ; views
             ; unknown }
           , sub_standards ) =
-        Contract_metadata.Content.(
-          match classify metadata with
-          | Tzip_16 t -> (t, [])
-          | Tzip_12
-              { metadata
-              ; interface_claim
-              ; get_balance
-              ; total_supply
-              ; all_tokens
-              ; is_operator
-              ; token_metadata
-              ; permissions_descriptor } as t12 ->
-              let tzip_12_block =
-                let errorify c = Bootstrap.color `Danger c in
-                let interface_claim =
-                  t "Interface claim is"
-                  %%
-                  match interface_claim with
-                  | None -> t "missing." |> errorify
-                  | Some (`Invalid s) -> t "invalid: " %% ct s |> errorify
-                  | Some (`Version s) ->
-                      t "valid, and defines version as" %% ct s
-                  | Some `Just_interface -> t "valid" in
-                let view_validation ?(missing_add_on = empty)
-                    ?(mandatory = false) name (v : view_validation) =
-                  match v with
-                  | Missing when not mandatory ->
-                      t "Optional View" %% ct name %% t "is not there."
-                      %% missing_add_on ()
-                  | Missing ->
-                      t "Mandatory View" %% ct name %% t "is missing."
-                      |> errorify
-                  | No_michelson_implementation _ ->
-                      t "View" %% ct name
-                      %% t
-                           "is invalid: it is missing a Michelson \
-                            implementation."
-                      |> errorify
-                  | Invalid {parameter_status; return_status; _} ->
-                      errorify (t "View" %% ct name %% t "is invalid:")
-                      %% itemize
-                           [ ( t "Parameter type"
-                             %%
-                             match parameter_status with
-                             | `Ok, _ -> t "is ok."
-                             | `Wrong, None ->
-                                 (* This should not happen. *)
-                                 errorify (t "is wrong: not found.")
-                             | `Wrong, Some pt ->
-                                 errorify
-                                   ( t "is wrong:"
-                                   %% ct
-                                        (Michelson.micheline_canonical_to_string
-                                           pt.original) )
-                             | `Unchecked_Parameter, None ->
-                                 errorify (t "is expectedly not defined.")
-                             | `Unchecked_Parameter, Some _ ->
-                                 errorify (t "is defined while it shouldn't.")
-                             | `Missing_parameter, _ ->
-                                 errorify (t "is missing.") )
-                           ; ( t "Return type"
-                             %%
-                             match return_status with
-                             | `Ok, _ -> t "is ok."
-                             | `Wrong, None ->
-                                 (* This should not happen. *)
-                                 errorify (t "is wrong: not found.")
-                             | `Wrong, Some pt ->
-                                 errorify
-                                   ( t "is wrong:"
-                                   %% ct
-                                        (Michelson.micheline_canonical_to_string
-                                           pt.original) ) ) ]
-                  | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
-                let show_permissions_descriptor pd =
-                  match pd with
-                  | None ->
-                      t
-                        "Permissions-descriptor is not present (assuming \
-                         default permissions)."
-                  | Some (Ok _) -> t "Permissions-descriptor is valid."
-                  | Some (Error e) ->
-                      errorify (t "Permissions-descriptor is invalid:")
-                      %% div (error_trace ctxt e) in
-                let show_tokens_metadata tm =
-                  view_validation "token_metadata" tm ~missing_add_on:(fun () ->
-                      t
-                        "This means that the contract must provide \
-                         token-specific metadata using a big-map annotated \
-                         with"
-                      %% ct "%token_metadata" % t ".") in
-                let global_validity = Contract_metadata.Content.is_valid t12 in
-                t "This looks like a TZIP-12 contract (a.k.a. FA2);"
-                %% ( match global_validity with
-                   | true -> Bootstrap.color `Success (t "it seems valid.")
-                   | false -> Bootstrap.color `Danger (t "it is invalid.") )
-                % itemize
-                    [ interface_claim
-                    ; view_validation "get_balance" get_balance ~mandatory:false
-                    ; view_validation "total_supply" total_supply
-                    ; view_validation "all_tokens" all_tokens
-                    ; view_validation "is_operator" is_operator
-                    ; show_tokens_metadata token_metadata
-                    ; show_permissions_descriptor permissions_descriptor ] in
-              (metadata, [field "TZIP-12 Implementation" tzip_12_block])) in
+        metadata_substandards ctxt metadata in
       ( if open_in_editor_link then
         open_in_editor ctxt
           (Tezos_contract_metadata.Metadata_contents.to_json metadata)
