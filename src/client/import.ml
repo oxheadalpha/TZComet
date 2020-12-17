@@ -149,6 +149,10 @@ module System = struct
     let timeout = http_timeout_peek ctxt in
     Lwt.pick
       [f (); (Js_of_ocaml_lwt.Lwt_js.sleep timeout >>= fun () -> raise timeout)]
+
+  let now () = (new%js Js_of_ocaml.Js.date_now)##valueOf /. 1000.
+  let time_zero = now ()
+  let program_time () = now () -. time_zero
 end
 
 module Browser_window = struct

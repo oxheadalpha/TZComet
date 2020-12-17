@@ -6,12 +6,46 @@ end
 
 open Node_status
 
+module Rpc_cache = struct
+  module Hashtbl = Caml.Hashtbl
+
+  type t = (string, float * string) Hashtbl.t
+
+  let create () : t = Hashtbl.create 42
+
+  let add (t : t) ~rpc ~response =
+    let now = System.program_time () in
+    dbgf "CACHE-ADD: %s (%.0f)" rpc now ;
+    Hashtbl.add t rpc (now, response)
+
+  let get (t : t) ~rpc =
+    let now = System.program_time () in
+    let best_ts = ref 0. in
+    let best = ref None in
+    let filter r (ts, v) =
+      if Float.(!best_ts < ts) && String.equal rpc r then (
+        best_ts := ts ;
+        best := Some v ) ;
+      if Float.(ts + 120. < now) then None else Some (ts, v) in
+    Hashtbl.filter_map_inplace filter t ;
+    let age = now -. !best_ts in
+    dbgf "CACHE-GET:\n %s\n → now: %.0f\n → age: %.0f\n → %s" rpc now age
+      (if Option.is_none !best then "MISS" else "HIT") ;
+    (age, !best)
+end
+
 module Node = struct
   type t =
-    {name: string; prefix: string; status: (float * Node_status.t) Reactive.var}
+    { name: string
+    ; prefix: string
+    ; status: (float * Node_status.t) Reactive.var
+    ; rpc_cache: Rpc_cache.t }
 
   let create name prefix =
-    {name; prefix; status= Reactive.var (0., Uninitialized)}
+    { name
+    ; prefix
+    ; status= Reactive.var (0., Uninitialized)
+    ; rpc_cache= Rpc_cache.create () }
 
   let status n = Reactive.get n.status
 
@@ -23,20 +57,27 @@ module Node = struct
         Message.(
           t "Calling" %% ct "HTTP-GET" %% ct path %% t "on node" %% ct node.name
           %% msg) in
-    System.with_timeout ctxt
-      ~f:
-        Js_of_ocaml_lwt.XmlHttpRequest.(
-          fun () ->
-            get uri
-            >>= fun frame ->
-            dbgf "%s %s code: %d" node.prefix path frame.code ;
-            match frame.code with
-            | 200 -> return frame.content
-            | other ->
-                fail Message.(t "failed with code" %% Fmt.kstr ct "%d" other))
-      ~raise:(fun timeout ->
-        dbgf "Node-%S GET %s → TIMEOUT" node.name path ;
-        fail Message.(Fmt.kstr t "timeouted (%.03f seconds)" timeout))
+    let actually_get () =
+      System.with_timeout ctxt
+        ~f:
+          Js_of_ocaml_lwt.XmlHttpRequest.(
+            fun () ->
+              get uri
+              >>= fun frame ->
+              dbgf "%s %s code: %d" node.prefix path frame.code ;
+              match frame.code with
+              | 200 ->
+                  Rpc_cache.add node.rpc_cache ~rpc:path ~response:frame.content ;
+                  return frame.content
+              | other ->
+                  fail Message.(t "failed with code" %% Fmt.kstr ct "%d" other))
+        ~raise:(fun timeout ->
+          dbgf "Node-%S GET %s → TIMEOUT" node.name path ;
+          fail Message.(Fmt.kstr t "timeouted (%.03f seconds)" timeout)) in
+    match Rpc_cache.get node.rpc_cache ~rpc:path with
+    | _, None -> actually_get ()
+    | age, Some _ when Float.(age > 120.) -> actually_get ()
+    | _, Some s -> Lwt.return s
 
   let rpc_post ctxt node ~body path =
     let open Lwt in
@@ -241,7 +282,7 @@ module Update_status_loop = struct
              Node.ping ctxt nod
              >>= fun new_status ->
              dbgf "got status for %s" nod.name ;
-             let now = (new%js Js_of_ocaml.Js.date_now)##valueOf in
+             let now = System.now () in
              Reactive.set nod.status (now, new_status) ;
              Lwt.return ())
          >>= fun () ->
