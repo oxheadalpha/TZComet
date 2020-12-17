@@ -1018,8 +1018,9 @@ module Tezos_html = struct
                                 Bootstrap.Table.simple ~header_row
                                   (List.fold (one :: more) ~init:(empty ())
                                      ~f:(fun prev tok ->
-                                       H5.tr
-                                         (List.map tok ~f:(fun (_, v) -> td v))))
+                                       prev
+                                       % H5.tr
+                                           (List.map tok ~f:(fun (_, v) -> td v))))
                           in
                           Async_work.ok wip_explore_tokens token_list ;
                           Lwt.return ()) ;
