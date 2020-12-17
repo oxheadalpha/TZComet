@@ -989,17 +989,35 @@ module Tezos_html = struct
                                          Fmt.kstr ct "%S" k %% t "→"
                                          %% Fmt.kstr ct "%S" v))
                               | Error m -> Message_html.render ctxt m in
+                            let default_show = function
+                              | Ok node ->
+                                  ct (Michelson.micheline_node_to_string node)
+                              | Error s -> Bootstrap.color `Danger (t s) in
+                            let show_total_supply = function
+                              | Ok (Tezos_micheline.Micheline.Int (_, z)) -> (
+                                match Option.map ~f:Int.of_string decimals with
+                                | Some decimals ->
+                                    let dec =
+                                      Float.(
+                                        Z.to_float z / (10. ** of_int decimals))
+                                    in
+                                    Fmt.kstr t "%s (%a Units)"
+                                      (Float.to_string_hum ~delimiter:' '
+                                         ~decimals ~strip_zero:true dec)
+                                      Z.pp_print z
+                                | None | (exception _) ->
+                                    Fmt.kstr t "%a Units (no decimals)"
+                                      Z.pp_print z )
+                              | other -> ct "Error: " %% default_show other
+                            in
                             let metarows =
-                              let default_show = function
-                                | Ok node ->
-                                    ct (Michelson.micheline_node_to_string node)
-                                | Error s -> Bootstrap.color `Danger (t s) in
                               let or_not n o ~f =
-                                match o with None -> [] | Some s -> [(n, f s)]
-                              in
+                                match o with
+                                | None -> [(n, empty ())]
+                                | Some s -> [(n, f s)] in
                               [("Token Id", Fmt.kstr ct "%04d" id)]
                               @ or_not "Total Supply" total_supply
-                                  ~f:default_show
+                                  ~f:show_total_supply
                               @ or_not "Symbol" symbol ~f:it
                               @ or_not "Name" name ~f:it
                               @ or_not "Decimals" decimals ~f:it
