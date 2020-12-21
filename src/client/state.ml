@@ -241,6 +241,7 @@ let link_to_editor ctxt content ~text =
       [ H5.a_href href
       ; H5.a_onclick
           (Tyxml_lwd.Lwdom.attr (fun _ ->
+               Reactive.set (get ctxt).editor_should_load false ;
                set_editor_content ctxt text ;
                set_page ctxt (`Changing_to Page.Editor) () ;
                false)) ]
