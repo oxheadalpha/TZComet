@@ -1185,7 +1185,8 @@ module Tezos_html = struct
             ; ("reasonligo", "https://ligolang.org/")
             ; ("morley", "https://gitlab.com/morley-framework/morley")
             ; ("lorentz", "https://serokell.io/project-lorentz-indigo")
-            ; ("indigo", "https://serokell.io/project-lorentz-indigo") ] in
+            ; ("indigo", "https://serokell.io/project-lorentz-indigo")
+            ; ("scaml", "https://www.scamlang.dev/") ] in
           let splitted = String.split ~on:' ' s in
           match splitted with
           | [] | [""] -> t "Empty Tool 👎"
