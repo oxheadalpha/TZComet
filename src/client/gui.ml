@@ -709,7 +709,7 @@ module Tezos_html = struct
              %% michelson_instruction "ADDRESS" )
         %% t "in off-chain-views."
 
-  let metadata_substandards ctxt metadata =
+  let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
     Contract_metadata.Content.(
       match classify metadata with
       | Tzip_16 t -> (t, [])
@@ -820,7 +820,9 @@ module Tezos_html = struct
               (btn, dv) in
             let wip_explore_tokens = Async_work.empty () in
             let can_enumerate_tokens, explore_tokens_btn =
-              match (global_validity, all_tokens) with
+              match
+                (global_validity && add_explore_tokens_button, all_tokens)
+              with
               | true, Valid (_, view) ->
                   let action () =
                     Async_work.reinit wip_explore_tokens ;
@@ -1065,7 +1067,8 @@ module Tezos_html = struct
           in
           (metadata, [field "TZIP-12 Implementation Claim" tzip_12_block]))
 
-  let metadata_contents ?(open_in_editor_link = true) ctxt =
+  let metadata_contents ~add_explore_tokens_button ?(open_in_editor_link = true)
+      ctxt =
     let open Tezos_contract_metadata.Metadata_contents in
     fun (*  as *) metadata ->
       let ct = monot in
@@ -1268,7 +1271,7 @@ module Tezos_html = struct
             ; views
             ; unknown }
           , sub_standards ) =
-        metadata_substandards ctxt metadata in
+        metadata_substandards ~add_explore_tokens_button ctxt metadata in
       ( if open_in_editor_link then
         open_in_editor ctxt
           (Tezos_contract_metadata.Metadata_contents.to_json metadata)
@@ -1429,6 +1432,7 @@ module Editor = struct
             (Tezos_html.metadata_validation_warning ctxt)
         % h4 (t "Contents")
         % Tezos_html.metadata_contents ~open_in_editor_link:false ctxt m
+            ~add_explore_tokens_button:false
     | Error el ->
         big_answer `Error (t "This metadata JSON is not valid 🥸")
         % Tezos_html.error_trace ctxt el
@@ -1853,7 +1857,7 @@ module Explorer = struct
     % h4 (t "Metadata Location")
     % Tezos_html.metadata_uri ctxt uri
     % h4 (t "Metadata Contents")
-    % Tezos_html.metadata_contents ctxt metadata
+    % Tezos_html.metadata_contents ctxt metadata ~add_explore_tokens_button:true
 
   let uri_ok_but_metadata_failure ctxt ~uri ~metadata_json ~error ~full_input =
     let open Meta_html in
