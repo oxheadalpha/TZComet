@@ -2,15 +2,39 @@ open! Import
 
 type log_item = Html_types.div_content_fun Meta_html.H5.elt
 type 'a status = Empty | Work_in_progress | Done of ('a, log_item) Result.t
-type 'a t = {logs: log_item Reactive.Table.t; status: 'a status Reactive.var}
 
-let empty () = {logs= Reactive.Table.make (); status= Reactive.var Empty}
+type 'a t =
+  {logs: log_item Reactive.Table.t; status: 'a status Reactive.var; id: int}
+
+let _id = ref 0
+
+let empty () =
+  let id = !_id in
+  Caml.incr _id ;
+  {logs= Reactive.Table.make (); status= Reactive.var Empty; id}
+
+let logs_div_id t = Fmt.str "logs-of-async-work-%d" t.id
 
 let reinit s =
   Reactive.Table.clear s.logs ;
   Reactive.set s.status Empty
 
-let log t item = Reactive.Table.append' t.logs item
+let log t item =
+  Reactive.Table.append' t.logs item ;
+  Lwt.async
+    Lwt.Infix.(
+      fun () ->
+        Js_of_ocaml.(
+          Js_of_ocaml_lwt.Lwt_js.sleep 0.1
+          >>= fun () ->
+          let divid = logs_div_id t in
+          dbgf "Trying to scroll down %s" divid ;
+          ( match Dom_html.getElementById_opt divid with
+          | Some e -> e##.scrollTop := 100000
+          | None -> dbgf "Cannot find: %s" divid ) ;
+          Lwt.return_unit)) ;
+  ()
+
 let wip t = Reactive.set t.status Work_in_progress
 let ok t o = Reactive.set t.status (Done (Ok o))
 let error t o = Reactive.set t.status (Done (Error o))
@@ -46,11 +70,15 @@ let render work_status ~f =
   let show_logs ?(wip = false) () =
     let make_logs_map _ x = H5.li [x] in
     let logs = Reactive.Table.concat_map ~map:make_logs_map work_status.logs in
-    Bootstrap.terminal_logs
-      (H5.ul
-         ( if wip then
-           [logs; H5.li [Bootstrap.spinner ~kind:`Info (t "Working …")]]
-         else [logs] )) in
+    div
+      ~a:
+        [ H5.a_style (Lwd.pure "max-height: 20em; overflow: auto")
+        ; H5.a_id (Lwd.pure (logs_div_id work_status)) ]
+      (Bootstrap.terminal_logs
+         (H5.ul
+            ( if wip then
+              [logs; H5.li [Bootstrap.spinner ~kind:`Info (t "Working …")]]
+            else [logs] ))) in
   let collapsing_logs () =
     let collapse = Bootstrap.Collapse.make () in
     Bootstrap.Collapse.fixed_width_reactive_button_with_div_below collapse
