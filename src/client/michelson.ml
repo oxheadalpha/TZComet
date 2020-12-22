@@ -213,34 +213,42 @@ module Partial_type = struct
               (Reactive.Bidirectional.of_var leaf.v) ] in
     go mf.structure
 
+  let bytes_guesses input =
+    try
+      let raw, default_value =
+        match input with
+        | `Zero_x bytes ->
+            let hex = String.chop_prefix_exn bytes ~prefix:"0x" in
+            Hex.to_string (`Hex hex), `Just_hex hex
+        | `Raw_string s ->
+          let `Hex hex = Hex.of_string s in
+          s, `Just_hex hex
+      in
+      let json = try Some (Ezjsonm.value_from_string raw) with _ -> None in
+      match json with
+      | Some s -> `Json s
+      | None -> (
+          let valid_utf8 =
+            let nl = Uchar.of_char '\n' in
+            let folder (count, max_per_line) _ = function
+              | `Uchar n when Uchar.equal n nl -> (0, max count max_per_line)
+              | `Uchar _ -> (count + 1, max_per_line)
+              | `Malformed _ -> Fmt.failwith "nop" in
+            try
+              let c, m = Uutf.String.fold_utf_8 folder (0, 0) raw in
+              Some (max c m)
+            with _ -> None in
+          let lines =
+            match raw with "" -> [] | _ -> String.split ~on:'\n' raw in
+          match valid_utf8 with
+          | Some maxperline -> `Valid_utf_8 (maxperline, lines)
+          | None -> default_value )
+    with _ -> `Dont_know
+
   let render mf =
     let desc description =
       Option.value_map description ~default:(empty ()) ~f:(fun (k, v) ->
           t ":" %% it v %% parens (ct k)) in
-    let bytes_guesses bytes =
-      try
-        let hex = String.chop_prefix_exn bytes ~prefix:"0x" in
-        let raw = Hex.to_string (`Hex hex) in
-        let json = try Some (Ezjsonm.value_from_string raw) with _ -> None in
-        match json with
-        | Some s -> `Json s
-        | None -> (
-            let valid_utf8 =
-              let nl = Uchar.of_char '\n' in
-              let folder (count, max_per_line) _ = function
-                | `Uchar n when Uchar.equal n nl -> (0, max count max_per_line)
-                | `Uchar _ -> (count + 1, max_per_line)
-                | `Malformed _ -> Fmt.failwith "nop" in
-              try
-                let c, m = Uutf.String.fold_utf_8 folder (0, 0) raw in
-                Some (max c m)
-              with _ -> None in
-            let lines =
-              match raw with "" -> [] | _ -> String.split ~on:'\n' raw in
-            match valid_utf8 with
-            | Some maxperline -> `Valid_utf_8 (maxperline, lines)
-            | None -> `Just_hex hex )
-      with _ -> `Dont_know in
     let rec structure = function
       | Leaf ({kind= Bytes; _} as leaf) ->
           let content = Reactive.peek leaf.v in
@@ -254,7 +262,7 @@ module Partial_type = struct
           [ ( ct (content |> bytes_summary ~threshold:30 ~left:15 ~right:15)
             % desc leaf.description
             %%
-            match bytes_guesses content with
+            match bytes_guesses (`Zero_x content) with
             | `Just_hex hex ->
                 show_content "Hex Dump" (fun () ->
                     pre (ct (Hex.hexdump_s (`Hex hex))))

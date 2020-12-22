@@ -733,12 +733,32 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                               with
                               | [] -> None
                               | m -> Some (Ok m) ) in
-                          let show_extras = function
+                          let show_extras =
+                            let show_bytes b =
+                              match
+                                Michelson.Partial_type.bytes_guesses
+                                  (`Raw_string b)
+                              with
+                              | `Dont_know -> Fmt.kstr ct "%S" b
+                              | `Json json ->
+                                  pre
+                                    (ct
+                                       (Ezjsonm.value_to_string json
+                                          ~minify:false))
+                              | `Just_hex h -> ct h
+                              | `Valid_utf_8 (_, [one_line]) -> t one_line
+                              | `Valid_utf_8 (_, lines) ->
+                                  div
+                                    (list
+                                       (oxfordize_list ~map:t lines
+                                          ~sep:(fun () -> H5.br ())
+                                          ~last_sep:(fun () -> H5.br ()))) in
+                            function
                             | Ok l ->
                                 itemize
                                   (List.map l ~f:(fun (k, v) ->
                                        Fmt.kstr ct "%S" k %% t "→"
-                                       %% Fmt.kstr ct "%S" v))
+                                       %% show_bytes v))
                             | Error m -> Message_html.render ctxt m in
                           let default_show = function
                             | Ok node ->
