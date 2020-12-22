@@ -219,11 +219,10 @@ module Partial_type = struct
         match input with
         | `Zero_x bytes ->
             let hex = String.chop_prefix_exn bytes ~prefix:"0x" in
-            Hex.to_string (`Hex hex), `Just_hex hex
+            (Hex.to_string (`Hex hex), `Just_hex hex)
         | `Raw_string s ->
-          let `Hex hex = Hex.of_string s in
-          s, `Just_hex hex
-      in
+            let (`Hex hex) = Hex.of_string s in
+            (s, `Just_hex hex) in
       let json = try Some (Ezjsonm.value_from_string raw) with _ -> None in
       match json with
       | Some s -> `Json s
