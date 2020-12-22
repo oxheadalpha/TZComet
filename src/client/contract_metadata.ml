@@ -271,11 +271,11 @@ module Content = struct
     let open Metadata_contents in
     let looks_like_tzip_12 ~found metadata =
       let interface_claim =
-        List.find metadata.interfaces ~f:(String.is_prefix ~prefix:"TZIP-12")
+        List.find metadata.interfaces ~f:(String.is_prefix ~prefix:"TZIP-012")
         |> Option.map ~f:(function
-             | "TZIP-12" -> `Just_interface
+             | "TZIP-012" -> `Just_interface
              | itf -> (
-               match String.chop_prefix itf ~prefix:"TZIP-12-" with
+               match String.chop_prefix itf ~prefix:"TZIP-012-" with
                | None -> `Invalid itf
                | Some v -> `Version v )) in
       let find_extra name =

@@ -799,7 +799,7 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
             | _ -> (false, empty ()) in
           let tokens_exploration x = div (bt "Tokens:" % div x) in
           div
-            ( t "This looks like a TZIP-12 contract (a.k.a. FA2);"
+            ( t "This looks like a TZIP-012 contract (a.k.a. FA2);"
             %%
             match global_validity with
             | true ->
@@ -813,7 +813,7 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
               ( show_validity_btn % explore_tokens_btn % validity_div
               % Async_work.render wip_explore_tokens ~f:tokens_exploration )
         in
-        (metadata, [field "TZIP-12 Implementation Claim" tzip_12_block]))
+        (metadata, [field "TZIP-012 Implementation Claim" tzip_12_block]))
 
 let metadata_contents ~add_explore_tokens_button ?(open_in_editor_link = true)
     ctxt =
