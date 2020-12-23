@@ -244,54 +244,116 @@ module Partial_type = struct
           | None -> default_value )
     with _ -> `Dont_know
 
+  let micheline_string_bytes_map_exn node =
+    let open Tezos_micheline.Micheline in
+    let nope = Decorate_error.raise in
+    match node with
+    | Seq (l, map) -> (
+      match map with
+      | [] -> []
+      | Prim (_, "Elt", [String (_, s); Bytes (_, b)], _) :: more ->
+          List.fold more
+            ~init:[(s, Bytes.to_string b)]
+            ~f:(fun prev -> function
+              | Prim (_, "Elt", [String (_, s); Bytes (_, b)], _) ->
+                  (s, Bytes.to_string b) :: prev
+              | other ->
+                  nope
+                    Message.(
+                      t "Michelson-map element has wrong structure:"
+                      %% ct (micheline_node_to_string other)))
+      | other ->
+          nope
+            Message.(
+              t "Metadata result has wrong structure:"
+              %% ct (micheline_node_to_string (Seq (l, other)))) )
+    | other ->
+        nope
+          Message.(
+            t "Expecting Michelson-map but got"
+            %% ct (micheline_node_to_string other))
+
+  let desc ?(default = empty ()) description =
+    Option.value_map description ~default ~f:(fun (k, v) ->
+        t ":" %% it v %% parens (ct k))
+
+  let show_bytes_result ?description content =
+    let show_content name f =
+      let collapse = Bootstrap.Collapse.make () in
+      Bootstrap.Collapse.fixed_width_reactive_button_with_div_below collapse
+        ~width:"12em" ~kind:`Secondary
+        ~button:(function
+          | true -> t "Show" %% t name | false -> t "Hide" %% t name)
+        f in
+    let utf8_line_threshold = 78 in
+    let show_summary = function
+      | `Zero_x content ->
+          ct (content |> bytes_summary ~threshold:30 ~left:15 ~right:15)
+      | `Raw_string content ->
+          let (`Hex hex) = Hex.of_string content in
+          ct ("0x" ^ hex |> bytes_summary ~threshold:24 ~left:10 ~right:10)
+    in
+    [ ( show_summary content % desc description
+      %%
+      match bytes_guesses content with
+      | `Just_hex hex ->
+          show_content "Hex Dump" (fun () ->
+              pre (ct (Hex.hexdump_s (`Hex hex))))
+      | `Json v ->
+          t "→"
+          %% Bootstrap.color `Success (t "It is valid JSON!")
+          %% show_content "Indented JSON" (fun () ->
+                 pre (ct (Ezjsonm.value_to_string ~minify:false v)))
+      | `Valid_utf_8 (maxperline, [one]) when maxperline <= utf8_line_threshold
+        ->
+          t "→" %% t one
+          %% parens (Bootstrap.color `Success (t "Valid UTF-8"))
+      | `Valid_utf_8 (maxperline, lines) ->
+          t "→"
+          %% Bootstrap.color `Success
+               (let lnnb = List.length lines in
+                match lnnb with
+                | 0 -> t "It's just empty."
+                | _ ->
+                    Fmt.kstr t
+                      "It is valid UTF-8 text, %d line%s %d characters!" lnnb
+                      (if lnnb <> 1 then "s, each ≤" else ",")
+                      maxperline)
+          %%
+          if maxperline = 0 then empty ()
+          else
+            show_content "Text" (fun () ->
+                div
+                  (let sep () = H5.br () in
+                   List.fold lines ~init:(empty ()) ~f:(fun p l ->
+                       p % sep () % t l)))
+      | `Dont_know -> parens (t "Can't identify") ) ]
+
   let render mf =
-    let desc description =
-      Option.value_map description ~default:(empty ()) ~f:(fun (k, v) ->
-          t ":" %% it v %% parens (ct k)) in
+    let default content description_opt = [ct content % desc description_opt] in
     let rec structure = function
       | Leaf ({kind= Bytes; _} as leaf) ->
           let content = Reactive.peek leaf.v in
-          let show_content name f =
-            let collapse = Bootstrap.Collapse.make () in
-            Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
-              collapse ~width:"12em" ~kind:`Secondary
-              ~button:(function
-                | true -> t "Show" %% t name | false -> t "Hide" %% t name)
-              f in
-          [ ( ct (content |> bytes_summary ~threshold:30 ~left:15 ~right:15)
-            % desc leaf.description
-            %%
-            match bytes_guesses (`Zero_x content) with
-            | `Just_hex hex ->
-                show_content "Hex Dump" (fun () ->
-                    pre (ct (Hex.hexdump_s (`Hex hex))))
-            | `Json v ->
-                t "→"
-                %% Bootstrap.color `Success (t "It is valid JSON!")
-                %% show_content "Indented JSON" (fun () ->
-                       pre (ct (Ezjsonm.value_to_string ~minify:false v)))
-            | `Valid_utf_8 (maxperline, lines) ->
-                t "→"
-                %% Bootstrap.color `Success
-                     (let lnnb = List.length lines in
-                      match lnnb with
-                      | 0 -> t "It's just empty."
-                      | _ ->
-                          Fmt.kstr t
-                            "It is valid UTF-8 text, %d line%s %d characters!"
-                            lnnb
-                            (if lnnb <> 1 then "s, each ≤" else ",")
-                            maxperline)
-                %%
-                if maxperline = 0 then empty ()
-                else
-                  show_content "Text" (fun () ->
-                      div
-                        (let sep () = H5.br () in
-                         List.fold lines ~init:(empty ()) ~f:(fun p l ->
-                             p % sep () % t l)))
-            | `Dont_know -> empty () ) ]
-      | Leaf leaf -> [ct (Reactive.peek leaf.v) % desc leaf.description]
+          show_bytes_result (`Zero_x content) ?description:leaf.description
+      | Leaf {kind= Map (String, Bytes); v; description} -> (
+          let content = Reactive.peek v in
+          match
+            parse_micheline ~check_primitives:false ~check_indentation:false
+              content
+          with
+          | Ok node -> (
+            try
+              let map = micheline_string_bytes_map_exn node in
+              [ t "Map"
+                %% parens (ct "string → bytes")
+                % desc description % t ":"
+                % itemize
+                    (List.map map ~f:(fun (k, v) ->
+                         ct k %% t "→"
+                         % list (show_bytes_result (`Raw_string v)))) ]
+            with _ -> default content description )
+          | Error el -> default content description )
+      | Leaf leaf -> default (Reactive.peek leaf.v) leaf.description
       | Pair {left; right} -> structure left @ structure right in
     structure mf.structure
 end

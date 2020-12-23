@@ -662,47 +662,10 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                                 | Some (Error s) ->
                                     nope
                                       Message.(t "Error getting view:" %% ct s)
-                                | Some
-                                    (Ok
-                                      (Prim (_, "Pair", [_; Seq (l, map)], _)))
-                                  -> (
-                                  match map with
-                                  | [] -> []
-                                  | Prim
-                                      ( _
-                                      , "Elt"
-                                      , [String (_, s); Bytes (_, b)]
-                                      , _ )
-                                    :: more ->
-                                      List.fold more
-                                        ~init:[(s, Bytes.to_string b)]
-                                        ~f:(fun prev -> function
-                                          | Prim
-                                              ( _
-                                              , "Elt"
-                                              , [String (_, s); Bytes (_, b)]
-                                              , _ ) ->
-                                              (s, Bytes.to_string b) :: prev
-                                          | other ->
-                                              nope
-                                                Message.(
-                                                  t
-                                                    "Metadata result has wrong \
-                                                     structure:"
-                                                  %% ct
-                                                       (Michelson
-                                                        .micheline_node_to_string
-                                                          other)))
-                                  | other ->
-                                      nope
-                                        Message.(
-                                          t
-                                            "Metadata result has wrong \
-                                             structure:"
-                                          %% ct
-                                               (Michelson
-                                                .micheline_node_to_string
-                                                  (Seq (l, other)))) )
+                                | Some (Ok (Prim (_, "Pair", [_; full_map], _)))
+                                  ->
+                                    Michelson.Partial_type
+                                    .micheline_string_bytes_map_exn full_map
                                 | Some (Ok other) ->
                                     nope
                                       Message.(
@@ -711,7 +674,12 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                                              (Michelson.micheline_node_to_string
                                                 other)) in
                               Ok ok
-                            with Decorate_error.E {message} -> Error message
+                            with
+                            | Decorate_error.E {message} -> Error message
+                            | e ->
+                                Error
+                                  Message.(
+                                    t "Exception:" %% ct (Exn.to_string e))
                           in
                           let piece_of_metadata k =
                             match unpaired_metadata with
