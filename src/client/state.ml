@@ -247,7 +247,6 @@ let link_to_editor ctxt content ~text =
                false)) ]
     content
 
-
 let link_to_explorer ctxt content ~search =
   let open Meta_html in
   let fragment = make_fragment ~side_effects:false ctxt in
@@ -265,7 +264,6 @@ let link_to_explorer ctxt content ~search =
                set_page ctxt (`Changing_to Page.Explorer) () ;
                false)) ]
     content
-
 
 let if_explorer_should_go state f =
   if
