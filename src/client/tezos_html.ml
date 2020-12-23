@@ -712,6 +712,7 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                                   it
                                     (Float.to_string_hum ~delimiter:' '
                                        ~strip_zero:true f)
+                              | `Web_uri wuri -> url it wuri
                               | `Json json ->
                                   pre
                                     (ct

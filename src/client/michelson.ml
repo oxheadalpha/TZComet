@@ -236,8 +236,15 @@ module Partial_type = struct
         let lines = match raw with "" -> [] | _ -> String.split ~on:'\n' raw in
         `Valid_utf_8 (maxperline, lines) in
       let number () = `Number (Float.of_string raw) in
+      let web_uri () =
+        if
+          ( String.is_prefix raw ~prefix:"https://"
+          || String.is_prefix raw ~prefix:"http://" )
+          && String.for_all raw ~f:(function '\n' | '\t' -> false | _ -> true)
+        then `Web_uri raw
+        else failwith "not web uri :)" in
       match
-        List.find_map [number; json; utf8] ~f:(fun f ->
+        List.find_map [number; web_uri; json; utf8] ~f:(fun f ->
             try Some (f ()) with _ -> None)
       with
       | Some s -> s
@@ -302,6 +309,7 @@ module Partial_type = struct
       | `Number f ->
           t "→ The number"
           %% it (Float.to_string_hum ~delimiter:' ' ~strip_zero:true f)
+      | `Web_uri wuri -> t "→" %% url it wuri
       | `Json v ->
           t "→"
           %% Bootstrap.color `Success (t "It is valid JSON!")
