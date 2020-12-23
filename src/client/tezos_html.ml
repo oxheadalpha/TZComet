@@ -599,10 +599,11 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                       ( Contract_metadata.Uri.Fetcher.current_contract ctxt
                       |> Reactive.peek
                       |> Option.value ~default:"KT1TododoTodo" ) in
+                  let log_prompt = ref "Exploring tokens" in
                   let log s =
                     Async_work.log wip_explore_tokens
-                      ( it "Exploring tokens" %% t "→"
-                      %% Bootstrap.monospace (t s) ) in
+                      (it !log_prompt %% t "→" %% Bootstrap.monospace (t s))
+                  in
                   Async_work.async_catch wip_explore_tokens
                     ~exn_to_html:(Errors_html.exception_html ctxt)
                     Lwt.Infix.(
@@ -652,6 +653,7 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                           Fmt.(Dump.list int)
                           tokens ;
                         let explore_token id =
+                          log_prompt := Fmt.str "Exploring token %d" id ;
                           let maybe_call_view view_validation ~parameter_string
                               =
                             match view_validation with
