@@ -223,25 +223,25 @@ module Partial_type = struct
         | `Raw_string s ->
             let (`Hex hex) = Hex.of_string s in
             (s, `Just_hex hex) in
-      let json = try Some (Ezjsonm.value_from_string raw) with _ -> None in
-      match json with
-      | Some s -> `Json s
-      | None -> (
-          let valid_utf8 =
-            let nl = Uchar.of_char '\n' in
-            let folder (count, max_per_line) _ = function
-              | `Uchar n when Uchar.equal n nl -> (0, max count max_per_line)
-              | `Uchar _ -> (count + 1, max_per_line)
-              | `Malformed _ -> Fmt.failwith "nop" in
-            try
-              let c, m = Uutf.String.fold_utf_8 folder (0, 0) raw in
-              Some (max c m)
-            with _ -> None in
-          let lines =
-            match raw with "" -> [] | _ -> String.split ~on:'\n' raw in
-          match valid_utf8 with
-          | Some maxperline -> `Valid_utf_8 (maxperline, lines)
-          | None -> default_value )
+      let json () = `Json (Ezjsonm.value_from_string raw) in
+      let utf8 () =
+        let maxperline =
+          let nl = Uchar.of_char '\n' in
+          let folder (count, max_per_line) _ = function
+            | `Uchar n when Uchar.equal n nl -> (0, max count max_per_line)
+            | `Uchar _ -> (count + 1, max_per_line)
+            | `Malformed _ -> Fmt.failwith "nop" in
+          let c, m = Uutf.String.fold_utf_8 folder (0, 0) raw in
+          max c m in
+        let lines = match raw with "" -> [] | _ -> String.split ~on:'\n' raw in
+        `Valid_utf_8 (maxperline, lines) in
+      let number () = `Number (Float.of_string raw) in
+      match
+        List.find_map [number; json; utf8] ~f:(fun f ->
+            try Some (f ()) with _ -> None)
+      with
+      | Some s -> s
+      | None -> default_value
     with _ -> `Dont_know
 
   let micheline_string_bytes_map_exn node =
@@ -299,6 +299,9 @@ module Partial_type = struct
       | `Just_hex hex ->
           show_content "Hex Dump" (fun () ->
               pre (ct (Hex.hexdump_s (`Hex hex))))
+      | `Number f ->
+          t "→ The number"
+          %% it (Float.to_string_hum ~delimiter:' ' ~strip_zero:true f)
       | `Json v ->
           t "→"
           %% Bootstrap.color `Success (t "It is valid JSON!")

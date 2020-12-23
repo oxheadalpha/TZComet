@@ -708,6 +708,10 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                                   (`Raw_string b)
                               with
                               | `Dont_know -> Fmt.kstr ct "%S" b
+                              | `Number f ->
+                                  it
+                                    (Float.to_string_hum ~delimiter:' '
+                                       ~strip_zero:true f)
                               | `Json json ->
                                   pre
                                     (ct
