@@ -754,7 +754,6 @@ end
 
 let root_document state =
   let open Meta_html in
-  let explorer = lazy (Explorer.page state) in
   let editor = lazy (Editor.page state) in
   let settings = lazy (Settings_page.render state) in
   let about = lazy (about_page state) in
@@ -777,7 +776,7 @@ let root_document state =
                     ~a:[a_width (Reactive.pure 100)]
                     ~src:(Reactive.pure "loading.gif")
                     ~alt:(Reactive.pure "Loading spinner GIF"))
-          | `Page Explorer -> Lazy.force explorer
+          | `Page Explorer -> Explorer.page state
           | `Page Editor -> Lazy.force editor
           | `Page Settings -> Lazy.force settings
           | `Page About -> Lazy.force about) )

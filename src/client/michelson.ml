@@ -236,15 +236,22 @@ module Partial_type = struct
         let lines = match raw with "" -> [] | _ -> String.split ~on:'\n' raw in
         `Valid_utf_8 (maxperline, lines) in
       let number () = `Number (Float.of_string raw) in
+      let one_line_not_weird () =
+        String.for_all raw ~f:(function '\n' | '\t' -> false | _ -> true) in
+      let any_prefix l =
+        List.exists l ~f:(fun prefix -> String.is_prefix raw ~prefix) in
       let web_uri () =
-        if
-          ( String.is_prefix raw ~prefix:"https://"
-          || String.is_prefix raw ~prefix:"http://" )
-          && String.for_all raw ~f:(function '\n' | '\t' -> false | _ -> true)
+        if any_prefix ["https://"; "http://"; "ftp://"] && one_line_not_weird ()
         then `Web_uri raw
         else failwith "not web uri :)" in
+      let tzip16_uri () =
+        if
+          any_prefix ["tezos-storage://"; "ipfs://"; "sha256://"]
+          && one_line_not_weird ()
+        then `Tzip16_uri raw
+        else failwith "not tzip16 uri :)" in
       match
-        List.find_map [number; web_uri; json; utf8] ~f:(fun f ->
+        List.find_map [number; web_uri; tzip16_uri; json; utf8] ~f:(fun f ->
             try Some (f ()) with _ -> None)
       with
       | Some s -> s
@@ -284,7 +291,7 @@ module Partial_type = struct
     Option.value_map description ~default ~f:(fun (k, v) ->
         t ":" %% it v %% parens (ct k))
 
-  let show_bytes_result ?description content =
+  let show_bytes_result ~tzip16_uri ?description content =
     let show_content name f =
       let collapse = Bootstrap.Collapse.make () in
       Bootstrap.Collapse.fixed_width_reactive_button_with_div_below collapse
@@ -310,6 +317,7 @@ module Partial_type = struct
           t "→ The number"
           %% it (Float.to_string_hum ~delimiter:' ' ~strip_zero:true f)
       | `Web_uri wuri -> t "→" %% url it wuri
+      | `Tzip16_uri wuri -> t "→" %% tzip16_uri wuri
       | `Json v ->
           t "→"
           %% Bootstrap.color `Success (t "It is valid JSON!")
@@ -340,12 +348,13 @@ module Partial_type = struct
                        p % sep () % t l)))
       | `Dont_know -> parens (t "Can't identify") ) ]
 
-  let render mf =
+  let render ~tzip16_uri mf =
     let default content description_opt = [ct content % desc description_opt] in
     let rec structure = function
       | Leaf ({kind= Bytes; _} as leaf) ->
           let content = Reactive.peek leaf.v in
-          show_bytes_result (`Zero_x content) ?description:leaf.description
+          show_bytes_result ~tzip16_uri (`Zero_x content)
+            ?description:leaf.description
       | Leaf {kind= Map (String, Bytes); v; description} -> (
           let content = Reactive.peek v in
           match
@@ -360,8 +369,9 @@ module Partial_type = struct
                 % desc description % t ":"
                 % itemize
                     (List.map map ~f:(fun (k, v) ->
-                         ct k %% t "→"
-                         % list (show_bytes_result (`Raw_string v)))) ]
+                         Fmt.kstr ct "%S" k %% t "→"
+                         % list (show_bytes_result ~tzip16_uri (`Raw_string v))))
+              ]
             with _ -> default content description )
           | Error el -> default content description )
       | Leaf leaf -> default (Reactive.peek leaf.v) leaf.description

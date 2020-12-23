@@ -192,8 +192,18 @@ let protocol s =
       known "Delphi" "https://blog.nomadic-labs.com/delphi-changelog.html"
   | s -> proto s
 
-let open_in_editor ctxt text =
-  div (small (parens (State.link_to_editor ctxt ~text (t "Open in editor"))))
+let open_in_editor ?(and_explorer = false) ctxt text =
+  small
+    (parens
+       ( State.link_to_editor ctxt ~text (t "Open in editor")
+       %
+       if and_explorer then
+         t "," %% State.link_to_explorer ctxt (t "Explore") ~search:text
+       else empty () ))
+
+let tzip16_uri_short ctxt s =
+  Bootstrap.color `Info (Bootstrap.monospace (t s))
+  %% open_in_editor ctxt s ~and_explorer:true
 
 let metadata_uri ?(open_in_editor_link = true) ctxt uri =
   let open Tezos_contract_metadata.Metadata_uri in
@@ -225,7 +235,9 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
             ; field "… should SHA256-hash to"
                 (Fmt.kstr ct "%a" Hex.pp (Hex.of_string value)) ] in
   ( if open_in_editor_link then
-    open_in_editor ctxt (Tezos_contract_metadata.Metadata_uri.to_string_uri uri)
+    div
+      (open_in_editor ctxt
+         (Tezos_contract_metadata.Metadata_uri.to_string_uri uri))
   else empty () )
   % div (go uri)
 
@@ -244,7 +256,9 @@ let view_result ctxt ~result ~storage ~address ~view ~parameter =
         Michelson.Partial_type.of_type ~annotations:view.human_annotations
           view.return_type in
       Michelson.Partial_type.fill_with_value retmf result ;
-      match Michelson.Partial_type.render retmf with
+      match
+        Michelson.Partial_type.render ~tzip16_uri:(tzip16_uri_short ctxt) retmf
+      with
       | [] ->
           dbgf "view_result.expanded: empty list!" ;
           bt "This should not be shown"
@@ -713,6 +727,7 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                                     (Float.to_string_hum ~delimiter:' '
                                        ~strip_zero:true f)
                               | `Web_uri wuri -> url it wuri
+                              | `Tzip16_uri wuri -> tzip16_uri_short ctxt wuri
                               | `Json json ->
                                   pre
                                     (ct
@@ -1009,8 +1024,9 @@ let metadata_contents ~add_explore_tokens_button ?(open_in_editor_link = true)
         , sub_standards ) =
       metadata_substandards ~add_explore_tokens_button ctxt metadata in
     ( if open_in_editor_link then
-      open_in_editor ctxt
-        (Tezos_contract_metadata.Metadata_contents.to_json metadata)
+      div
+        (open_in_editor ctxt
+           (Tezos_contract_metadata.Metadata_contents.to_json metadata))
     else empty () )
     % itemize
         ( option_field "Name" name ct
