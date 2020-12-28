@@ -53,7 +53,7 @@ let contract () =
   {tz|
 parameter unit;
 storage (pair nat (big_map %metadata string bytes));
-code { FAILWITH; };
+code { PUSH nat 42; FAILWITH; };
 |tz}
 
 module Micheline_views = struct

@@ -14,6 +14,14 @@ let ellipsize_string ?(ellipsis = " …") s ~max_length =
   if String.length s <= max_length then s
   else String.prefix s max_length ^ ellipsis
 
+let bytes_summary ?(threshold = 25) ?(left = 10) ?(right = 10) bytes =
+  match String.length bytes with
+  | m when m < threshold -> bytes
+  | m ->
+      Fmt.str "%s…%s"
+        (String.sub bytes ~pos:0 ~len:left)
+        (String.sub bytes ~pos:(m - right) ~len:right)
+
 module Context = struct type 'a t = 'a constraint 'a = < .. > end
 
 module Reactive = struct
@@ -141,6 +149,10 @@ module System = struct
     let timeout = http_timeout_peek ctxt in
     Lwt.pick
       [f (); (Js_of_ocaml_lwt.Lwt_js.sleep timeout >>= fun () -> raise timeout)]
+
+  let now () = (new%js Js_of_ocaml.Js.date_now)##valueOf /. 1000.
+  let time_zero = now ()
+  let program_time () = now () -. time_zero
 end
 
 module Browser_window = struct

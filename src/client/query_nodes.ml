@@ -6,12 +6,46 @@ end
 
 open Node_status
 
+module Rpc_cache = struct
+  module Hashtbl = Caml.Hashtbl
+
+  type t = (string, float * string) Hashtbl.t
+
+  let create () : t = Hashtbl.create 42
+
+  let add (t : t) ~rpc ~response =
+    let now = System.program_time () in
+    dbgf "CACHE-ADD: %s (%.0f)" rpc now ;
+    Hashtbl.add t rpc (now, response)
+
+  let get (t : t) ~rpc =
+    let now = System.program_time () in
+    let best_ts = ref 0. in
+    let best = ref None in
+    let filter r (ts, v) =
+      if Float.(!best_ts < ts) && String.equal rpc r then (
+        best_ts := ts ;
+        best := Some v ) ;
+      if Float.(ts + 120. < now) then None else Some (ts, v) in
+    Hashtbl.filter_map_inplace filter t ;
+    let age = now -. !best_ts in
+    dbgf "CACHE-GET:\n %s\n → now: %.0f\n → age: %.0f\n → %s" rpc now age
+      (if Option.is_none !best then "MISS" else "HIT") ;
+    (age, !best)
+end
+
 module Node = struct
   type t =
-    {name: string; prefix: string; status: (float * Node_status.t) Reactive.var}
+    { name: string
+    ; prefix: string
+    ; status: (float * Node_status.t) Reactive.var
+    ; rpc_cache: Rpc_cache.t }
 
   let create name prefix =
-    {name; prefix; status= Reactive.var (0., Uninitialized)}
+    { name
+    ; prefix
+    ; status= Reactive.var (0., Uninitialized)
+    ; rpc_cache= Rpc_cache.create () }
 
   let status n = Reactive.get n.status
 
@@ -23,20 +57,27 @@ module Node = struct
         Message.(
           t "Calling" %% ct "HTTP-GET" %% ct path %% t "on node" %% ct node.name
           %% msg) in
-    System.with_timeout ctxt
-      ~f:
-        Js_of_ocaml_lwt.XmlHttpRequest.(
-          fun () ->
-            get uri
-            >>= fun frame ->
-            dbgf "%s %s code: %d" node.prefix path frame.code ;
-            match frame.code with
-            | 200 -> return frame.content
-            | other ->
-                fail Message.(t "failed with code" %% Fmt.kstr ct "%d" other))
-      ~raise:(fun timeout ->
-        dbgf "Node-%S GET %s → TIMEOUT" node.name path ;
-        fail Message.(Fmt.kstr t "timeouted (%.03f seconds)" timeout))
+    let actually_get () =
+      System.with_timeout ctxt
+        ~f:
+          Js_of_ocaml_lwt.XmlHttpRequest.(
+            fun () ->
+              get uri
+              >>= fun frame ->
+              dbgf "%s %s code: %d" node.prefix path frame.code ;
+              match frame.code with
+              | 200 ->
+                  Rpc_cache.add node.rpc_cache ~rpc:path ~response:frame.content ;
+                  return frame.content
+              | other ->
+                  fail Message.(t "failed with code" %% Fmt.kstr ct "%d" other))
+        ~raise:(fun timeout ->
+          dbgf "Node-%S GET %s → TIMEOUT" node.name path ;
+          fail Message.(Fmt.kstr t "timeouted (%.03f seconds)" timeout)) in
+    match Rpc_cache.get node.rpc_cache ~rpc:path with
+    | _, None -> actually_get ()
+    | age, Some _ when Float.(age > 120.) -> actually_get ()
+    | _, Some s -> Lwt.return s
 
   let rpc_post ctxt node ~body path =
     let open Lwt in
@@ -93,7 +134,7 @@ module Node = struct
     >>= fun () ->
     Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/script" address
     >>= fun script_string ->
-    log "Got raw script: %s…" (String.prefix script_string 30) ;
+    log "Got raw script: %s…" (ellipsize_string script_string ~max_length:30) ;
     let mich_storage_type =
       Michelson.micheline_of_json script_string
       |> Tezos_micheline.Micheline.strip_locations
@@ -197,7 +238,7 @@ let default_nodes =
     [ Node.create "Delphinet-GigaNode" "https://delphinet-tezos.giganode.io"
     ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
     ; Node.create "Current-Testnet-GigaNode" "https://testnet-tezos.giganode.io"
-    ; Node.create "Dalphanet-GigaNode" "https://dalphanet-tezos.giganode.io"
+    ; Node.create "Edonet-GigaNode" "https://edonet-tezos.giganode.io"
     ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
     ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
     ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io" ]
@@ -241,7 +282,7 @@ module Update_status_loop = struct
              Node.ping ctxt nod
              >>= fun new_status ->
              dbgf "got status for %s" nod.name ;
-             let now = (new%js Js_of_ocaml.Js.date_now)##valueOf in
+             let now = System.now () in
              Reactive.set nod.status (now, new_status) ;
              Lwt.return ())
          >>= fun () ->
@@ -309,6 +350,30 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   find_node_with_contract ctxt address
   >>= fun node ->
   logf "Found contract with node %S" node.name ;
+  Fmt.kstr (Node.rpc_get ctxt node) "/chains/main/blocks/head/protocols"
+  >>= fun protocols ->
+  let protocol_kind, protocol_hash =
+    let hash =
+      match Ezjsonm.value_from_string protocols with
+      | `O l ->
+          List.find_map l ~f:(function
+            | "protocol", `String p -> Some p
+            | _ -> None)
+      | _ | (exception _) -> None in
+    match hash with
+    | None ->
+        Decorate_error.raise
+          Message.(
+            t "Cannot understand answer from “protocols” RPC:"
+            %% code_block protocols)
+    | Some p when String.is_prefix p ~prefix:"PsCARTHA" -> (`Carthage, p)
+    | Some p when String.is_prefix p ~prefix:"PsDELPH1" -> (`Delphi, p)
+    | Some p when String.is_prefix p ~prefix:"PtEdoTez" -> (`Edo, p)
+    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Edo, p)
+    | Some p ->
+        logf "Can't recognize protocol: `%s` assuming Delphi-like." p ;
+        (`Delphi, p) in
+  logf "Protocol is `%s`" protocol_hash ;
   Fmt.kstr (Node.rpc_get ctxt node)
     "/chains/main/blocks/head/context/contracts/%s/storage" address
   >>= fun storage ->
@@ -323,7 +388,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   Fmt.kstr (Node.rpc_get ctxt node) "/chains/main/chain_id"
   >>= fun chain_id ->
   let chain_id = Ezjsonm.(value_from_string chain_id |> get_string) in
-  logf "Got the script: %s" script ;
+  logf "Got the script: %s" (ellipsize_string script ~max_length:30) ;
   let contract_storage = Michelson.micheline_of_json storage in
   let `Contract view_contract, `Input view_input, `Storage view_storage =
     let code_mich = Michelson.micheline_of_json script in
@@ -368,11 +433,16 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline view_storage ;
   let constructed =
     let open Ezjsonm in
-    dict
+    let normal_fields =
       [ ("script", Michelson.micheline_to_ezjsonm view_contract)
       ; ("storage", Michelson.micheline_to_ezjsonm view_storage)
       ; ("input", Michelson.micheline_to_ezjsonm view_input)
       ; ("amount", string "0"); ("chain_id", string chain_id) ] in
+    let fields =
+      match protocol_kind with
+      | `Edo -> normal_fields @ [("balance", string "0")]
+      | _ -> normal_fields in
+    dict fields in
   Node.rpc_post ctxt node
     ~body:(Ezjsonm.value_to_string constructed)
     "/chains/main/blocks/head/helpers/scripts/run_code"
