@@ -317,7 +317,7 @@ module Examples = struct
            let mtb, mtb_dev, mtb_all = aggl () in
            let mby, mby_dev, mby_all = aggl () in
            let tzc, tzc_dev, tzc_all = aggl () in
-           let kt1_one_view = "KT1GPDQvmV37orH1XH3SZmVVKFaMuzzqsmN7" in
+           let kt1_one_view = "KT1V8ghqePSqVW5jYC1T9zj2udQ6qZQjBqNf" in
            kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
              "Should not exist any where." ;
            kt1 "KT1TLvewkn73Hb1YTDyX6pE6oD8qVKGTZax3"
@@ -326,12 +326,12 @@ module Examples = struct
              "Has a URI that points nowhere." ;
            kt1_dev "KT1Peb7x8DfBMnHyyzdSDgpSyAvaZXLuTz5g"
              "Has a URI that is invalid." ;
-           kt1_dev "KT1Dkn2fHtjtfLJ6SeTRQ7BujKEPk1pGjBAE"
+           kt1_dev "KT1FsTYsKVfyvAuoh4WHNV5ibWbnh55p1XvR"
              "Points to invalid metdaata." ;
            kt1 kt1_one_view "Has one off-chain-view." ;
-           kt1_dev "KT191tWhzxUvx3ziu1sMYrDweZLrQfgbvGC5"
+           kt1_dev "KT1HxJrj34gpSeMyGwtozzsx3KPrKUwCT9zj"
              "Has a few views that return bytes (JSON, UTF-8, binary …)" ;
-           kt1_dev "KT1RyihALYEsVCcKP7Ya6teCHs9ii5ZHQxvj"
+           kt1_dev "KT1Gha36XyYeoFaReyUVdkYeVjjHrq8h8V7u"
              "Event more weird off-chain-views." ;
            uri https_ok "A valid HTTPS URI." ;
            uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
