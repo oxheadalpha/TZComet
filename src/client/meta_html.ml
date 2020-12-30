@@ -145,6 +145,7 @@ module Bootstrap = struct
 
   let monospace content = H5.span ~a:[classes ["text-monospace"]] [content]
   let terminal_logs content = div ~a:[classes ["bg-dark"; "text-white"]] content
+  let _raw_button = button
 
   let button ?(outline = false) ?(disabled = false) ?(size = `Normal)
       ?(kind = `Light) content ~action =
@@ -160,7 +161,11 @@ module Bootstrap = struct
           | `Small -> ["btn-sm"]
           | `Large -> ["btn-lg"] ) ]
       @ if disabled then [H5.a_disabled ()] else [] in
-    button ~action ~a content
+    _raw_button ~action ~a content
+
+  let close_button ~action =
+    let a = [classes ["close"]; H5.a_aria "label" (Lwd.pure ["Close"])] in
+    _raw_button ~action ~a (t "×")
 
   let container ?(suffix = "-md") c =
     H.div ~a:[classes [Fmt.str "container%s" suffix]] c

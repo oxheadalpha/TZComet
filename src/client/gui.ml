@@ -178,42 +178,6 @@ module Editor = struct
         | [] -> empty ()
         | more -> p (t "Moreover:") % list_of_validation_errors more )
 
-  let show_metadata ctxt inpo =
-    let open Tezos_contract_metadata.Metadata_contents in
-    match Contract_metadata.Content.of_json inpo with
-    | Ok m ->
-        let errs, warns =
-          Validation.validate m ~protocol_hash_is_valid:(fun s ->
-              try
-                let _ = B58_hashes.check_b58_protocol_hash s in
-                true
-              with e ->
-                dbgf "Protocol hash problem: %a" Exn.pp e ;
-                false) in
-        let header =
-          match (errs, warns) with
-          | [], [] -> big_answer `Ok (t "This metadata JSON is VALID 👌")
-          | _ :: _, _ ->
-              big_answer `Error
-                (t "This metadata JSON parses Okay but is not valid 👎")
-          | [], _ :: _ ->
-              big_answer `Ok
-                (t "This metadata JSON is valid 👍, with warnings …") in
-        let section title reasons to_html =
-          match reasons with
-          | [] -> empty ()
-          | more -> h4 title %% itemize (List.map more ~f:to_html) in
-        header
-        % section (t "Errors") errs (Tezos_html.metadata_validation_error ctxt)
-        % section (t "Warnings") warns
-            (Tezos_html.metadata_validation_warning ctxt)
-        % h4 (t "Contents")
-        % Tezos_html.metadata_contents ~open_in_editor_link:false ctxt m
-            ~add_explore_tokens_button:false
-    | Error el ->
-        big_answer `Error (t "This metadata JSON is not valid 🥸")
-        % Tezos_html.error_trace ctxt el
-
   let explode_hex bytes_code =
     let with_zero_x, bytes =
       let prefix = "0x" in
@@ -492,7 +456,10 @@ module Editor = struct
               header
               %
               match fmt with
-              | `Metadata_json -> show_metadata ctxt inp
+              | `Metadata_json ->
+                  Tezos_html.show_metadata_full_validation ctxt inp
+                    ~add_explore_tokens_button:false
+                    ~show_validation_big_answer:true
               | `Uri -> show_uri ctxt inp
               | `Hex -> show_hex ctxt inp
               | `Michelson -> show_michelson ctxt inp )
@@ -518,6 +485,31 @@ module Editor = struct
             (abbreviation
                "Local storage is not available for this browser/site combo."
                label) in
+    let editor_function_messages = Reactive.var [] in
+    let editor_message m =
+      Reactive.set editor_function_messages
+        (m :: Reactive.peek editor_function_messages) in
+    let editor_function_buttons =
+      let json_formatter ~minify () =
+        try
+          State.transform_editor_content ctxt ~f:(fun x ->
+              let v = Ezjsonm.value_from_string x in
+              Ezjsonm.value_to_string ~minify v)
+        with e ->
+          let verb = if minify then "minify" else "re-indent" in
+          editor_message
+            Message.(t "Failed to" %% t verb % t ", the JSON has to be valid.")
+      in
+      Reactive.bind format_result ~f:(fun (_, (_, kind, _)) ->
+          match kind with
+          | Empty -> empty ()
+          | Failed -> empty ()
+          | Format `Metadata_json ->
+              Bootstrap.button ~kind:`Info (t "Reindent JSON") ~outline:true
+                ~action:(json_formatter ~minify:false)
+              %% Bootstrap.button ~kind:`Info (t "Minify JSON") ~outline:true
+                   ~action:(json_formatter ~minify:true)
+          | Format _ -> empty ()) in
     let editor =
       div
         ( Examples_dropdown.editable ctxt ~action:(fun v ->
@@ -535,7 +527,14 @@ module Editor = struct
                        ( ct (State.Editor_mode.to_string m)
                        %% t "→"
                        %% State.Editor_mode.explain m )) ))
-        % local_storage_button )
+        % local_storage_button % editor_function_buttons )
+      % Reactive.bind_var editor_function_messages ~f:(function
+          | [] -> empty ()
+          | more ->
+              Bootstrap.alert ~kind:`Danger
+                ( Bootstrap.close_button ~action:(fun () ->
+                      Reactive.set editor_function_messages [])
+                %% itemize (List.map more ~f:(Message_html.render ctxt)) ))
       % H5.(
           div
             [ textarea
@@ -634,7 +633,8 @@ module Explorer = struct
     % h4 (t "Metadata Location")
     % Tezos_html.metadata_uri ctxt uri
     % h4 (t "Metadata Contents")
-    % Tezos_html.metadata_contents ctxt metadata ~add_explore_tokens_button:true
+    % Tezos_html.show_metadata_full_validation ctxt metadata
+        ~add_explore_tokens_button:true ~show_validation_big_answer:false
 
   let uri_ok_but_metadata_failure ctxt ~uri ~metadata_json ~error ~full_input =
     let open Meta_html in
@@ -690,9 +690,10 @@ module Explorer = struct
             let open Tezos_contract_metadata.Metadata_contents in
             dbgf "before of-json" ;
             match Contract_metadata.Content.of_json json_code with
-            | Ok metadata ->
+            | Ok (_, _) ->
                 Async_work.ok result
-                  (uri_and_metadata_result ctxt ~full_input ~uri ~metadata) ;
+                  (uri_and_metadata_result ctxt ~full_input ~uri
+                     ~metadata:json_code) ;
                 Lwt.return ()
             | Error error ->
                 raise
