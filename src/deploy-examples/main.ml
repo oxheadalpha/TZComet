@@ -86,11 +86,11 @@ module Micheline_views = struct
   let storage_view_implementation ?version ?parameter ?(return_type = nat)
       ?(annotations = []) code =
     dict
-      [ ( "michelson-storage-view"
+      [ ( "michelsonStorageView"
         , dict
             ( Option.value_map parameter ~default:[] ~f:(fun p ->
                   [("parameter", p)])
-            @ [("return-type", return_type); ("code", `A code)]
+            @ [("returnType", return_type); ("code", `A code)]
             @ ( match annotations with
               | [] -> []
               | more ->
