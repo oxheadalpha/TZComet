@@ -173,6 +173,11 @@ let editor_content ctxt =
 let editor_mode ctxt = Reactive.get (get ctxt).editor_mode
 let set_editor_mode ctxt = Reactive.set (get ctxt).editor_mode
 
+let transform_editor_content ctxt ~f =
+  let v = (get ctxt).editor_content in
+  let changed = f (Reactive.peek v) in
+  Reactive.set v changed
+
 (*
      Automatic saving to make one day?
         let variable = (get ctxt).editor_content in

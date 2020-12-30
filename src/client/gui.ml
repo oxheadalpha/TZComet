@@ -485,6 +485,31 @@ module Editor = struct
             (abbreviation
                "Local storage is not available for this browser/site combo."
                label) in
+    let editor_function_messages = Reactive.var [] in
+    let editor_message m =
+      Reactive.set editor_function_messages
+        (m :: Reactive.peek editor_function_messages) in
+    let editor_function_buttons =
+      let json_formatter ~minify () =
+        try
+          State.transform_editor_content ctxt ~f:(fun x ->
+              let v = Ezjsonm.value_from_string x in
+              Ezjsonm.value_to_string ~minify v)
+        with e ->
+          let verb = if minify then "minify" else "re-indent" in
+          editor_message
+            Message.(t "Failed to" %% t verb % t ", the JSON has to be valid.")
+      in
+      Reactive.bind format_result ~f:(fun (_, (_, kind, _)) ->
+          match kind with
+          | Empty -> empty ()
+          | Failed -> empty ()
+          | Format `Metadata_json ->
+              Bootstrap.button ~kind:`Info (t "Reindent JSON") ~outline:true
+                ~action:(json_formatter ~minify:false)
+              %% Bootstrap.button ~kind:`Info (t "Minify JSON") ~outline:true
+                   ~action:(json_formatter ~minify:true)
+          | Format _ -> empty ()) in
     let editor =
       div
         ( Examples_dropdown.editable ctxt ~action:(fun v ->
@@ -502,7 +527,14 @@ module Editor = struct
                        ( ct (State.Editor_mode.to_string m)
                        %% t "→"
                        %% State.Editor_mode.explain m )) ))
-        % local_storage_button )
+        % local_storage_button % editor_function_buttons )
+      % Reactive.bind_var editor_function_messages ~f:(function
+          | [] -> empty ()
+          | more ->
+              Bootstrap.alert ~kind:`Danger
+                ( Bootstrap.close_button ~action:(fun () ->
+                      Reactive.set editor_function_messages [])
+                %% itemize (List.map more ~f:(Message_html.render ctxt)) ))
       % H5.(
           div
             [ textarea
