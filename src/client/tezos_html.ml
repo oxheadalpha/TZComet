@@ -825,8 +825,7 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
         in
         (metadata, [field "TZIP-012 Implementation Claim" tzip_12_block]))
 
-let metadata_contents ~add_explore_tokens_button ?(open_in_editor_link = true)
-    ctxt =
+let metadata_contents ~add_explore_tokens_button ?open_in_editor_link ctxt =
   let open Tezos_contract_metadata.Metadata_contents in
   fun (*  as *) metadata ->
     let ct = monot in
@@ -1025,11 +1024,9 @@ let metadata_contents ~add_explore_tokens_button ?(open_in_editor_link = true)
           ; unknown }
         , sub_standards ) =
       metadata_substandards ~add_explore_tokens_button ctxt metadata in
-    ( if open_in_editor_link then
-      div
-        (open_in_editor ctxt
-           (Tezos_contract_metadata.Metadata_contents.to_json metadata))
-    else empty () )
+    ( match open_in_editor_link with
+    | Some content -> div (open_in_editor ctxt content)
+    | None -> empty () )
     % itemize
         ( option_field "Name" name ct
         @ option_field "Version" version ct
@@ -1043,3 +1040,52 @@ let metadata_contents ~add_explore_tokens_button ?(open_in_editor_link = true)
         @ option_field "Errors" errors (errors_elt ~views)
         @ list_field "Views" views views_elt
         @ list_field "Extra/Unknown" unknown unknown_extras )
+
+let big_answer level content =
+  let kind = match level with `Ok -> `Success | `Error -> `Danger in
+  h2 (Bootstrap.color kind content)
+
+let show_metadata_full_validation ctxt ~add_explore_tokens_button
+    ~show_validation_big_answer inpo =
+  let open Tezos_contract_metadata.Metadata_contents in
+  match Contract_metadata.Content.of_json inpo with
+  | Ok (legacy_warnings, m) ->
+      let errs, warns =
+        Validation.validate m ~protocol_hash_is_valid:(fun s ->
+            try
+              let _ = B58_hashes.check_b58_protocol_hash s in
+              true
+            with e ->
+              dbgf "Protocol hash problem: %a" Exn.pp e ;
+              false) in
+      let header =
+        if show_validation_big_answer then
+          match (errs, warns, legacy_warnings) with
+          | [], [], [] -> big_answer `Ok (t "This metadata JSON is VALID 👌")
+          | _ :: _, _, _ | _, _, _ :: _ ->
+              big_answer `Error
+                (t "This metadata JSON parses Okay but is not valid 👎")
+          | [], _ :: _, [] ->
+              big_answer `Ok
+                (t "This metadata JSON is valid 👍, with warnings …")
+        else empty () in
+      let hn = h5 in
+      let section title reasons to_html =
+        match reasons with
+        | [] -> empty ()
+        | more -> hn title %% itemize (List.map more ~f:to_html) in
+      let legacy_warning = function
+        | `Fixed_legacy (old, fixed) ->
+            t "The metadata uses the field"
+            %% ct old %% t "instead of" %% ct fixed
+            %% t "from the latest specification." in
+      header
+      % section (t "Old-Format Errors") legacy_warnings legacy_warning
+      % section (t "Errors") errs (metadata_validation_error ctxt)
+      % section (t "Warnings") warns (metadata_validation_warning ctxt)
+      % hn (t "Contents")
+      % metadata_contents ~open_in_editor_link:inpo ctxt m
+          ~add_explore_tokens_button
+  | Error el ->
+      big_answer `Error (t "This metadata JSON is not valid 🥸")
+      % error_trace ctxt el
