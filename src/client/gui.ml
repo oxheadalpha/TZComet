@@ -181,7 +181,7 @@ module Editor = struct
   let show_metadata ctxt inpo =
     let open Tezos_contract_metadata.Metadata_contents in
     match Contract_metadata.Content.of_json inpo with
-    | Ok m ->
+    | Ok (legacy_warnings, m) ->
         let errs, warns =
           Validation.validate m ~protocol_hash_is_valid:(fun s ->
               try
@@ -191,19 +191,25 @@ module Editor = struct
                 dbgf "Protocol hash problem: %a" Exn.pp e ;
                 false) in
         let header =
-          match (errs, warns) with
-          | [], [] -> big_answer `Ok (t "This metadata JSON is VALID 👌")
-          | _ :: _, _ ->
+          match (errs, warns, legacy_warnings) with
+          | [], [], [] -> big_answer `Ok (t "This metadata JSON is VALID 👌")
+          | _ :: _, _, _ | _, _, _ :: _ ->
               big_answer `Error
                 (t "This metadata JSON parses Okay but is not valid 👎")
-          | [], _ :: _ ->
+          | [], _ :: _, [] ->
               big_answer `Ok
                 (t "This metadata JSON is valid 👍, with warnings …") in
         let section title reasons to_html =
           match reasons with
           | [] -> empty ()
           | more -> h4 title %% itemize (List.map more ~f:to_html) in
+        let legacy_warning = function
+          | `Fixed_legacy (old, fixed) ->
+              t "The metadata uses the field"
+              %% ct old %% t "instead of" %% ct fixed
+              %% t "from the latest specification." in
         header
+        % section (t "Old-Format Errors") legacy_warnings legacy_warning
         % section (t "Errors") errs (Tezos_html.metadata_validation_error ctxt)
         % section (t "Warnings") warns
             (Tezos_html.metadata_validation_warning ctxt)
@@ -690,7 +696,7 @@ module Explorer = struct
             let open Tezos_contract_metadata.Metadata_contents in
             dbgf "before of-json" ;
             match Contract_metadata.Content.of_json json_code with
-            | Ok metadata ->
+            | Ok (_, metadata) ->
                 Async_work.ok result
                   (uri_and_metadata_result ctxt ~full_input ~uri ~metadata) ;
                 Lwt.return ()

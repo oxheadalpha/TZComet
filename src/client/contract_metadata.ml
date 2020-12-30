@@ -110,11 +110,32 @@ end
 module Content = struct
   let of_json s =
     try
-      let jsonm = Ezjsonm.value_from_string s in
+      let warnings = ref [] in
+      let jsonm =
+        let j = Ezjsonm.value_from_string s in
+        let rec fix = function
+          | (`String _ | `Float _ | `Bool _ | `Null) as v -> v
+          | `A l -> `A (List.map l ~f:fix)
+          | `O kvl ->
+              let f (k, v) =
+                let fix_warn o k =
+                  ( match
+                      List.exists !warnings ~f:(function
+                          | `Fixed_legacy (a, _) -> String.equal a o)
+                    with
+                  | true -> ()
+                  | false -> warnings := `Fixed_legacy (o, k) :: !warnings ) ;
+                  (k, fix v) in
+                match k with
+                | "michelson-storage-view" -> fix_warn k "michelsonStorageView"
+                | "return-type" -> fix_warn k "returnType"
+                | other -> (other, fix v) in
+              `O (List.map kvl ~f) in
+        fix j in
       let contents =
         Json_encoding.destruct
           Tezos_contract_metadata.Metadata_contents.encoding jsonm in
-      Ok contents
+      Ok (!warnings, contents)
     with e -> Tezos_error_monad.Error_monad.error_exn e
 
   module Permissions_descriptor = struct
