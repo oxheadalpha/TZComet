@@ -312,7 +312,7 @@ module Content = struct
           let check_parameter =
             Michelson.Partial_type.Structure.(
               function
-              | Pair {left= Leaf {kind= Nat; _}; right= Leaf {kind= Address; _}}
+              | Pair {left= Leaf {kind= Address; _}; right= Leaf {kind= Nat; _}}
                 ->
                   true
               | _ -> false) in
@@ -331,11 +331,11 @@ module Content = struct
             Michelson.Partial_type.Structure.(
               function
               | Pair
-                  { left= Leaf {kind= Nat; _}
+                  { left= Leaf {kind= Address; _}
                   ; right=
                       Pair
                         { left= Leaf {kind= Address; _}
-                        ; right= Leaf {kind= Address; _} } } ->
+                        ; right= Leaf {kind= Nat; _} } } ->
                   true
               | _ -> false) in
           let check_return =

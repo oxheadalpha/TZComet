@@ -1046,7 +1046,7 @@ let big_answer level content =
   h2 (Bootstrap.color kind content)
 
 let show_metadata_full_validation ctxt ~add_explore_tokens_button
-    ~show_validation_big_answer inpo =
+    ~add_open_in_editor_button ~show_validation_big_answer inpo =
   let open Tezos_contract_metadata.Metadata_contents in
   match Contract_metadata.Content.of_json inpo with
   | Ok (legacy_warnings, m) ->
@@ -1084,8 +1084,10 @@ let show_metadata_full_validation ctxt ~add_explore_tokens_button
       % section (t "Errors") errs (metadata_validation_error ctxt)
       % section (t "Warnings") warns (metadata_validation_warning ctxt)
       % hn (t "Contents")
-      % metadata_contents ~open_in_editor_link:inpo ctxt m
-          ~add_explore_tokens_button
+      % metadata_contents
+          ?open_in_editor_link:
+            (if add_open_in_editor_button then Some inpo else None)
+          ctxt m ~add_explore_tokens_button
   | Error el ->
       big_answer `Error (t "This metadata JSON is not valid 🥸")
       % error_trace ctxt el

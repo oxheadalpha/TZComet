@@ -18,7 +18,7 @@ ensure_vendors () {
     # We use the following pointer to the main repo's master branch:
     tezos_branch=smondet-contract-metadata
     tezos_remote=https://gitlab.com/smondet/tezos.git
-    tezos_commit="5d36af36a02b7380af924d6823aaababafdeac4e"
+    tezos_commit="ddd548ecfa768efff1c31affc13e7365498e436c"
     say "Vendoring tezos @ %10s" "$tezos_branch"
     if [ -f "local-vendor/tezos/README.md" ] ; then
         say "Tezos already cloned"
@@ -76,7 +76,7 @@ ensure_setup () {
     fi
     eval $(opam env)
     opam install --deps-only \
-         local-vendor/tezos/src/lib_contract_metadata/core/tezos-contract-metadata.opam
+         local-vendor/tezos/src/lib_contract_metadata/tezos-contract-metadata.opam
     opam pin add -n digestif 0.9.0
     opam pin add -n ocamlformat 0.15.0
     opam install -y base fmt uri cmdliner ezjsonm \
