@@ -76,7 +76,7 @@ ensure_setup () {
     fi
     eval $(opam env)
     opam install --deps-only \
-         local-vendor/tezos/src/lib_contract_metadata/core/tezos-contract-metadata.opam
+         local-vendor/tezos/src/lib_contract_metadata/tezos-contract-metadata.opam
     opam pin add -n digestif 0.9.0
     opam pin add -n ocamlformat 0.15.0
     opam install -y base fmt uri cmdliner ezjsonm \
