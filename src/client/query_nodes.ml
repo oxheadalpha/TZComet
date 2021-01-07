@@ -128,7 +128,7 @@ module Node = struct
     log "Got raw storage: %s" storage_string ;
     let mich_storage = Michelson.micheline_of_json storage_string in
     log "As concrete: %a"
-      Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
+      Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
       mich_storage ;
     System.slow_step state_handle
     >>= fun () ->
@@ -138,14 +138,14 @@ module Node = struct
     let mich_storage_type =
       Michelson.micheline_of_json script_string
       |> Tezos_micheline.Micheline.strip_locations
-      |> Tezos_contract_metadata.Contract_storage.get_storage_type_exn in
+      |> Tezos_contract_metadata.Micheline_helpers.get_storage_type_exn in
     log "Storage type: %a"
-      Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
+      Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
       mich_storage_type ;
     System.slow_step state_handle
     >>= fun () ->
     let bgs =
-      Tezos_contract_metadata.Contract_storage.find_metadata_big_maps
+      Tezos_contract_metadata.Micheline_helpers.find_metadata_big_maps
         ~storage_node:mich_storage ~type_node:mich_storage_type in
     match bgs with
     | [] -> Fmt.failwith "Contract has no valid %%metadata big-map!"
@@ -346,7 +346,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
         dbgf "call_off_chain_view: %s" s)
       f in
   logf "Calling %s(%a)" address
-    Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline parameter ;
+    Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline parameter ;
   find_node_with_contract ctxt address
   >>= fun node ->
   logf "Found contract with node %S" node.name ;
@@ -392,7 +392,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   let contract_storage = Michelson.micheline_of_json storage in
   let `Contract view_contract, `Input view_input, `Storage view_storage =
     let code_mich = Michelson.micheline_of_json script in
-    let open Tezos_contract_metadata.Contract_storage in
+    let open Tezos_contract_metadata.Micheline_helpers in
     let contract_storage_type =
       get_storage_type_exn (Tezos_micheline.Micheline.strip_locations code_mich)
     in
@@ -425,12 +425,13 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       ~contract_address:address ~contract_storage ~view_parameters
       ~contract_storage_type ~contract_parameter_type in
   logf "Made the view-script: %a"
-    Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline
+    Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
     view_contract ;
   logf "Made the view-input: %a"
-    Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline view_input ;
+    Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline view_input ;
   logf "Made the view-storage: %a"
-    Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline view_storage ;
+    Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
+    view_storage ;
   let constructed =
     let open Ezjsonm in
     let normal_fields =
@@ -477,6 +478,6 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     | Prim (_, "Some", [s], _) -> s
     | other ->
         Fmt.failwith "Result is not (Some _): %a"
-          Tezos_contract_metadata.Contract_storage.pp_arbitrary_micheline other
+          Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline other
   in
   return (Ok (actual_result, contract_storage))
