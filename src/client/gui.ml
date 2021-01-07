@@ -458,6 +458,7 @@ module Editor = struct
               match fmt with
               | `Metadata_json ->
                   Tezos_html.show_metadata_full_validation ctxt inp
+                    ~add_open_in_editor_button:false
                     ~add_explore_tokens_button:false
                     ~show_validation_big_answer:true
               | `Uri -> show_uri ctxt inp
@@ -634,7 +635,8 @@ module Explorer = struct
     % Tezos_html.metadata_uri ctxt uri
     % h4 (t "Metadata Contents")
     % Tezos_html.show_metadata_full_validation ctxt metadata
-        ~add_explore_tokens_button:true ~show_validation_big_answer:false
+        ~add_open_in_editor_button:true ~add_explore_tokens_button:true
+        ~show_validation_big_answer:false
 
   let uri_ok_but_metadata_failure ctxt ~uri ~metadata_json ~error ~full_input =
     let open Meta_html in
