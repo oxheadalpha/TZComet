@@ -211,7 +211,8 @@ module Bootstrap = struct
               ~a:
                 [ a_class
                     (Reactive.pure
-                       [ "btn"; Fmt.str "btn-%s" (Label_kind.to_string kind)
+                       [ "btn"
+                       ; Fmt.str "btn-%s" (Label_kind.to_string kind)
                        ; "dropdown-toggle" ])
                   (* ; a_type (Reactive.pure `Button) *)
                 ; a_id (Reactive.pure id)
@@ -368,7 +369,8 @@ module Bootstrap = struct
                            | 13 when not (Js_of_ocaml.Js.to_bool ev##.shiftKey)
                              ->
                                enter_action () ; false
-                           | _ -> true)); a_input_type (Reactive.pure kind) ]
+                           | _ -> true))
+                  ; a_input_type (Reactive.pure kind) ]
                 @ Option.value_map placeholder ~default:[] ~f:(fun plc ->
                       [a_placeholder plc])
                 @ more_a )
@@ -485,20 +487,18 @@ module Bootstrap = struct
     type state = [`Hidden | `Hiding | `Shown | `Showing]
 
     module Global_jquery_communication = struct
-      (**
-         This module brings the ["*.bs.collapse"] jQuery events into
-         the Lwd realm, using each a global handler for traditional JS
-         events.
+      (** This module brings the ["*.bs.collapse"] jQuery events into the Lwd
+          realm, using each a global handler for traditional JS events.
 
-         See the generation of the events forwarding in ["src/gen-web/main.ml"]:
+          See the generation of the events forwarding in
+          ["src/gen-web/main.ml"]:
 
-         {v
+          {v
            $(document).on('hidden.bs.collapse', function (e) {
               var ev = new CustomEvent('collapse-hidden', { detail: e.target.id } );
               document.body.dispatchEvent(ev);
            })
-         v}
-      *)
+          v} *)
 
       let done_once = ref false
       let ids_and_states : (string * state Reactive.var) list ref = ref []
@@ -513,7 +513,9 @@ module Bootstrap = struct
               (Dom_html.document##.body :> Js_of_ocaml.Dom_html.element Js.t)
             in
             List.iter
-              [ ("shown", `Shown); ("show", `Showing); ("hide", `Hiding)
+              [ ("shown", `Shown)
+              ; ("show", `Showing)
+              ; ("hide", `Hiding)
               ; ("hidden", `Hidden) ]
               ~f:(fun (evname, resulting_status) ->
                 let ev_type = Fmt.kstr Dom.Event.make "collapse-%s" evname in
@@ -571,7 +573,8 @@ module Bootstrap = struct
           ( more_a
           @ H5.
               [ classes
-                  [ "btn"; "btn-sm"
+                  [ "btn"
+                  ; "btn-sm"
                   ; Fmt.str "btn-outline-%s" (Label_kind.to_string kind) ]
               ; a_user_data "toggle" (Lwd.pure "collapse")
               ; a_user_data "target" (Reactive.map ~f:(Fmt.str "#%s") t.id)
@@ -674,7 +677,8 @@ module Example = struct
                  | true -> empty ())
             %% t "checked." )
         % itemize
-            [ t "Some item"; t "Some other item"
+            [ t "Some item"
+            ; t "Some other item"
             ; t "truc" %% it "bidule" %% bt "chouette"
             ; t "Form submissions:"
               %% Reactive.bind_var submissions ~f:(fun subs ->

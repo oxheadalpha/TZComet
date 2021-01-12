@@ -38,9 +38,22 @@ let originate ?(balance = 0) ?(description = "") ~source ~init ~name ~logfile ()
     =
   let cmd =
     tezos_client
-      [ "--wait"; "0"; "originate"; "contract"; name; "transferring"
-      ; Int.to_string balance; "from"; Env.funder (); "running"; source
-      ; "--burn-cap"; "100"; "--init"; init; "--force" ] in
+      [ "--wait"
+      ; "0"
+      ; "originate"
+      ; "contract"
+      ; name
+      ; "transferring"
+      ; Int.to_string balance
+      ; "from"
+      ; Env.funder ()
+      ; "running"
+      ; source
+      ; "--burn-cap"
+      ; "100"
+      ; "--init"
+      ; init
+      ; "--force" ] in
   System.exec cmd ;
   System.append_to_file ~file:logfile (Fmt.str "## Contract `%s`\n\n" name) ;
   System.append_to_file ~file:logfile (Fmt.str "- Init: `%s`\n- Address: " init) ;
@@ -148,7 +161,8 @@ let all ?only ~logfile () =
     Ezjsonm.
       [ ( "license"
         , dict [("name", string "MIT"); ("details", string "The MIT License")]
-        ); ("homepage", string "https://github.com/tqtezos/TZComet")
+        )
+      ; ("homepage", string "https://github.com/tqtezos/TZComet")
       ; ( "source"
         , dict
             [ ("tools", list string ["TZComet"; "deploy-examples/main.exe"])
@@ -169,7 +183,8 @@ let all ?only ~logfile () =
                       [ ( "bytes"
                         , string
                             "7175656c7175652063686f7365206e276120706173206d61726368c3a9"
-                        ) ] ); ("languages", strings ["fr"]) ]
+                        ) ] )
+                ; ("languages", strings ["fr"]) ]
             ; dict [("view", string "does-not-exist")]
             ; dict
                 [ ("view", string "multiply-the-nat-in-storage")
@@ -205,8 +220,11 @@ let all ?only ~logfile () =
         ; ( "%negative_even_number"
           , "The result, if any, is twice the argument \
              (%the_decisive_argument)." ) ]
-      [ prim "CAR" []; prim "DUP" []; prim "PUSH" [prim "int" []; int 0]
-      ; prim "COMPARE" []; prim "LT" []
+      [ prim "CAR" []
+      ; prim "DUP" []
+      ; prim "PUSH" [prim "int" []; int 0]
+      ; prim "COMPARE" []
+      ; prim "LT" []
       ; prim "IF"
           [ seq [prim "FAILWITH" []]
           ; seq [prim "PUSH" [prim "int" []; int 2]; prim "MUL" []] ] ] in
@@ -270,8 +288,13 @@ let all ?only ~logfile () =
       (basics_and_views [multiply_the_nat]) ;
     self_describe "This contract has a couple of off-chain-views."
       (basics_and_views
-         [ empty_view_01; failwith_01; multiply_the_nat; call_balance
-         ; identity_01; view_with_too_much_code; call_self_address ]) ;
+         [ empty_view_01
+         ; failwith_01
+         ; multiply_the_nat
+         ; call_balance
+         ; identity_01
+         ; view_with_too_much_code
+         ; call_self_address ]) ;
     simple "Has a URI that is invalid." [root "tezos-storage:onekey/with/slash"] ;
     self_host "Point to invalid metadata."
       Ezjsonm.(dict [("version", list string ["tzcomet-example v0.0.42"])]) ;
