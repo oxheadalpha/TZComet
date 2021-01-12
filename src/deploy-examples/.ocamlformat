@@ -1,1 +1,4 @@
 profile=compact
+break-collection-expressions=fit-or-vertical
+exp-grouping=preserve
+parse-docstrings
