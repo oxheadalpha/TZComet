@@ -328,7 +328,8 @@ module Editor = struct
              *)
              prev
              % row
-                 [ t label; Fmt.kstr t "%a B" ppbig bytes
+                 [ t label
+                 ; Fmt.kstr t "%a B" ppbig bytes
                  ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 250) ])) in
     let hashes =
       (* let _item k bytes =
@@ -542,7 +543,8 @@ module Editor = struct
                 ((* txt *) Reactive.Bidirectional.get content)
                 ~a:
                   [ a_style (Lwd.pure "font-family: monospace")
-                  ; classes ["col-12"]; a_rows (Lwd.pure 50)
+                  ; classes ["col-12"]
+                  ; a_rows (Lwd.pure 50)
                   ; a_oninput
                       (Tyxml_lwd.Lwdom.attr
                          Js_of_ocaml.(

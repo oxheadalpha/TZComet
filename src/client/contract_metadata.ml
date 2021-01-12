@@ -163,7 +163,8 @@ module Content = struct
       let open Json_encoding in
       let operator_transfer_policy =
         string_enum
-          [ ("no-transfer", No_transfer); ("owner-transfer", Owner_transfer)
+          [ ("no-transfer", No_transfer)
+          ; ("owner-transfer", Owner_transfer)
           ; ("owner-or-operator-transfer", Owner_or_operator_transfer) ] in
       let owner_transfer_policy =
         string_enum
@@ -237,7 +238,10 @@ module Content = struct
         | Some `Just_interface | Some (`Version _) -> true
         | _ -> false )
         && List.for_all
-             [ t12.get_balance; t12.total_supply; t12.all_tokens; t12.is_operator
+             [ t12.get_balance
+             ; t12.total_supply
+             ; t12.all_tokens
+             ; t12.is_operator
              ; t12.token_metadata ] ~f:(function
              | Missing | Valid _ -> true
              | _ -> false)

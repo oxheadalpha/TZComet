@@ -438,7 +438,8 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       [ ("script", Michelson.micheline_to_ezjsonm view_contract)
       ; ("storage", Michelson.micheline_to_ezjsonm view_storage)
       ; ("input", Michelson.micheline_to_ezjsonm view_input)
-      ; ("amount", string "0"); ("chain_id", string chain_id) ] in
+      ; ("amount", string "0")
+      ; ("chain_id", string chain_id) ] in
     let fields =
       match protocol_kind with
       | `Edo -> normal_fields @ [("balance", string "0")]

@@ -4,7 +4,9 @@ let nodes_form ctxt =
   let open Meta_html in
   Bootstrap.Table.simple
     ~header_row:
-      [ t "Name"; t "URI-Prefix"; t "Status"
+      [ t "Name"
+      ; t "URI-Prefix"
+      ; t "Status"
       ; t "Latest Ping"
         %% Reactive.bind
              (Query_nodes.loop_status ctxt)
@@ -39,7 +41,8 @@ let nodes_form ctxt =
      let row_of_node n =
        row
          Query_nodes.Node.
-           [ it n.name; ct n.prefix
+           [ it n.name
+           ; ct n.prefix
            ; Reactive.bind (status n) ~f:(fun (_, s) -> node_status s)
            ; Reactive.bind (status n) ~f:(fun (f, _) -> ping_date f) ] in
      let last_row =

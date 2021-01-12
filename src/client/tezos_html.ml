@@ -73,10 +73,12 @@ let uri_parsing_error err =
     let item_some name s = item name (Some s) in
     t "The URI is understood this way: "
     % itemize
-        [ item "Scheme" (Uri.scheme u); item "Host" (Uri.host u)
+        [ item "Scheme" (Uri.scheme u)
+        ; item "Host" (Uri.host u)
         ; item "User-info" (Uri.userinfo u)
         ; item "Port" (Uri.port u |> Option.map ~f:Int.to_string)
-        ; item_some "Path" (Uri.path u); item "Query" (Uri.verbatim_query u)
+        ; item_some "Path" (Uri.path u)
+        ; item "Query" (Uri.verbatim_query u)
         ; item "Fragment" (Uri.fragment u) ] in
   t "Failed to parse URI:" %% ct err.input % t ":"
   % itemize [details; exploded_uri]
@@ -215,7 +217,8 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
         let gatewayed = Fmt.str "https://gateway.ipfs.io/ipfs/%s%s" cid path in
         field_head "IPFS URI"
         % itemize
-            [ field "CID" (ct cid); field "Path" (ct path)
+            [ field "CID" (ct cid)
+            ; field "Path" (ct path)
             ; t "(Try " %% url ct gatewayed % t ")" ]
     | Storage {network; address; key} ->
         field_head "In-Contract-Storage"
@@ -275,7 +278,8 @@ let view_result ctxt ~result ~storage ~address ~view ~parameter =
        items
          [ ( "Returned Michelson"
            , Fmt.str "%s : %s" (mich_node result) (mich view.return_type) )
-         ; ("Called contract", address); ("Parameter used", mich_node parameter)
+         ; ("Called contract", address)
+         ; ("Parameter used", mich_node parameter)
          ; ("Current storage", mich_node storage) ])
 
 let michelson_view ctxt ~view =
