@@ -241,7 +241,8 @@ let default_nodes =
     ; Node.create "Edonet-GigaNode" "https://edonet-tezos.giganode.io"
     ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
     ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
-    ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io" ]
+    ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io"
+    ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ]
 
 let dev_nodes =
   List.rev

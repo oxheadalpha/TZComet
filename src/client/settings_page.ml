@@ -35,7 +35,7 @@ let nodes_form ctxt =
        if Float.(date < 10.) then (* Construction sign: *) t "🚧"
        else
          let date_string =
-           (new%js Js_of_ocaml.Js.date_fromTimeValue date)##toISOString
+           (new%js Js_of_ocaml.Js.date_fromTimeValue (1000. *. date))##toISOString
            |> Js_of_ocaml__Js.to_string in
          Bootstrap.monospace (t date_string) in
      let row_of_node n =
