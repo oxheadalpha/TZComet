@@ -24,7 +24,7 @@ ensure_vendors () {
         say "Tezos already cloned"
     else
         mkdir -p local-vendor/
-        git clone --depth 10 "$tezos_remote" -b "$tezos_branch" \
+        git clone "$tezos_remote" -b "$tezos_branch" \
             local-vendor/tezos
     fi
     (

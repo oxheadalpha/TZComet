@@ -329,9 +329,9 @@ module Examples = struct
            kt1_dev "KT1FsTYsKVfyvAuoh4WHNV5ibWbnh55p1XvR"
              "Points to invalid metdaata." ;
            kt1 kt1_one_view "Has one off-chain-view." ;
-           kt1_dev "KT1HxJrj34gpSeMyGwtozzsx3KPrKUwCT9zj"
+           kt1_dev "KT1JyuJoEDVaJ5Pfjp6vZsrvZRymyGs59rgw"
              "Has a few views that return bytes (JSON, UTF-8, binary …)" ;
-           kt1_dev "KT1Gha36XyYeoFaReyUVdkYeVjjHrq8h8V7u"
+           kt1_dev "KT1T8oqWTAVokcEh2ki56Gyf4QBbsoJE3jjU"
              "Event more weird off-chain-views." ;
            uri https_ok "A valid HTTPS URI." ;
            uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
