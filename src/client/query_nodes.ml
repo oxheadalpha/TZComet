@@ -383,6 +383,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     | Some p when String.is_prefix p ~prefix:"PsCARTHA" -> (`Carthage, p)
     | Some p when String.is_prefix p ~prefix:"PsDELPH1" -> (`Delphi, p)
     | Some p when String.is_prefix p ~prefix:"PtEdoTez" -> (`Edo, p)
+    | Some p when String.is_prefix p ~prefix:"PtEdo2Zk" -> (`Edo, p)
     | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Edo, p)
     | Some p ->
         logf "Can't recognize protocol: `%s` assuming Delphi-like." p ;
