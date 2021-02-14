@@ -123,7 +123,20 @@ module Node = struct
     let open Lwt in
     let get = rpc_get state_handle node in
     let log fmt = Fmt.kstr log fmt in
-    Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/storage" address
+    Lwt.catch
+      (fun () ->
+        Fmt.kstr
+          (rpc_post state_handle node
+             ~body:
+               Ezjsonm.(
+                 dict [("unparsing_mode", string "Optimized_legacy")]
+                 |> value_to_string))
+          "/chains/main/blocks/head/context/contracts/%s/storage/normalized"
+          address)
+      (fun e ->
+        log "Node does not handle /normalized" ;
+        Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/storage"
+          address)
     >>= fun storage_string ->
     log "Got raw storage: %s" storage_string ;
     let mich_storage = Michelson.micheline_of_json storage_string in
