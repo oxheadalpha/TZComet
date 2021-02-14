@@ -119,10 +119,7 @@ module Node = struct
         >>= fun metadata -> Lwt.return (Ready metadata))
       (fun e -> Lwt.return (Non_responsive e))
 
-  let metadata_big_map state_handle node ~address ~log =
-    let open Lwt in
-    let get = rpc_get state_handle node in
-    let log fmt = Fmt.kstr log fmt in
+  let get_storage state_handle node ~address ~log =
     Lwt.catch
       (fun () ->
         Fmt.kstr
@@ -135,9 +132,16 @@ module Node = struct
           address)
       (fun e ->
         log "Node does not handle /normalized" ;
-        Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/storage"
-          address)
+        Fmt.kstr
+          (rpc_get state_handle node)
+          "/chains/main/blocks/head/context/contracts/%s/storage" address)
+
+  let metadata_big_map state_handle node ~address ~log =
+    let open Lwt in
+    get_storage state_handle node ~address ~log
     >>= fun storage_string ->
+    let get = rpc_get state_handle node in
+    let log fmt = Fmt.kstr log fmt in
     log "Got raw storage: %s" storage_string ;
     let mich_storage = Michelson.micheline_of_json storage_string in
     log "As concrete: %a"
@@ -389,8 +393,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
         logf "Can't recognize protocol: `%s` assuming Delphi-like." p ;
         (`Delphi, p) in
   logf "Protocol is `%s`" protocol_hash ;
-  Fmt.kstr (Node.rpc_get ctxt node)
-    "/chains/main/blocks/head/context/contracts/%s/storage" address
+  Node.get_storage ctxt node ~address ~log
   >>= fun storage ->
   logf "Got the storage: %s" storage ;
   Fmt.kstr (Node.rpc_get ctxt node)
@@ -457,12 +460,17 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       ; ("chain_id", string chain_id) ] in
     let fields =
       match protocol_kind with
-      | `Edo -> normal_fields @ [("balance", string "0")]
+      | `Edo ->
+          normal_fields
+          @ [ ("balance", string "0")
+            ; ("unparsing_mode", string "Optimized_legacy") ]
       | _ -> normal_fields in
     dict fields in
   Node.rpc_post ctxt node
     ~body:(Ezjsonm.value_to_string constructed)
-    "/chains/main/blocks/head/helpers/scripts/run_code"
+    ( match protocol_kind with
+    | `Edo -> "/chains/main/blocks/head/helpers/scripts/run_code/normalized"
+    | _ -> "/chains/main/blocks/head/helpers/scripts/run_code" )
   >>= fun result ->
   logf "RESULT: %s" result ;
   (*
