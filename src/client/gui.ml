@@ -630,14 +630,15 @@ module Explorer = struct
     let open Meta_html in
     h4 (t "Understood Input") % div (full_input_quick ctxt full_input)
 
-  let uri_and_metadata_result ctxt ~uri ~metadata ~full_input =
+  let uri_and_metadata_result ?token_metadata_big_map ctxt ~uri ~metadata
+      ~full_input =
     let open Meta_html in
     full_input_bloc ctxt full_input
     % h4 (t "Metadata Location")
     % Tezos_html.metadata_uri ctxt uri
     % h4 (t "Metadata Contents")
-    % Tezos_html.show_metadata_full_validation ctxt metadata
-        ~add_open_in_editor_button:true ~add_explore_tokens_button:true
+    % Tezos_html.show_metadata_full_validation ctxt ?token_metadata_big_map
+        metadata ~add_open_in_editor_button:true ~add_explore_tokens_button:true
         ~show_validation_big_answer:false
 
   let uri_ok_but_metadata_failure ctxt ~uri ~metadata_json ~error ~full_input =
@@ -682,7 +683,7 @@ module Explorer = struct
             Async_work.log result
               (it prefix %% t "→" %% Bootstrap.monospace (t s)) in
           let full_input = validate_intput input_value in
-          let on_uri ctxt uri =
+          let on_uri ctxt ?token_metadata_big_map uri =
             Lwt.catch
               (fun () ->
                 Contract_metadata.Uri.fetch ctxt uri
@@ -697,7 +698,7 @@ module Explorer = struct
             | Ok (_, _) ->
                 Async_work.ok result
                   (uri_and_metadata_result ctxt ~full_input ~uri
-                     ~metadata:json_code) ;
+                     ?token_metadata_big_map ~metadata:json_code) ;
                 Lwt.return ()
             | Error error ->
                 raise
@@ -711,8 +712,20 @@ module Explorer = struct
               >>= fun metadata_uri ->
               Contract_metadata.Uri.Fetcher.set_current_contract ctxt address ;
               Async_work.log result (t "Now going for: " %% ct metadata_uri) ;
+              Lwt.catch
+                (fun () ->
+                  Contract_metadata.Content.token_metadata_value ctxt ~address
+                    ~key:""
+                    ~log:(logs "Getting Token Metadata")
+                  >>= fun token_metadata -> Lwt.return_some token_metadata)
+                (fun exn ->
+                  Async_work.log result
+                    ( t "Attempt at getting a %token_metadata big-map failed:"
+                    %% Errors_html.exception_html ctxt exn ) ;
+                  Lwt.return_none)
+              >>= fun token_metadata_big_map ->
               match Contract_metadata.Uri.validate metadata_uri with
-              | Ok uri, _ -> on_uri ctxt uri
+              | Ok uri, _ -> on_uri ctxt uri ?token_metadata_big_map
               | Error error, _ ->
                   raise
                     (mkexn

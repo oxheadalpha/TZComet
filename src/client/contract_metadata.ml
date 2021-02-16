@@ -292,6 +292,73 @@ module Content = struct
             Invalid {view; implementation= impl; parameter_status; return_status}
         )
 
+  let rec find_token_metadata_big_map ~storage_node ~type_node =
+    let open Tezos_micheline.Micheline in
+    let go (storage_node, type_node) =
+      find_token_metadata_big_map ~storage_node ~type_node in
+    let check_annots annotations node =
+      if List.mem annotations "%token_metadata" ~equal:String.equal then
+        Decorate_error.raise
+          Message.(
+            t "Wrong %token_metadata annotation:"
+            %% kpp ct
+                 Tezos_contract_metadata.Micheline_helpers
+                 .pp_arbitrary_micheline node) in
+    match (storage_node, type_node) with
+    | Prim (_, "Pair", [l; r], ans), Prim (_, "pair", [lt; rt], ant) ->
+        check_annots ans storage_node ;
+        check_annots ant type_node ;
+        go (l, lt) @ go (r, rt)
+    | ( Int (_, z)
+      , Prim
+          ( _
+          , "big_map"
+          , [ Prim (_, "nat", [], _)
+            ; Prim
+                ( _
+                , "pair"
+                , [ Prim (_, "nat", [], _)
+                  ; Prim
+                      ( _
+                      , "map"
+                      , [Prim (_, "string", [], _); Prim (_, "bytes", [], _)]
+                      , _ ) ]
+                , _ ) ]
+          , annotations ) )
+      when List.mem annotations "%token_metadata" ~equal:String.equal ->
+        [z]
+    | Int (_, _z), Prim (_, "big_map", _, annots) ->
+        check_annots annots type_node ;
+        []
+    | Int (_, _z), _ -> []
+    | String (_, _s), _ -> []
+    | Bytes (_, _b), _ -> []
+    | Prim (_, _prim, _args, annot), _t ->
+        check_annots annot storage_node ;
+        []
+    | Seq (_, _l), _t -> []
+
+  let token_metadata_value ctxt ~address ~key ~(log : string -> unit) =
+    let open Lwt in
+    let open Query_nodes in
+    let logf f = Fmt.kstr log f in
+    find_node_with_contract ctxt address
+    >>= fun node ->
+    logf "Found contract with node %S" node.Node.name ;
+    Node.metadata_big_map ctxt node ~address ~log
+    >>= fun metacontract ->
+    let Node.Contract.{storage_node; type_node; _} = metacontract in
+    let tmbm_id =
+      match find_token_metadata_big_map ~storage_node ~type_node with
+      | [one] -> one
+      | other ->
+          Decorate_error.raise
+            Message.(
+              t "Wrong number of %token_metadata big-maps:"
+              %% int ct (List.length other)) in
+    logf "Token-Metadata big-map: %s" (Z.to_string tmbm_id) ;
+    Lwt.return tmbm_id
+
   let classify : metadata -> classified =
     let open Metadata_contents in
     let looks_like_tzip_12 ~found metadata =

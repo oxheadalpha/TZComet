@@ -10,7 +10,15 @@ module Block_explorer = struct
     | Smartpy -> Fmt.str "https://smartpy.io/dev/explorer.html?address=%s" kt1
     | Bcd -> Fmt.str "https://better-call.dev/search?text=%s" kt1
 
+  let big_map_url id =
+    Fmt.str "https://better-call.dev/delphinet/big_map/%a/keys" Z.pp_print id
+
   let vendor_show_name = function Smartpy -> "SmartPy" | Bcd -> "BCD"
+
+  let big_map_display id =
+    let open Meta_html in
+    Bootstrap.monospace (Fmt.kstr bt "%a" Z.pp_print id)
+    %% small (parens (link ~target:(big_map_url id) (t (vendor_show_name Bcd))))
 
   let kt1_display kt1 =
     let open Meta_html in
@@ -481,7 +489,8 @@ let metadata_validation_warning ctxt =
            %% michelson_instruction "ADDRESS" )
       %% t "in off-chain-views."
 
-let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
+let metadata_substandards ?token_metadata_big_map
+    ?(add_explore_tokens_button = true) ctxt metadata =
   Contract_metadata.Content.(
     match classify metadata with
     | Tzip_16 t -> (t, [])
@@ -563,10 +572,19 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
                 %% div (error_trace ctxt e) in
           let show_tokens_metadata tm =
             view_validation "token_metadata" tm ~missing_add_on:(fun () ->
-                t
-                  "This means that the contract must provide token-specific \
-                   metadata using a big-map annotated with"
-                %% ct "%token_metadata" % t ".") in
+                match token_metadata_big_map with
+                | None ->
+                    t
+                      "This means that the contract is likely invalid: it must \
+                       provide token-specific metadata using a big-map \
+                       annotated with"
+                    %% ct "%token_metadata"
+                    % t " which was not found by TZComet."
+                | Some id ->
+                    t "This means that token-metadata must be available in the"
+                    %% ct "%token_metadata" %% t "big-map:"
+                    %% Block_explorer.big_map_display id
+                    % t ".") in
           let global_validity = Contract_metadata.Content.is_valid t12 in
           let show_validity_btn, validity_div =
             let validity_details () =
@@ -829,7 +847,8 @@ let metadata_substandards ?(add_explore_tokens_button = true) ctxt metadata =
         in
         (metadata, [field "TZIP-012 Implementation Claim" tzip_12_block]))
 
-let metadata_contents ~add_explore_tokens_button ?open_in_editor_link ctxt =
+let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
+    ?open_in_editor_link ctxt =
   let open Tezos_contract_metadata.Metadata_contents in
   fun (*  as *) metadata ->
     let ct = monot in
@@ -1027,7 +1046,8 @@ let metadata_contents ~add_explore_tokens_button ?open_in_editor_link ctxt =
           ; views
           ; unknown }
         , sub_standards ) =
-      metadata_substandards ~add_explore_tokens_button ctxt metadata in
+      metadata_substandards ?token_metadata_big_map ~add_explore_tokens_button
+        ctxt metadata in
     ( match open_in_editor_link with
     | Some content -> div (open_in_editor ctxt content)
     | None -> empty () )
@@ -1049,8 +1069,9 @@ let big_answer level content =
   let kind = match level with `Ok -> `Success | `Error -> `Danger in
   h2 (Bootstrap.color kind content)
 
-let show_metadata_full_validation ctxt ~add_explore_tokens_button
-    ~add_open_in_editor_button ~show_validation_big_answer inpo =
+let show_metadata_full_validation ?token_metadata_big_map ctxt
+    ~add_explore_tokens_button ~add_open_in_editor_button
+    ~show_validation_big_answer inpo =
   let open Tezos_contract_metadata.Metadata_contents in
   match Contract_metadata.Content.of_json inpo with
   | Ok (legacy_warnings, m) ->
@@ -1088,7 +1109,7 @@ let show_metadata_full_validation ctxt ~add_explore_tokens_button
       % section (t "Errors") errs (metadata_validation_error ctxt)
       % section (t "Warnings") warns (metadata_validation_warning ctxt)
       % hn (t "Contents")
-      % metadata_contents
+      % metadata_contents ?token_metadata_big_map
           ?open_in_editor_link:
             (if add_open_in_editor_button then Some inpo else None)
           ctxt m ~add_explore_tokens_button

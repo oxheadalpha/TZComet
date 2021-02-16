@@ -136,6 +136,16 @@ module Node = struct
           (rpc_get state_handle node)
           "/chains/main/blocks/head/context/contracts/%s/storage" address)
 
+  module Contract = struct
+    type t =
+      { storage_node: (int, string) Tezos_micheline.Micheline.node
+      ; type_node: (int, string) Tezos_micheline.Micheline.node
+      ; metadata_big_map: Z.t }
+
+    let make ~storage_node ~type_node ~metadata_big_map =
+      {storage_node; type_node; metadata_big_map}
+  end
+
   let metadata_big_map state_handle node ~address ~log =
     let open Lwt in
     get_storage state_handle node ~address ~log
@@ -172,7 +182,11 @@ module Node = struct
               ~sep:(fun () -> ",")
               ~last_sep:(fun () -> ", and ")
           |> String.concat ~sep:"" )
-    | [one] -> return one
+    | [metadata_big_map] ->
+        return
+          Contract.(
+            make ~metadata_big_map ~storage_node:mich_storage
+              ~type_node:mich_storage_type)
 
   let bytes_value_of_big_map_at_string ctxt node ~big_map_id ~key ~log =
     let open Lwt in
@@ -349,7 +363,8 @@ let metadata_value ctxt ~address ~key ~(log : string -> unit) =
   >>= fun node ->
   logf "Found contract with node %S" node.Node.name ;
   Node.metadata_big_map ctxt node ~address ~log
-  >>= fun big_map_id ->
+  >>= fun metacontract ->
+  let big_map_id = metacontract.Node.Contract.metadata_big_map in
   logf "Metadata big-map: %s" (Z.to_string big_map_id) ;
   Node.bytes_value_of_big_map_at_string ctxt node ~big_map_id ~key ~log
 
