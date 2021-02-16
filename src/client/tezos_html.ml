@@ -492,7 +492,7 @@ let metadata_validation_warning ctxt =
 let metadata_substandards ?token_metadata_big_map
     ?(add_explore_tokens_button = true) ctxt metadata =
   Contract_metadata.Content.(
-    match classify metadata with
+    match classify ?token_metadata_big_map metadata with
     | Tzip_16 t -> (t, [])
     | Tzip_12
         { metadata
@@ -573,19 +573,30 @@ let metadata_substandards ?token_metadata_big_map
           let show_tokens_metadata tm =
             view_validation "token_metadata" tm ~missing_add_on:(fun () ->
                 match token_metadata_big_map with
+                | None when add_explore_tokens_button ->
+                    errorify
+                      ( t
+                          "This means that the contract is likely invalid: it \
+                           must provide token-specific metadata using a \
+                           big-map annotated with"
+                      %% ct "%token_metadata"
+                      % t " which was not found by TZComet." )
                 | None ->
                     t
-                      "This means that the contract is likely invalid: it must \
+                      "This means that the contract could be invalid: it must \
                        provide token-specific metadata using a big-map \
                        annotated with"
                     %% ct "%token_metadata"
-                    % t " which was not found by TZComet."
+                    % t " which was not found by TZComet at this point."
                 | Some id ->
                     t "This means that token-metadata must be available in the"
                     %% ct "%token_metadata" %% t "big-map:"
                     %% Block_explorer.big_map_display id
                     % t ".") in
-          let global_validity = Contract_metadata.Content.is_valid t12 in
+          let global_validity =
+            Contract_metadata.Content.is_valid
+              ~ignore_token_metadata_big_map:(not add_explore_tokens_button)
+              t12 in
           let show_validity_btn, validity_div =
             let validity_details () =
               itemize
@@ -830,17 +841,24 @@ let metadata_substandards ?token_metadata_big_map
                     ~action (t "Explore Tokens") )
             | _ -> (false, empty ()) in
           let tokens_exploration x = div (bt "Tokens:" % div x) in
+          let validity_qualifier =
+            if add_explore_tokens_button then
+              parens (t "using storage and metadata")
+            else parens (t "only according to metadata") in
           div
             ( t "This looks like a TZIP-012 contract (a.k.a. FA2);"
             %%
             match global_validity with
             | true ->
                 Bootstrap.color `Success (t "it seems valid")
-                %%
+                %% validity_qualifier
+                %
                 if can_enumerate_tokens then
-                  parens (t "and tokens can be enumerated/explored") % t "."
+                  t " and tokens can be enumerated/explored" % t "."
                 else t "."
-            | false -> Bootstrap.color `Danger (t "it is invalid.") )
+            | false ->
+                Bootstrap.color `Danger (t "it is invalid")
+                %% validity_qualifier % t "." )
           % div
               ( show_validity_btn % explore_tokens_btn % validity_div
               % Async_work.render wip_explore_tokens ~f:tokens_exploration )
