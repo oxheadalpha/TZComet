@@ -106,6 +106,14 @@ module Message = struct
   let ( % ) a b = List [a; b]
   let ( %% ) a b = List [a; t " "; b]
   let parens tt = list [t "("; tt; t ")"]
+
+  let rec pp ppf =
+    let open Fmt in
+    function
+    | Text s -> pf ppf "%s" s
+    | Inline_code s -> pf ppf "`%s`" s
+    | Code_block s -> pf ppf "@.```@.%s@.```@." s
+    | List l -> List.iter l ~f:(pp ppf)
 end
 
 module Decorate_error = struct
@@ -113,6 +121,11 @@ module Decorate_error = struct
 
   let raise ?(trace = []) message = raise (E {message; trace})
   let reraise message ~f = Lwt.catch f (fun e -> raise message ~trace:[e])
+
+  let () =
+    Caml.Printexc.register_printer (function
+      | E {message; _} -> Some (Fmt.str "Decorated-Error %a" Message.pp message)
+      | _ -> None)
 end
 
 module System = struct
