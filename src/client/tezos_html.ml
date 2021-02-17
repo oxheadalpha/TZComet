@@ -489,8 +489,8 @@ let metadata_validation_warning ctxt =
            %% michelson_instruction "ADDRESS" )
       %% t "in off-chain-views."
 
-let explore_tokens_action ctxt ~token_metadata_view ~how ~total_supply_view
-    wip_explore_tokens =
+let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
+    ~total_supply_view wip_explore_tokens =
   let open Contract_metadata.Content in
   Async_work.reinit wip_explore_tokens ;
   Async_work.wip wip_explore_tokens ;
@@ -548,13 +548,23 @@ let explore_tokens_action ctxt ~token_metadata_view ~how ~total_supply_view
               Fmt.kstr log "Got list of tokens %a" Fmt.(Dump.list int) tokens ;
               Lwt.return (fun f -> Lwt_list.map_s f tokens)
           | `Iter_until_fail ->
-              log "Going to try token-ids in order! YOLO !!" ;
+              let max_failures = 3 in
+              Fmt.kstr log
+                "Going to try token-ids in order up to %d failures! YOLO !!"
+                max_failures ;
               Lwt.return (fun f ->
-                  let rec go acc n =
+                  let rec go acc failures n =
                     Lwt.catch
-                      (fun () -> f n >>= fun res -> go (res :: acc) (n + 1))
-                      (fun exn -> Lwt.return (List.rev acc)) in
-                  go [] 0) in
+                      (fun () ->
+                        f n >>= fun res -> go (res :: acc) failures (n + 1))
+                      (fun exn ->
+                        let failures = failures + 1 in
+                        Fmt.kstr log "Got the %dth failure: %a" failures Exn.pp
+                          exn ;
+                        if failures > max_failures then
+                          Lwt.return (List.rev acc)
+                        else go acc failures (n + 1)) in
+                  go [] 0 0) in
         let explore_token id =
           log_prompt := Fmt.str "Exploring token %d" id ;
           let maybe_call_view view_validation ~parameter_string =
@@ -568,9 +578,21 @@ let explore_tokens_action ctxt ~token_metadata_view ~how ~total_supply_view
             ~parameter_string:(Int.to_string id)
           >>= fun metadata_map_opt ->
           begin
-            match metadata_map_opt with
-            | None -> Decorate_error.raise Message.(t "Not available")
-            | Some s -> Lwt.return s
+            match (metadata_map_opt, token_metadata_big_map) with
+            | Some s, _ ->
+                log "Using the token_metadata off-chain-view." ;
+                Lwt.return s
+            | None, Some big_map_id ->
+                log "Using the %token_metadata big-map." ;
+                Query_nodes.find_node_with_contract ctxt (Reactive.peek address)
+                >>= fun node ->
+                Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
+                Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node
+                  ~log ~big_map_id ~key:id
+                >>= fun mich ->
+                Fmt.kstr log "Got value from big-map" ;
+                Lwt.return (Ok mich)
+            | None, None -> Decorate_error.raise Message.(t "Not available")
           end
           >>= fun metadata_map ->
           maybe_call_view total_supply_view ~parameter_string:(Int.to_string id)
@@ -818,8 +840,8 @@ let metadata_substandards ?token_metadata_big_map
             | true, Valid (_, view) ->
                 let action () =
                   explore_tokens_action ctxt ~token_metadata_view:token_metadata
-                    ~how:(`All_tokens_view view) ~total_supply_view:total_supply
-                    wip_explore_tokens in
+                    ?token_metadata_big_map ~how:(`All_tokens_view view)
+                    ~total_supply_view:total_supply wip_explore_tokens in
                 Bootstrap.button ~kind:`Primary ~size:`Small ~outline:true
                   ~action
                   ( t "Explore tokens using the off-chain-view"
@@ -830,8 +852,8 @@ let metadata_substandards ?token_metadata_big_map
             | true ->
                 let action () =
                   explore_tokens_action ctxt ~token_metadata_view:token_metadata
-                    ~how:`Iter_until_fail ~total_supply_view:total_supply
-                    wip_explore_tokens in
+                    ?token_metadata_big_map ~how:`Iter_until_fail
+                    ~total_supply_view:total_supply wip_explore_tokens in
                 Bootstrap.button ~kind:`Primary ~size:`Small ~outline:true
                   ~action
                   (t "Explore tokens iterating and hoping for the best")

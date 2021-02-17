@@ -218,6 +218,11 @@ let encode_michelson_string s =
     Tezos_micheline.Micheline.(String (0, s) |> strip_locations)
   |> Bytes.to_string
 
+let encode_michelson_int i =
+  Data_encoding.Binary.to_bytes_exn expr_encoding
+    Tezos_micheline.Micheline.(Int (0, Z.of_int i) |> strip_locations)
+  |> Bytes.to_string
+
 let example () =
   let bytes = "0707002a002a" in
   let to_display =

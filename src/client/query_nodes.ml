@@ -216,6 +216,26 @@ module Node = struct
       dbgf "v: %s" v##.bytes ;
       Hex.to_string (`Hex v##.bytes) in
     return content
+
+  let micheline_value_of_big_map_at_nat ctxt node ~big_map_id ~key ~log =
+    let open Lwt in
+    let hash_string = B58_hashes.b58_script_id_hash_of_michelson_int key in
+    Decorate_error.(
+      reraise
+        Message.(
+          t "Cannot find any value in the big-map"
+          %% ct (Z.to_string big_map_id)
+          %% t "at the key" %% int ct key %% t "(hash: " % ct hash_string
+          % t ").")
+        ~f:(fun () ->
+          Fmt.kstr (rpc_get ctxt node)
+            "/chains/main/blocks/head/context/big_maps/%s/%s"
+            (Z.to_string big_map_id) hash_string))
+    >>= fun raw_value ->
+    Fmt.kstr log "JSON raw value: %s"
+      (ellipsize_string raw_value ~max_length:60) ;
+    let content = Michelson.micheline_of_json raw_value in
+    return content
 end
 
 module Node_list = struct

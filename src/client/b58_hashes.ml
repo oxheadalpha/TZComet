@@ -81,6 +81,9 @@ let check_b58_protocol_hash s = check_b58_hash ~prefix:protocol_hash ~size:32 s
 let b58_script_id_hash_of_michelson_string s =
   b58_script_id_hash ("\x05" ^ Michelson_bytes.encode_michelson_string s)
 
+let b58_script_id_hash_of_michelson_int s =
+  b58_script_id_hash ("\x05" ^ Michelson_bytes.encode_michelson_int s)
+
 let crypto_test () =
   dbgf "TRYING BLAKE2B: %s"
     (let dgst = Digestif.digest_string (Digestif.blake2b 32) "" in
