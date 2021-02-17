@@ -1033,7 +1033,11 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                 dbgf "Error in interface html: %a" Exn.pp e ;
                 the_text ) in
         Re.split_full (Re.compile r) s |> List.map ~f:tok |> list in
-      List.map l ~f:interface |> List.intersperse ~sep:(t ", ") |> list in
+      List.map l ~f:interface
+      |> oxfordize_list ~map:Fn.id
+           ~sep:(fun () -> t ", ")
+           ~last_sep:(fun () -> t ", and ")
+      |> list in
     let _todo l = Fmt.kstr t "todo: %d items" (List.length l) in
     let view_id s = Fmt.str "view-%s" s in
     let view ?(collapsing = false) v =
