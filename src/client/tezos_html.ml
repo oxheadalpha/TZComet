@@ -615,27 +615,122 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
             with
             | Decorate_error.E {message} -> Error message
             | e -> Error Message.(t "Exception:" %% ct (Exn.to_string e)) in
-          let piece_of_metadata k =
+          let piece_of_metadata_map k =
             match unpaired_metadata with
             | Ok s -> List.Assoc.find s k ~equal:String.equal
             | Error _ -> None in
+          let uri = piece_of_metadata_map "" in
+          let warnings = ref [] in
+          let warn k e =
+            if List.exists !warnings ~f:(fun (key, _) -> String.equal key k)
+            then ()
+            else warnings := (k, e) :: !warnings in
+          begin
+            match uri with
+            | None -> Lwt.return_none
+            | Some u -> (
+              match Contract_metadata.Uri.validate u with
+              | Ok uri, _ ->
+                  Lwt.catch
+                    (fun () ->
+                      Contract_metadata.Uri.fetch ctxt uri ~log:(fun s ->
+                          Fmt.kstr log "Fetching %s" u)
+                      >>= fun s ->
+                      Lwt.return_some (u, Ezjsonm.value_from_string s))
+                    (fun exn ->
+                      warn "fetch-uri"
+                        ( bt "Fetching URI" %% ct u %% t "failed:"
+                        %% Errors_html.exception_html ctxt exn ) ;
+                      Lwt.return_none)
+              | Error error, _ ->
+                  warn "parsing-uri"
+                    ( bt "Parsing URI" %% ct u %% t "failed:"
+                    %% error_trace ctxt error ) ;
+                  Lwt.return_none )
+          end
+          >>= fun extra_contents ->
+          let piece_of_metadata ?(json_type = `String) key =
+            let in_json =
+              match extra_contents with
+              | None -> None
+              | Some (_, `O l) -> (
+                match
+                  ( List.filter_map l ~f:(function
+                      | k, v when String.equal k key -> Some v
+                      | _ -> None)
+                  , json_type )
+                with
+                | [], _ -> None
+                | [`String one], `String -> Some one
+                | [`Float one], `Int -> Some (Float.to_int one |> Int.to_string)
+                | (`String one :: _ as more), `String ->
+                    warn
+                      (Fmt.str "fields-of-object-at-%s" key)
+                      ( t "Token-metadata URI objects has"
+                      %% Fmt.kstr ct "%d" (List.length more)
+                      %% t "fields called" %% Fmt.kstr ct "%S" key ) ;
+                    Some one
+                | (`Float one :: _ as more), `Int ->
+                    warn
+                      (Fmt.str "fields-of-object-at-%s" key)
+                      ( t "Token-metadata URI objects has"
+                      %% Fmt.kstr ct "%d" (List.length more)
+                      %% t "fields called" %% Fmt.kstr ct "%S" key ) ;
+                    Some (Float.to_int one |> Int.to_string)
+                | other :: _, _ ->
+                    warn
+                      (Fmt.str "type-of-field-of-object-at-%s" key)
+                      ( t "Token-metadata URI points a JSON where field"
+                      %% Fmt.kstr ct "%S" key %% t "has the wrong type:"
+                      %% ct (Ezjsonm.value_to_string other) ) ;
+                    None )
+              | Some (uri, other) ->
+                  warn
+                    (Fmt.str "uri-wrong-json-%s" uri)
+                    ( t "Metadata URI" %% ct uri
+                    %% t "does not point at a JSON object, I got:"
+                    %% ct (Ezjsonm.value_to_string other) ) ;
+                  None in
+            match (piece_of_metadata_map key, in_json) with
+            | None, Some s -> Some s
+            | Some s, None -> Some s
+            | Some s, Some same when String.equal s same -> Some s
+            | Some s, Some ignored ->
+                warn
+                  (Fmt.str "field-double-%s" key)
+                  ( t "Field" %% Fmt.kstr ct "%S" key
+                  %% t "is defined twice differently:"
+                  %% Fmt.kstr ct "%S" ignored ) ;
+                Some s
+            | None, None -> None in
           let symbol = piece_of_metadata "symbol" in
           let name = piece_of_metadata "name" in
-          let decimals = piece_of_metadata "decimals" in
+          let decimals = piece_of_metadata ~json_type:`Int "decimals" in
           let extras =
-            match unpaired_metadata with
-            | Error m -> Some (Error m)
-            | Ok l -> (
-              match
-                List.filter l ~f:(fun (k, _) ->
+            let make_ok_list l ~f =
+              List.filter_map l ~f:(fun (k, v) ->
+                  if
                     not
                       (List.mem
-                         ["symbol"; "name"; "decimals"]
-                         k ~equal:String.equal))
-              with
-              | [] -> None
-              | m -> Some (Ok m) ) in
-          let show_extras =
+                         ["symbol"; "name"; "decimals"; ""]
+                         k ~equal:String.equal)
+                  then Some (Ok (k, f v))
+                  else None) in
+            let from_map =
+              match unpaired_metadata with
+              | Error m -> [Error m]
+              | Ok l -> make_ok_list l ~f:Fn.id in
+            let from_json =
+              match extra_contents with
+              | None -> []
+              | Some (_, `O l) -> make_ok_list l ~f:Ezjsonm.value_to_string
+              | Some (u, other) ->
+                  [ (* Error already reported above:
+                       Message.(
+                         t "URI" %% ct u %% t "does not point at a JSON object.") *) ]
+            in
+            match from_map @ from_json with [] -> None | l -> Some l in
+          let show_extras extr =
             let show_bytes b =
               match Michelson.Partial_type.bytes_guesses (`Raw_string b) with
               | `Dont_know -> Fmt.kstr ct "%S" b
@@ -653,12 +748,10 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                        (oxfordize_list ~map:t lines
                           ~sep:(fun () -> H5.br ())
                           ~last_sep:(fun () -> H5.br ()))) in
-            function
-            | Ok l ->
-                itemize
-                  (List.map l ~f:(fun (k, v) ->
-                       Fmt.kstr ct "%S" k %% t "→" %% show_bytes v))
-            | Error m -> Message_html.render ctxt m in
+            itemize
+              (List.map extr ~f:(function
+                | Ok (k, v) -> Fmt.kstr ct "%S" k %% t "→" %% show_bytes v
+                | Error m -> Message_html.render ctxt m)) in
           let default_show = function
             | Ok node -> ct (Michelson.micheline_node_to_string node)
             | Error s -> Bootstrap.color `Danger (t s) in
@@ -682,7 +775,13 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
             @ or_not "Symbol" symbol ~f:it
             @ or_not "Name" name ~f:it
             @ or_not "Decimals" decimals ~f:it
+            @ or_not "URI" uri ~f:ct
             @ or_not "“Extras”" extras ~f:show_extras
+            @ or_not "Comments/Warnings"
+                ( match List.rev_map ~f:snd !warnings with
+                | [] -> None
+                | more -> Some more )
+                ~f:itemize
             (* @ or_not "Full-Metadata" metadata_map
                 ~f:default_show *) in
           Lwt.return metarows in
