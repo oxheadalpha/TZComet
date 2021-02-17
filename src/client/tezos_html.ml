@@ -723,7 +723,13 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
             let from_json =
               match extra_contents with
               | None -> []
-              | Some (_, `O l) -> make_ok_list l ~f:Ezjsonm.value_to_string
+              | Some (_, `O l) ->
+                  let f = function
+                    | `String s -> s
+                    | `Float f -> Float.to_string f
+                    | `Bool b -> Bool.to_string b
+                    | other -> Ezjsonm.value_to_string other in
+                  make_ok_list l ~f
               | Some (u, other) ->
                   [ (* Error already reported above:
                        Message.(
@@ -736,6 +742,8 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
               | `Dont_know -> Fmt.kstr ct "%S" b
               | `Number f ->
                   it (Float.to_string_hum ~delimiter:' ' ~strip_zero:true f)
+              | `Bool true -> it "True"
+              | `Bool false -> it "False"
               | `Web_uri wuri -> url it wuri
               | `Tzip16_uri wuri -> tzip16_uri_short ctxt wuri
               | `Json json ->
