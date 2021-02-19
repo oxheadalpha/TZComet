@@ -235,6 +235,7 @@ module Partial_type = struct
           max c m in
         let lines = match raw with "" -> [] | _ -> String.split ~on:'\n' raw in
         `Valid_utf_8 (maxperline, lines) in
+      let bool () = `Bool (Bool.of_string raw) in
       let number () = `Number (Float.of_string raw) in
       let one_line_not_weird () =
         String.for_all raw ~f:(function '\n' | '\t' -> false | _ -> true) in
@@ -251,8 +252,8 @@ module Partial_type = struct
         then `Tzip16_uri raw
         else failwith "not tzip16 uri :)" in
       match
-        List.find_map [number; web_uri; tzip16_uri; json; utf8] ~f:(fun f ->
-            try Some (f ()) with _ -> None)
+        List.find_map [bool; number; web_uri; tzip16_uri; json; utf8]
+          ~f:(fun f -> try Some (f ()) with _ -> None)
       with
       | Some s -> s
       | None -> default_value
@@ -316,6 +317,7 @@ module Partial_type = struct
       | `Number f ->
           t "→ The number"
           %% it (Float.to_string_hum ~delimiter:' ' ~strip_zero:true f)
+      | `Bool b -> t "→ The boolean" %% it (Bool.to_string b)
       | `Web_uri wuri -> t "→" %% url it wuri
       | `Tzip16_uri wuri -> t "→" %% tzip16_uri wuri
       | `Json v ->

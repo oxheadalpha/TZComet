@@ -136,6 +136,16 @@ module Node = struct
           (rpc_get state_handle node)
           "/chains/main/blocks/head/context/contracts/%s/storage" address)
 
+  module Contract = struct
+    type t =
+      { storage_node: (int, string) Tezos_micheline.Micheline.node
+      ; type_node: (int, string) Tezos_micheline.Micheline.node
+      ; metadata_big_map: Z.t }
+
+    let make ~storage_node ~type_node ~metadata_big_map =
+      {storage_node; type_node; metadata_big_map}
+  end
+
   let metadata_big_map state_handle node ~address ~log =
     let open Lwt in
     get_storage state_handle node ~address ~log
@@ -172,7 +182,11 @@ module Node = struct
               ~sep:(fun () -> ",")
               ~last_sep:(fun () -> ", and ")
           |> String.concat ~sep:"" )
-    | [one] -> return one
+    | [metadata_big_map] ->
+        return
+          Contract.(
+            make ~metadata_big_map ~storage_node:mich_storage
+              ~type_node:mich_storage_type)
 
   let bytes_value_of_big_map_at_string ctxt node ~big_map_id ~key ~log =
     let open Lwt in
@@ -201,6 +215,26 @@ module Node = struct
       in
       dbgf "v: %s" v##.bytes ;
       Hex.to_string (`Hex v##.bytes) in
+    return content
+
+  let micheline_value_of_big_map_at_nat ctxt node ~big_map_id ~key ~log =
+    let open Lwt in
+    let hash_string = B58_hashes.b58_script_id_hash_of_michelson_int key in
+    Decorate_error.(
+      reraise
+        Message.(
+          t "Cannot find any value in the big-map"
+          %% ct (Z.to_string big_map_id)
+          %% t "at the key" %% int ct key %% t "(hash: " % ct hash_string
+          % t ").")
+        ~f:(fun () ->
+          Fmt.kstr (rpc_get ctxt node)
+            "/chains/main/blocks/head/context/big_maps/%s/%s"
+            (Z.to_string big_map_id) hash_string))
+    >>= fun raw_value ->
+    Fmt.kstr log "JSON raw value: %s"
+      (ellipsize_string raw_value ~max_length:60) ;
+    let content = Michelson.micheline_of_json raw_value in
     return content
 end
 
@@ -349,7 +383,8 @@ let metadata_value ctxt ~address ~key ~(log : string -> unit) =
   >>= fun node ->
   logf "Found contract with node %S" node.Node.name ;
   Node.metadata_big_map ctxt node ~address ~log
-  >>= fun big_map_id ->
+  >>= fun metacontract ->
+  let big_map_id = metacontract.Node.Contract.metadata_big_map in
   logf "Metadata big-map: %s" (Z.to_string big_map_id) ;
   Node.bytes_value_of_big_map_at_string ctxt node ~big_map_id ~key ~log
 

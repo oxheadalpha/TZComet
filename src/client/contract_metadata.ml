@@ -229,22 +229,28 @@ module Content = struct
             , Tezos_error_monad.Error_monad.tztrace )
             Result.t
             Option.t
-        ; token_metadata: view_validation }
+        ; token_metadata: view_validation
+        ; token_metadata_big_map: Z.t option }
 
-  let is_valid = function
+  let is_valid ~ignore_token_metadata_big_map = function
     | Tzip_16 _ -> true
     | Tzip_12 t12 -> (
         ( match t12.interface_claim with
         | Some `Just_interface | Some (`Version _) -> true
         | _ -> false )
         && List.for_all
-             [ t12.get_balance
-             ; t12.total_supply
-             ; t12.all_tokens
-             ; t12.is_operator
-             ; t12.token_metadata ] ~f:(function
+             [t12.get_balance; t12.total_supply; t12.all_tokens; t12.is_operator]
+             ~f:(function
              | Missing | Valid _ -> true
              | _ -> false)
+        && ( match (t12.token_metadata, t12.token_metadata_big_map) with
+           | Missing, None -> ignore_token_metadata_big_map
+           | Missing, Some _ -> true
+           | Valid _, _ -> true
+           | No_michelson_implementation _, Some _ -> true
+           | No_michelson_implementation _, None ->
+               ignore_token_metadata_big_map
+           | Invalid _, _ -> false )
         &&
         match t12.permissions_descriptor with
         | None | Some (Ok _) -> true
@@ -292,9 +298,76 @@ module Content = struct
             Invalid {view; implementation= impl; parameter_status; return_status}
         )
 
-  let classify : metadata -> classified =
+  let rec find_token_metadata_big_map ~storage_node ~type_node =
+    let open Tezos_micheline.Micheline in
+    let go (storage_node, type_node) =
+      find_token_metadata_big_map ~storage_node ~type_node in
+    let check_annots annotations node =
+      if List.mem annotations "%token_metadata" ~equal:String.equal then
+        Decorate_error.raise
+          Message.(
+            t "Wrong %token_metadata annotation:"
+            %% kpp ct
+                 Tezos_contract_metadata.Micheline_helpers
+                 .pp_arbitrary_micheline node) in
+    match (storage_node, type_node) with
+    | Prim (_, "Pair", [l; r], ans), Prim (_, "pair", [lt; rt], ant) ->
+        check_annots ans storage_node ;
+        check_annots ant type_node ;
+        go (l, lt) @ go (r, rt)
+    | ( Int (_, z)
+      , Prim
+          ( _
+          , "big_map"
+          , [ Prim (_, "nat", [], _)
+            ; Prim
+                ( _
+                , "pair"
+                , [ Prim (_, "nat", [], _)
+                  ; Prim
+                      ( _
+                      , "map"
+                      , [Prim (_, "string", [], _); Prim (_, "bytes", [], _)]
+                      , _ ) ]
+                , _ ) ]
+          , annotations ) )
+      when List.mem annotations "%token_metadata" ~equal:String.equal ->
+        [z]
+    | Int (_, _z), Prim (_, "big_map", _, annots) ->
+        check_annots annots type_node ;
+        []
+    | Int (_, _z), _ -> []
+    | String (_, _s), _ -> []
+    | Bytes (_, _b), _ -> []
+    | Prim (_, _prim, _args, annot), _t ->
+        check_annots annot storage_node ;
+        []
+    | Seq (_, _l), _t -> []
+
+  let token_metadata_value ctxt ~address ~key ~(log : string -> unit) =
+    let open Lwt in
+    let open Query_nodes in
+    let logf f = Fmt.kstr log f in
+    find_node_with_contract ctxt address
+    >>= fun node ->
+    logf "Found contract with node %S" node.Node.name ;
+    Node.metadata_big_map ctxt node ~address ~log
+    >>= fun metacontract ->
+    let Node.Contract.{storage_node; type_node; _} = metacontract in
+    let tmbm_id =
+      match find_token_metadata_big_map ~storage_node ~type_node with
+      | [one] -> one
+      | other ->
+          Decorate_error.raise
+            Message.(
+              t "Wrong number of %token_metadata big-maps:"
+              %% int ct (List.length other)) in
+    logf "Token-Metadata big-map: %s" (Z.to_string tmbm_id) ;
+    Lwt.return tmbm_id
+
+  let classify : ?token_metadata_big_map:Z.t -> metadata -> classified =
     let open Metadata_contents in
-    let looks_like_tzip_12 ~found metadata =
+    let looks_like_tzip_12 ?token_metadata_big_map ~found metadata =
       let interface_claim =
         List.find metadata.interfaces ~f:(String.is_prefix ~prefix:"TZIP-012")
         |> Option.map ~f:(function
@@ -377,11 +450,14 @@ module Content = struct
              ; all_tokens
              ; is_operator
              ; permissions_descriptor
-             ; token_metadata }) in
+             ; token_metadata
+             ; token_metadata_big_map }) in
     let exception Found of classified in
-    fun metadata ->
+    fun ?token_metadata_big_map metadata ->
       try
-        looks_like_tzip_12 ~found:(fun x -> raise (Found x)) metadata ;
+        looks_like_tzip_12 ?token_metadata_big_map
+          ~found:(fun x -> raise (Found x))
+          metadata ;
         Tzip_16 metadata
       with Found x -> x
 end
