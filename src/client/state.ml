@@ -48,7 +48,8 @@ type t =
   ; editor_mode: Editor_mode.t Reactive.var
   ; editor_load: bool Reactive.var
   ; editor_should_load: bool Reactive.var
-  ; check_micheline_indentation: bool Reactive.var }
+  ; check_micheline_indentation: bool Reactive.var
+  ; current_network: Network.t Reactive.var }
 
 let get (state : < gui: t ; .. > Context.t) = state#gui
 let local_storage_filename = "tzcomet-editor-input"
@@ -126,7 +127,8 @@ module Fragment = struct
       ; editor_load= Reactive.var editor_load
       ; editor_should_load=
           Reactive.var (editor_load && String.is_empty editor_input)
-      ; check_micheline_indentation= Reactive.var mich_indent } )
+      ; check_micheline_indentation= Reactive.var mich_indent
+      ; current_network= Reactive.var `Mainnet } )
 end
 
 (* in
@@ -157,6 +159,8 @@ let save_editor_content ctxt =
     (Reactive.peek (get ctxt).editor_content)
 
 let set_editor_content state v = Reactive.set (get state).editor_content v
+let set_current_network state v = Reactive.set (get state).current_network v
+let current_network state = Reactive.peek (get state).current_network
 
 let load_editor_content ctxt =
   match Local_storage.read_file ctxt local_storage_filename with

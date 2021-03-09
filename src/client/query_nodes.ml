@@ -4,22 +4,6 @@ module Node_status = struct
   type t = Uninitialized | Non_responsive of exn | Ready of string
 end
 
-module Network = struct
-  type t =
-    [`Mainnet | `Delphinet | `Edonet | `Florence_NoBA | `Florence_BA | `Sandbox]
-
-  let to_string : t -> string = function
-    | `Mainnet -> "Mainnet "
-    | `Delphinet -> "Delphinet "
-    | `Edonet -> "Edonet "
-    | `Florence_NoBA -> "Florence_NoBA "
-    | `Florence_BA -> "Florence_BA "
-    | `Sandbox -> "Sandbox"
-
-  let all =
-    [`Mainnet; `Delphinet; `Edonet; `Florence_NoBA; `Florence_BA; `Sandbox]
-end
-
 open Node_status
 
 module Rpc_cache = struct
@@ -395,7 +379,9 @@ let find_node_with_contract ctxt addr =
             (fun () ->
               Fmt.kstr (Node.rpc_get ctxt node)
                 "/chains/main/blocks/head/context/contracts/%s/storage" addr
-              >>= fun _ -> return_true)
+              >>= fun _ ->
+              State.set_current_network ctxt node.Node.network ;
+              return_true)
             (fun exn ->
               trace := exn :: !trace ;
               return_false))

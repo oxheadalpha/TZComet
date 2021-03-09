@@ -10,15 +10,22 @@ module Block_explorer = struct
     | Smartpy -> Fmt.str "https://smartpy.io/dev/explorer.html?address=%s" kt1
     | Bcd -> Fmt.str "https://better-call.dev/search?text=%s" kt1
 
-  let big_map_url id =
-    Fmt.str "https://better-call.dev/delphinet/big_map/%a/keys" Z.pp_print id
+  let big_map_url network id =
+    Option.map (Network.better_call_dev_path network) ~f:(fun pref ->
+        Fmt.str "https://better-call.dev/%s/big_map/%a/keys" pref Z.pp_print id)
 
   let vendor_show_name = function Smartpy -> "SmartPy" | Bcd -> "BCD"
 
-  let big_map_display id =
+  let big_map_display ctxt id =
     let open Meta_html in
+    let text = t (vendor_show_name Bcd) in
+    let network = State.current_network ctxt in
     Bootstrap.monospace (Fmt.kstr bt "%a" Z.pp_print id)
-    %% small (parens (link ~target:(big_map_url id) (t (vendor_show_name Bcd))))
+    %% small
+         (parens
+            ( match big_map_url network id with
+            | None -> text
+            | Some target -> link ~target text ))
 
   let kt1_display kt1 =
     let open Meta_html in
@@ -189,11 +196,11 @@ let paragraphs blob =
 let list_field name field f =
   option_field name (match field with [] -> None | more -> Some more) f
 
-let network (net : Query_nodes.Network.t) =
+let network (net : Network.t) =
   match net with
   | `Edonet | `Florence_BA | `Florence_NoBA | `Delphinet | `Mainnet | `Sandbox
     ->
-      it (Query_nodes.Network.to_string net)
+      it (Network.to_string net)
 
 let protocol s =
   let proto s = abbreviation s (ct (String.prefix s 12)) in
@@ -925,7 +932,7 @@ let metadata_substandards ?token_metadata_big_map
                 | Some id ->
                     t "This means that token-metadata must be available in the"
                     %% ct "%token_metadata" %% t "big-map:"
-                    %% Block_explorer.big_map_display id
+                    %% Block_explorer.big_map_display ctxt id
                     % t ".") in
           let global_validity =
             Contract_metadata.Content.is_valid

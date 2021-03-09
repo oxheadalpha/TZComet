@@ -91,7 +91,7 @@ let nodes_form ctxt =
                ; classes ["form-control"] ]
          ; Bootstrap.Dropdown_menu.(
              let items =
-               List.map Query_nodes.Network.all ~f:(fun net ->
+               List.map Network.all ~f:(fun net ->
                    item (Tezos_html.network net) ~action:(fun () ->
                        Reactive.set network net)) in
              button
