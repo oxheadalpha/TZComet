@@ -337,6 +337,8 @@ module Examples = struct
              "Has a few views that return bytes (JSON, UTF-8, binary …)" ;
            kt1_dev "KT1T8oqWTAVokcEh2ki56Gyf4QBbsoJE3jjU"
              "Event more weird off-chain-views." ;
+           kt1 "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc"
+             "An NFT collection by “The Alchememist” on Mainnet." ;
            uri https_ok "A valid HTTPS URI." ;
            uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
            uri_dev sha256_https_ko
