@@ -30,7 +30,32 @@ let nodes_form ctxt =
                  ~button:(function
                    | true -> t "Show Error" | false -> t "Hide Error")
                  (fun () -> Errors_html.exception_html ctxt e)
-         | Ready _ -> m `Success "Ready") in
+         | Ready metadata ->
+             let extra_info =
+               try
+                 let dict = Ezjsonm.(value_from_string metadata |> get_dict) in
+                 let field = List.Assoc.find_exn ~equal:String.equal in
+                 let protocol = field dict "protocol" |> Ezjsonm.get_string in
+                 let level =
+                   let l = field dict "level" |> Ezjsonm.get_dict in
+                   let level = field l "level" |> Ezjsonm.get_int in
+                   level in
+                 t "["
+                 % Tezos_html.protocol protocol
+                 % t ","
+                 %% Fmt.kstr t "Level: %d" level
+                 % t "]"
+               with e ->
+                 let collapse = Bootstrap.Collapse.make () in
+                 Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
+                   collapse ~width:"12em" ~kind:`Secondary
+                   ~button:(function
+                     | true -> t "Failed to parse metadata"
+                     | false -> t "Hide Error")
+                   (fun () ->
+                     pre (code (t metadata))
+                     %% Errors_html.exception_html ctxt e) in
+             m `Success "Ready" %% extra_info) in
      let ping_date date =
        if Float.(date < 10.) then (* Construction sign: *) t "🚧"
        else
