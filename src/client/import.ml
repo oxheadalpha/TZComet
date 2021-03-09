@@ -402,3 +402,14 @@ module Ezjsonm = struct
             %% int ct col % t ":" %% err_message % t ".")
     | exception e -> Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
 end
+
+module Blob = struct
+  let guess_format s =
+    (* https://stackoverflow.com/questions/55869/determine-file-type-of-an-image *)
+    let prefixes =
+      [ ("\255\216\255\224", `Jpeg)
+      ; ("\255\216\255\225", `Jpeg2)
+      ; ("\137\080\078\071", `Png) ] in
+    List.find_map prefixes ~f:(fun (prefix, fmt) ->
+        if String.is_prefix s ~prefix then Some fmt else None)
+end
