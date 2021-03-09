@@ -286,14 +286,14 @@ let add_node ?dev ctxt nod =
 
 let default_nodes =
   List.rev
-    [ Node.create "Delphinet-GigaNode" "https://delphinet-tezos.giganode.io"
-    ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
-    ; Node.create "Current-Testnet-GigaNode" "https://testnet-tezos.giganode.io"
+    [ Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
     ; Node.create "Edonet-GigaNode" "https://edonet-tezos.giganode.io"
-    ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
     ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
     ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io"
-    ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ]
+    ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io"
+    ; Node.create "Florencenet-SmartPy" "https://florencenet.smartpy.io"
+    ; Node.create "Florence-NoBA-net-SmartPy"
+        "https://florencenobanet.smartpy.io/" ]
 
 let dev_nodes =
   List.rev
