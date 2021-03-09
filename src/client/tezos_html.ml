@@ -200,6 +200,13 @@ let protocol s =
       known "Babylon" "http://tezos.gitlab.io/protocols/005_babylon.html"
   | "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo" ->
       known "Delphi" "https://blog.nomadic-labs.com/delphi-changelog.html"
+  | "PtEdo2ZkT9oKpimTah6x2embF25oss54njMuPzkJTEi5RqfdZFA" ->
+      known "Edo" "http://tezos.gitlab.io/protocols/008_edo.html"
+  | "PsFLorBArSaXjuy9oP76Qv1v2FRYnUs7TFtteK5GkRBC24JvbdE" ->
+      known "Florence-BA"
+        "http://tezos.gitlab.io/protocols/009_florence_BA.html"
+  | "PsFLorenaUUuikDWvMDr6fGBRG8kt3e3D3fHoXK1j1BFRxeSH4i" ->
+      known "Florence" "http://tezos.gitlab.io/protocols/009_florence.html"
   | s -> proto s
 
 let open_in_editor ?(and_explorer = false) ctxt text =
