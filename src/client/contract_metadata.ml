@@ -439,7 +439,7 @@ module Content = struct
           { metadata with
             unknown=
               List.filter metadata.unknown ~f:(function
-                | "permissions", _ | "tokens", _ -> false
+                | "permissions", _ -> false
                 | _ -> true) } in
         found
           (Tzip_12
