@@ -189,6 +189,12 @@ let paragraphs blob =
 let list_field name field f =
   option_field name (match field with [] -> None | more -> Some more) f
 
+let network (net : Query_nodes.Network.t) =
+  match net with
+  | `Edonet | `Florence_BA | `Florence_NoBA | `Delphinet | `Mainnet | `Sandbox
+    ->
+      it (Query_nodes.Network.to_string net)
+
 let protocol s =
   let proto s = abbreviation s (ct (String.prefix s 12)) in
   let known name url =

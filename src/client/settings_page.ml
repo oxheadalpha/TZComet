@@ -5,6 +5,7 @@ let nodes_form ctxt =
   Bootstrap.Table.simple
     ~header_row:
       [ t "Name"
+      ; t "Network"
       ; t "URI-Prefix"
       ; t "Status"
       ; t "Latest Ping"
@@ -66,13 +67,17 @@ let nodes_form ctxt =
      let row_of_node n =
        row
          Query_nodes.Node.
-           [ it n.name
+           [ ( match n.info_url with
+             | None -> it n.name
+             | Some target -> link ~target (it n.name) )
+           ; Tezos_html.network n.network
            ; ct n.prefix
            ; Reactive.bind (status n) ~f:(fun (_, s) -> node_status s)
            ; Reactive.bind (status n) ~f:(fun (f, _) -> ping_date f) ] in
      let last_row =
        let name = Reactive.var "" in
        let nameb = Reactive.Bidirectional.of_var name in
+       let network = Reactive.var `Sandbox in
        let prefix = Reactive.var "" in
        let prefixb = Reactive.Bidirectional.of_var prefix in
        row
@@ -84,11 +89,21 @@ let nodes_form ctxt =
              ~a:
                [ H5.a_placeholder (Reactive.pure "URL-Prefix")
                ; classes ["form-control"] ]
+         ; Bootstrap.Dropdown_menu.(
+             let items =
+               List.map Query_nodes.Network.all ~f:(fun net ->
+                   item (Tezos_html.network net) ~action:(fun () ->
+                       Reactive.set network net)) in
+             button
+               ( Reactive.get network
+               |> Reactive.bind ~f:(fun net ->
+                      t "Network:" %% Tezos_html.network net) )
+               items)
          ; Bootstrap.button (t "⇐ Add/replace node (by name)")
              ~kind:`Secondary ~action:(fun () ->
                Query_nodes.add_node ctxt
                  (Query_nodes.Node.create (Reactive.peek name)
-                    (Reactive.peek prefix)) ;
+                    ~network:(Reactive.peek network) (Reactive.peek prefix)) ;
                Reactive.Bidirectional.set nameb "" ;
                Reactive.Bidirectional.set prefixb "" ;
                ())
