@@ -509,8 +509,66 @@ let metadata_validation_warning ctxt =
            %% michelson_instruction "ADDRESS" )
       %% t "in off-chain-views."
 
+let image_from_tzip16_uri ctxt ~title ~uri =
+  let show = Reactive.var false in
+  let result = Async_work.empty () in
+  Reactive.bind_var show ~f:(function
+    | true ->
+        Bootstrap.button (Fmt.kstr t "Hide %s" title) ~action:(fun () ->
+            Reactive.set show false)
+        %% Async_work.render result ~f:Fn.id
+    | false ->
+        Bootstrap.button (Fmt.kstr t "Show %s (Potentially NSFW)" title)
+          ~action:(fun () ->
+            Async_work.wip result ;
+            Reactive.set show true ;
+            Async_work.log result (t "Getting image: " %% ct uri) ;
+            Async_work.async_catch result
+              ~exn_to_html:(Errors_html.exception_html ctxt)
+              Lwt.Infix.(
+                fun ~mkexn () ->
+                  match Contract_metadata.Uri.validate uri with
+                  | Ok uri16, _ ->
+                      Lwt.catch
+                        (fun () ->
+                          Contract_metadata.Uri.fetch ctxt uri16 ~log:(fun s ->
+                              Async_work.log result (it "Fetching Image:" %% t s)))
+                        (fun e ->
+                          raise (mkexn (Errors_html.exception_html ctxt e)))
+                      >>= fun content ->
+                      let src =
+                        let format = Blob.guess_format content in
+                        let content_type =
+                          match format with
+                          | Some `Png -> "image/png"
+                          | Some (`Jpeg | `Jpeg2) -> "image/jpeg"
+                          | _ ->
+                              Async_work.log result
+                                (bt "WARNING: Cannot guess content type …") ;
+                              "image/jpeg" in
+                        Fmt.str "data:%s;base64,%s" content_type
+                          (Base64.encode_exn ~pad:true
+                             ~alphabet:Base64.default_alphabet content) in
+                      Async_work.ok result
+                        ((* Fmt.kstr t "TODO: Got %d bytes, from %s"
+                                (String.length content) uri
+                            %% pre
+                                 (code
+                                    (t
+                                       ( Hex.hexdump_s (Hex.of_string content)
+                                       |> String.sub ~pos:0 ~len:300 )))
+                            %% *)
+                         link ~target:src
+                           (H5.img
+                              ~a:[H5.a_style (Lwd.pure "max-height: 500px")]
+                              ~src:(Lwd.pure src)
+                              ~alt:(Fmt.kstr Lwd.pure "Image: %s" title)
+                              ())) ;
+                      Lwt.return ()
+                  | Error error, _ -> raise (mkexn (error_trace ctxt error)))))
+
 let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
-    ~total_supply_view wip_explore_tokens =
+    ~is_tzip21 ~total_supply_view wip_explore_tokens =
   let open Contract_metadata.Content in
   Async_work.reinit wip_explore_tokens ;
   Async_work.wip wip_explore_tokens ;
@@ -798,12 +856,52 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
           let metarows =
             let or_not n o ~f = [(n, Option.map o ~f)] in
             (* match o with None -> [(n, empty ())] | Some s -> [(n, f s)] in *)
+            let tzip21_section, extras =
+              match (is_tzip21, extras) with
+              | false, e -> ([], e)
+              | true, None -> ([], None)
+              | true, Some l ->
+                  let kvs, trash =
+                    List.partition_map l ~f:(function
+                      | Ok kv -> First kv
+                      | Error _ as e -> Second e) in
+                  let extr = ref kvs in
+                  let find_remove l ~key =
+                    let rec go found acc = function
+                      | [] -> (found, List.rev acc)
+                      | one :: more when Option.is_some found ->
+                          go found (one :: acc) more
+                      | (kone, vone) :: more ->
+                          if String.equal kone key then go (Some vone) acc more
+                          else go found ((kone, vone) :: acc) more in
+                    go None [] l in
+                  let find_remove_extr key =
+                    let v, ex = find_remove !extr ~key in
+                    extr := ex ;
+                    v in
+                  let thumbnail = find_remove_extr "thumbnailUri" in
+                  let display = find_remove_extr "displayUri" in
+                  let tzip21 =
+                    List.filter_map
+                      [("Thumbnail", thumbnail); ("Display-Image", display)]
+                      ~f:(fun (title, uo) ->
+                        Option.map uo ~f:(fun uri ->
+                            div (image_from_tzip16_uri ctxt ~title ~uri)))
+                    |> function [] -> None | more -> Some (list more) in
+                  let fields =
+                    (* or_not "Thumbnail" thumbnail ~f:(fun uri ->
+                           image_from_tzip16_uri ctxt ~title:"Thumbnail" ~uri)
+                       @ or_not "Display-Image" display ~f:(fun uri ->
+                             image_from_tzip16_uri ctxt ~title:"Display-image" ~uri)
+                       @ *)
+                    or_not "TZIP-21" tzip21 ~f:div in
+                  (fields, Some (List.map !extr ~f:Result.return @ trash)) in
             [("Token Id", Some (Fmt.kstr ct "%04d" id))]
             @ or_not "Total Supply" total_supply ~f:show_total_supply
             @ or_not "Symbol" symbol ~f:it
             @ or_not "Name" name ~f:it
             @ or_not "Decimals" decimals ~f:it
-            @ or_not "URI" uri ~f:ct
+            @ or_not "URI" uri ~f:ct @ tzip21_section
             @ or_not "“Extras”" extras ~f:show_extras
             @ or_not "Comments/Warnings"
                 ( match List.rev_map ~f:snd !warnings with
@@ -861,6 +959,7 @@ let metadata_substandards ?token_metadata_big_map
         ; is_operator
         ; token_metadata
         ; permissions_descriptor } as t12 ->
+        let is_tzip21 = Option.is_some (tzip21_claim metadata) in
         let tzip_12_block =
           let errorify c = Bootstrap.color `Danger c in
           let interface_claim =
@@ -984,8 +1083,9 @@ let metadata_substandards ?token_metadata_big_map
             | true, Valid (_, view) ->
                 let action () =
                   explore_tokens_action ctxt ~token_metadata_view:token_metadata
-                    ?token_metadata_big_map ~how:(`All_tokens_view view)
-                    ~total_supply_view:total_supply wip_explore_tokens in
+                    ~is_tzip21 ?token_metadata_big_map
+                    ~how:(`All_tokens_view view) ~total_supply_view:total_supply
+                    wip_explore_tokens in
                 Bootstrap.button ~kind:`Primary ~size:`Small ~outline:true
                   ~action
                   ( t "Explore tokens using the off-chain-view"
@@ -996,7 +1096,7 @@ let metadata_substandards ?token_metadata_big_map
             | true ->
                 let action () =
                   explore_tokens_action ctxt ~token_metadata_view:token_metadata
-                    ?token_metadata_big_map ~how:`Iter_until_fail
+                    ~is_tzip21 ?token_metadata_big_map ~how:`Iter_until_fail
                     ~total_supply_view:total_supply wip_explore_tokens in
                 Bootstrap.button ~kind:`Primary ~size:`Small ~outline:true
                   ~action

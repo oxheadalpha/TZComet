@@ -465,4 +465,8 @@ module Content = struct
           metadata ;
         Tzip_16 metadata
       with Found x -> x
+
+  let tzip21_claim metadata =
+    List.find metadata.Tezos_contract_metadata.Metadata_contents.interfaces
+      ~f:(fun claim -> String.is_prefix claim "TZIP-021")
 end
