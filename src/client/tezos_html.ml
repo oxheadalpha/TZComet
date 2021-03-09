@@ -796,9 +796,9 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                   Fmt.kstr t "%a Units (no decimals)" Z.pp_print z )
             | other -> ct "Error: " %% default_show other in
           let metarows =
-            let or_not n o ~f =
-              match o with None -> [(n, empty ())] | Some s -> [(n, f s)] in
-            [("Token Id", Fmt.kstr ct "%04d" id)]
+            let or_not n o ~f = [(n, Option.map o ~f)] in
+            (* match o with None -> [(n, empty ())] | Some s -> [(n, f s)] in *)
+            [("Token Id", Some (Fmt.kstr ct "%04d" id))]
             @ or_not "Total Supply" total_supply ~f:show_total_supply
             @ or_not "Symbol" symbol ~f:it
             @ or_not "Name" name ~f:it
@@ -821,11 +821,28 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
           match decorated_tokens with
           | [] -> bt "There are no tokens :("
           | one :: more ->
-              let fields = List.map one ~f:fst in
-              let header_row = List.map fields ~f:t in
+              let fields =
+                List.mapi one ~f:(fun idx -> function
+                  | k, Some _ -> (k, true)
+                  | k, None ->
+                      ( k
+                      , List.fold more ~init:false ~f:(fun prev row ->
+                            prev || Option.is_some (snd (List.nth_exn row idx)))
+                      )) in
+              let header_row =
+                List.filter_map fields ~f:(function
+                  | _, false -> None
+                  | k, true -> Some (t k)) in
               Bootstrap.Table.simple ~header_row
                 (List.fold (one :: more) ~init:(empty ()) ~f:(fun prev tok ->
-                     prev % H5.tr (List.map tok ~f:(fun (_, v) -> td v)))) in
+                     prev
+                     % H5.tr
+                         (List.filter_mapi tok ~f:(fun idx (_, vo) ->
+                              match List.nth_exn fields idx with
+                              | _, true ->
+                                  Some
+                                    (td (Option.value vo ~default:(empty ())))
+                              | _, false -> None)))) in
         Async_work.ok wip_explore_tokens token_list ;
         Lwt.return ()) ;
   dbgf "go view"
