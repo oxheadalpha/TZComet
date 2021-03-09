@@ -57,13 +57,18 @@ module Uri = struct
       | Web http ->
           logf "HTTP %S (may fail because of origin policy)" http ;
           Js_of_ocaml_lwt.XmlHttpRequest.(
-            get http
+            perform_raw ~response_type:ArrayBuffer http
             >>= fun frame ->
             dbgf "%s -> code: %d" http frame.code ;
             match frame.code with
             | 200 ->
-                logf "HTTP success (%d bytes)" (String.length frame.content) ;
-                Lwt.return frame.content
+                let res =
+                  Js_of_ocaml.Js.Opt.get frame.content (fun () ->
+                      Fmt.failwith "Getting %S gave no content" http) in
+                let as_string =
+                  Js_of_ocaml.Typed_array.String.of_arrayBuffer res in
+                logf "HTTP success (%d bytes)" (String.length as_string) ;
+                Lwt.return as_string
             | other -> Fmt.failwith "Getting %S returned code: %d" http other)
           >>= fun content -> Lwt.return content
       | Ipfs {cid; path} ->
