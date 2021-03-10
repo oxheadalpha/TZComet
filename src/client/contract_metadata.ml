@@ -374,9 +374,12 @@ module Content = struct
     let open Metadata_contents in
     let looks_like_tzip_12 ?token_metadata_big_map ~found metadata =
       let interface_claim =
-        List.find metadata.interfaces ~f:(String.is_prefix ~prefix:"TZIP-012")
+        List.find metadata.interfaces ~f:(fun s ->
+            String.is_prefix s ~prefix:"TZIP-12"
+            || String.is_prefix s ~prefix:"TZIP-012")
         |> Option.map ~f:(function
              | "TZIP-012" -> `Just_interface
+             | "TZIP-12" -> `Invalid "TZIP-12"
              | itf -> (
                match String.chop_prefix itf ~prefix:"TZIP-012-" with
                | None -> `Invalid itf

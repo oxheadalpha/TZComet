@@ -967,7 +967,10 @@ let metadata_substandards ?token_metadata_big_map
             %%
             match interface_claim with
             | None -> t "missing." |> errorify
-            | Some (`Invalid s) -> t "invalid: " %% ct s |> errorify
+            | Some (`Invalid s) ->
+                (t "invalid: " |> errorify)
+                %% ct s % t ". It should look like" %% ct "TZIP-012[-<version>]"
+                % t "."
             | Some (`Version s) -> t "valid, and defines version as" %% ct s
             | Some `Just_interface -> t "valid" in
           let view_validation ?(missing_add_on = empty) ?(mandatory = false)
@@ -1076,8 +1079,7 @@ let metadata_substandards ?token_metadata_big_map
             let dv = make_div collapse (fun () -> validity_details ()) in
             (btn, dv) in
           let wip_explore_tokens = Async_work.empty () in
-          let can_enumerate_tokens =
-            global_validity && add_explore_tokens_button in
+          let can_enumerate_tokens = add_explore_tokens_button in
           let explore_tokens_btn =
             match (can_enumerate_tokens, all_tokens) with
             | true, Valid (_, view) ->
