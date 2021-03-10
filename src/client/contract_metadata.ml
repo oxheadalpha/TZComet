@@ -469,7 +469,37 @@ module Content = struct
         Tzip_16 metadata
       with Found x -> x
 
-  let tzip21_claim metadata =
-    List.find metadata.Tezos_contract_metadata.Metadata_contents.interfaces
-      ~f:(fun claim -> String.is_prefix claim "TZIP-021")
+  module Tzip_021 = struct
+    let claim metadata =
+      List.find metadata.Tezos_contract_metadata.Metadata_contents.interfaces
+        ~f:(fun claim -> String.is_prefix claim "TZIP-021")
+
+    type t =
+      {thumbnail: string option; display: string option; artifact: string option}
+
+    let from_extras l =
+      let kvs, trash =
+        List.partition_map l ~f:(function
+          | Ok kv -> First kv
+          | Error _ as e -> Second e) in
+      let extr = ref kvs in
+      let find_remove l ~key =
+        let rec go found acc = function
+          | [] -> (found, List.rev acc)
+          | one :: more when Option.is_some found -> go found (one :: acc) more
+          | (kone, vone) :: more ->
+              if String.equal kone key then go (Some vone) acc more
+              else go found ((kone, vone) :: acc) more in
+        go None [] l in
+      let find_remove_extr key =
+        let v, ex = find_remove !extr ~key in
+        extr := ex ;
+        v in
+      let tzip21 =
+        (* We use side-effects here: *)
+        { thumbnail= find_remove_extr "thumbnailUri"
+        ; display= find_remove_extr "displayUri"
+        ; artifact= find_remove_extr "artifactUri" } in
+      (tzip21, List.map !extr ~f:Result.return @ trash)
+  end
 end

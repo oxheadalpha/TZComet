@@ -782,7 +782,13 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                 Some s
             | None, None -> None in
           let symbol = piece_of_metadata "symbol" in
-          let name = piece_of_metadata "name" in
+          let name =
+            match piece_of_metadata "name" with
+            | Some "" ->
+                warn "name-is-empty"
+                  (t "The" %% ct "name" %% t "field is the empty string.") ;
+                None
+            | o -> o in
           let decimals = piece_of_metadata ~json_type:`Int "decimals" in
           let extras =
             let make_ok_list l ~f =
@@ -853,95 +859,77 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
               | None | (exception _) ->
                   Fmt.kstr t "%a Units (no decimals)" Z.pp_print z )
             | other -> ct "Error: " %% default_show other in
-          let metarows =
-            let or_not n o ~f = [(n, Option.map o ~f)] in
-            (* match o with None -> [(n, empty ())] | Some s -> [(n, f s)] in *)
-            let tzip21_section, extras =
-              match (is_tzip21, extras) with
-              | false, e -> ([], e)
-              | true, None -> ([], None)
-              | true, Some l ->
-                  let kvs, trash =
-                    List.partition_map l ~f:(function
-                      | Ok kv -> First kv
-                      | Error _ as e -> Second e) in
-                  let extr = ref kvs in
-                  let find_remove l ~key =
-                    let rec go found acc = function
-                      | [] -> (found, List.rev acc)
-                      | one :: more when Option.is_some found ->
-                          go found (one :: acc) more
-                      | (kone, vone) :: more ->
-                          if String.equal kone key then go (Some vone) acc more
-                          else go found ((kone, vone) :: acc) more in
-                    go None [] l in
-                  let find_remove_extr key =
-                    let v, ex = find_remove !extr ~key in
-                    extr := ex ;
-                    v in
-                  let thumbnail = find_remove_extr "thumbnailUri" in
-                  let display = find_remove_extr "displayUri" in
-                  let tzip21 =
-                    List.filter_map
-                      [("Thumbnail", thumbnail); ("Display-Image", display)]
-                      ~f:(fun (title, uo) ->
-                        Option.map uo ~f:(fun uri ->
-                            div (image_from_tzip16_uri ctxt ~title ~uri)))
-                    |> function [] -> None | more -> Some (list more) in
-                  let fields =
-                    (* or_not "Thumbnail" thumbnail ~f:(fun uri ->
-                           image_from_tzip16_uri ctxt ~title:"Thumbnail" ~uri)
-                       @ or_not "Display-Image" display ~f:(fun uri ->
-                             image_from_tzip16_uri ctxt ~title:"Display-image" ~uri)
-                       @ *)
-                    or_not "TZIP-21" tzip21 ~f:div in
-                  (fields, Some (List.map !extr ~f:Result.return @ trash)) in
-            [("Token Id", Some (Fmt.kstr ct "%04d" id))]
-            @ or_not "Total Supply" total_supply ~f:show_total_supply
-            @ or_not "Symbol" symbol ~f:it
-            @ or_not "Name" name ~f:it
-            @ or_not "Decimals" decimals ~f:it
-            @ or_not "URI" uri ~f:ct @ tzip21_section
-            @ or_not "“Extras”" extras ~f:show_extras
-            @ or_not "Comments/Warnings"
-                ( match List.rev_map ~f:snd !warnings with
-                | [] -> None
-                | more -> Some more )
-                ~f:itemize
-            (* @ or_not "Full-Metadata" metadata_map
-                ~f:default_show *) in
-          Lwt.return metarows in
+          let tzip_021, extras =
+            match (is_tzip21, extras) with
+            | false, e -> (None, e)
+            | true, None -> (None, None)
+            | true, Some l ->
+                let tzip21, e =
+                  Contract_metadata.Content.Tzip_021.from_extras l in
+                (Some tzip21, Some e) in
+          let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
+              ?tzip_021 ctxt ~id ~warnings =
+            let or_empty o f = match o with None -> empty () | Some o -> f o in
+            let basics =
+              List.filter_opt
+                [ Option.map symbol ~f:(fun s -> t "symbol:" %% ct s)
+                ; Option.map total_supply ~f:(fun s ->
+                      t "total-supply:" %% show_total_supply s)
+                ; Option.map decimals ~f:(fun s -> t "decimals:" %% ct s) ]
+              |> function
+              | [] -> empty ()
+              | more ->
+                  t "["
+                  %% list
+                       (oxfordize_list more ~map:Fn.id
+                          ~sep:(fun () -> t " | ")
+                          ~last_sep:(fun () -> t " | "))
+                  %% t "]" in
+            Bootstrap.bordered ~kind:`Info
+              ( Bootstrap.div_lead
+                  ( Fmt.kstr bt "Token %d" id
+                  %% or_empty name (function
+                       | "" -> Bootstrap.color `Danger (t "<empty-name>")
+                       | n ->
+                           Bootstrap.color `Primary (Fmt.kstr it "“%s”" n))
+                  %% basics )
+              %% ( match List.rev_map ~f:snd warnings with
+                 | [] -> empty ()
+                 | more ->
+                     let one = match more with [_] -> true | _ -> false in
+                     div
+                       (Bootstrap.alert ~kind:`Warning
+                          ( Fmt.kstr bt "Warning%s:" (if one then "" else "s")
+                          %% if one then List.hd_exn more else itemize more ))
+                 )
+              %% or_empty tzip_021 (fun tzip21 ->
+                     let open Tzip_021 in
+                     div
+                       (let images =
+                          [ ("Thumbnail", tzip21.thumbnail)
+                          ; ("Display-Image", tzip21.display)
+                          ; ("Artifact", tzip21.artifact) ] in
+                        bt "TZIP-021 Rich-metadata"
+                        %% list
+                             (List.map images ~f:(function
+                               | _, None -> empty ()
+                               | title, Some uri ->
+                                   image_from_tzip16_uri ctxt ~title ~uri))))
+              %% or_empty extras (fun e ->
+                     div (bt "Extra-info:" %% show_extras e))
+                 (* %% itemize
+                      (List.filter_map tok ~f:(function
+                        | _, None -> None
+                        | k, Some v -> Some (it k %% v))) *) ) in
+          Async_work.wip_add_ok wip_explore_tokens
+            (show_one_token ctxt ~id ?decimals ?total_supply ?symbol ?name
+               ?tzip_021 ?extras ~warnings:!warnings) ;
+          Lwt.return () in
         make_map_tokens ()
         >>= fun map_tokens ->
         map_tokens explore_token
-        >>= fun decorated_tokens ->
-        let token_list =
-          match decorated_tokens with
-          | [] -> bt "There are no tokens :("
-          | one :: more ->
-              let fields =
-                List.mapi one ~f:(fun idx -> function
-                  | k, Some _ -> (k, true)
-                  | k, None ->
-                      ( k
-                      , List.fold more ~init:false ~f:(fun prev row ->
-                            prev || Option.is_some (snd (List.nth_exn row idx)))
-                      )) in
-              let header_row =
-                List.filter_map fields ~f:(function
-                  | _, false -> None
-                  | k, true -> Some (t k)) in
-              Bootstrap.Table.simple ~header_row
-                (List.fold (one :: more) ~init:(empty ()) ~f:(fun prev tok ->
-                     prev
-                     % H5.tr
-                         (List.filter_mapi tok ~f:(fun idx (_, vo) ->
-                              match List.nth_exn fields idx with
-                              | _, true ->
-                                  Some
-                                    (td (Option.value vo ~default:(empty ())))
-                              | _, false -> None)))) in
-        Async_work.ok wip_explore_tokens token_list ;
+        >>= fun (_ : unit list) ->
+        Async_work.finish wip_explore_tokens ;
         Lwt.return ()) ;
   dbgf "go view"
 
@@ -959,7 +947,7 @@ let metadata_substandards ?token_metadata_big_map
         ; is_operator
         ; token_metadata
         ; permissions_descriptor } as t12 ->
-        let is_tzip21 = Option.is_some (tzip21_claim metadata) in
+        let is_tzip21 = Option.is_some (Tzip_021.claim metadata) in
         let tzip_12_block =
           let errorify c = Bootstrap.color `Danger c in
           let interface_claim =
@@ -1104,7 +1092,7 @@ let metadata_substandards ?token_metadata_big_map
                   ~action
                   (t "Explore tokens iterating and hoping for the best")
             | _ -> empty () in
-          let tokens_exploration x = div (bt "Tokens:" % div x) in
+          let tokens_exploration x = div x in
           let validity_qualifier =
             if add_explore_tokens_button then
               parens (t "using storage and metadata")
