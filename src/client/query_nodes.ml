@@ -292,20 +292,20 @@ let default_nodes : Node.t list =
   let smartpy = "https://smartpy.io/nodes" in
   let giga = "https://giganode.io/" in
   List.rev
-    [ Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
+    [ Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
+        ~network:`Mainnet ~info_url:smartpy
+    ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ~network:`Edonet
+        ~info_url:smartpy
+    ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io"
+        ~network:`Delphinet ~info_url:smartpy
+    ; Node.create "Florence-NoBA-net-SmartPy" ~network:`Florence_NoBA
+        "https://florencenobanet.smartpy.io/" ~info_url:smartpy
+    ; Node.create "Florencenet-SmartPy" "https://florencenet.smartpy.io"
+        ~network:`Florence_BA ~info_url:smartpy
+    ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
         ~network:`Mainnet ~info_url:giga
     ; Node.create "Edonet-GigaNode" "https://edonet-tezos.giganode.io"
         ~network:`Edonet ~info_url:giga
-    ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
-        ~network:`Mainnet ~info_url:smartpy
-    ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io"
-        ~network:`Delphinet ~info_url:smartpy
-    ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ~network:`Edonet
-        ~info_url:smartpy
-    ; Node.create "Florencenet-SmartPy" "https://florencenet.smartpy.io"
-        ~network:`Florence_BA ~info_url:smartpy
-    ; Node.create "Florence-NoBA-net-SmartPy" ~network:`Florence_NoBA
-        "https://florencenobanet.smartpy.io/" ~info_url:smartpy
     ; Node.create "Flextesabox-node" "http://127.0.0.1:20000" ~network:`Sandbox
         ~info_url:"https://assets.tqtezos.com/docs/setup/2-sandbox/" ]
 
