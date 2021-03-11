@@ -37,6 +37,7 @@ module H = struct
   let tr ?a l = singletize H5.tr ?a l
   let td ?a l = singletize H5.td ?a l
   let th ?a l = singletize H5.th ?a l
+  let blockquote ?a l = singletize H5.blockquote ?a l
 end
 
 let hr = H5.hr
@@ -44,6 +45,7 @@ let hr = H5.hr
 include H
 
 let classes l = H5.a_class (Lwd.pure l)
+let style s = H5.a_style (Lwd.pure s)
 let it s = i (t s)
 let bt s = b (t s)
 let ct s = code (t s)
@@ -135,13 +137,13 @@ module Bootstrap = struct
   let p_lead ?(a = []) c = p ~a:(classes ["lead"] :: a) c
   let div_lead ?(a = []) c = div ~a:(classes ["lead"] :: a) c
 
-  let bordered ?(rounded = `Default) ?(kind = `Primary) content =
-    H5.div
-      ~a:
-        [ classes
-            ( ["border"; Fmt.str "border-%s" (Label_kind.to_string kind)]
-            @ match rounded with `Default -> ["rounded-sm"] | `No -> [] ) ]
-      [content]
+  let bordered ?(a = []) ?(rounded = `Default) ?(kind = `Primary) content =
+    let a =
+      [ classes
+          ( ["border"; Fmt.str "border-%s" (Label_kind.to_string kind)]
+          @ match rounded with `Default -> ["rounded-sm"] | `No -> [] ) ]
+      @ a in
+    H5.div ~a [content]
 
   let monospace content = H5.span ~a:[classes ["text-monospace"]] [content]
   let terminal_logs content = div ~a:[classes ["bg-dark"; "text-white"]] content
