@@ -325,6 +325,7 @@ module Bootstrap = struct
       type input =
         { label: Html_types.label_content_fun H5.elt option
         ; id: string option
+        ; active: bool Reactive.t
         ; help: Html_types.small_content_fun H5.elt option }
 
       type t =
@@ -342,7 +343,7 @@ module Bootstrap = struct
 
       let rec to_div ?(enter_action = fun () -> ()) ?cols =
         let open H5 in
-        let generic_input ?id ?help ?placeholder ~kind lbl more_a =
+        let generic_input ~active ?id ?help ?placeholder ~kind lbl more_a =
           let the_id = Fresh_id.of_option "input-item" id in
           let help_id = the_id ^ "Help" in
           let full_label =
@@ -356,27 +357,27 @@ module Bootstrap = struct
                         | `Checkbox -> ["form-check-label"] ) ]
                   [lbl]) in
           let full_input =
-            input
-              ~a:
-                ( [ classes
-                      [ ( match kind with
-                        | `Text -> "form-control"
-                        | `Checkbox -> "form-check-input" ) ]
-                  ; a_id (Reactive.pure the_id)
-                  ; a_aria "describedBy" (Reactive.pure [help_id])
-                  ; a_onkeydown
-                      (Tyxml_lwd.Lwdom.attr (fun ev ->
-                           dbgf "keycode: %d" ev##.keyCode ;
-                           match ev##.keyCode with
-                           | 13 when not (Js_of_ocaml.Js.to_bool ev##.shiftKey)
-                             ->
-                               enter_action () ; false
-                           | _ -> true))
-                  ; a_input_type (Reactive.pure kind) ]
-                @ Option.value_map placeholder ~default:[] ~f:(fun plc ->
-                      [a_placeholder plc])
-                @ more_a )
-              () in
+            let a_base =
+              [ classes
+                  [ ( match kind with
+                    | `Text -> "form-control"
+                    | `Checkbox -> "form-check-input" ) ]
+              ; a_id (Reactive.pure the_id)
+              ; a_aria "describedBy" (Reactive.pure [help_id])
+              ; a_onkeydown
+                  (Tyxml_lwd.Lwdom.attr (fun ev ->
+                       dbgf "keycode: %d" ev##.keyCode ;
+                       match ev##.keyCode with
+                       | 13 when not (Js_of_ocaml.Js.to_bool ev##.shiftKey) ->
+                           enter_action () ; false
+                       | _ -> true))
+              ; a_input_type (Reactive.pure kind) ]
+              @ Option.value_map placeholder ~default:[] ~f:(fun plc ->
+                    [a_placeholder plc])
+              @ more_a in
+            Reactive.bind active ~f:(function
+              | true -> input ~a:a_base ()
+              | false -> input ~a:(a_disabled () :: a_base) ()) in
           let full_help =
             small
               ~a:
@@ -403,8 +404,8 @@ module Bootstrap = struct
               ~a:[classes ["form-row"]]
               (List.map l ~f:(fun (cols, item) ->
                    to_div ~enter_action ~cols item))
-        | Input {input= {label= lbl; id; help}; placeholder; content} ->
-            generic_input ?id ?help ~kind:`Text lbl ?placeholder
+        | Input {input= {label= lbl; id; help; active}; placeholder; content} ->
+            generic_input ?id ?help ~kind:`Text lbl ~active ?placeholder
               [ a_value (Reactive.Bidirectional.get content)
               ; a_oninput
                   (Tyxml_lwd.Lwdom.attr
@@ -418,12 +419,12 @@ module Bootstrap = struct
                                    (String.length v) v ;
                                  Reactive.Bidirectional.set content v)) ;
                          true)) ]
-        | Check_box {input= {label= lbl; id; help}; checked} ->
+        | Check_box {input= {label= lbl; id; help; active}; checked} ->
             Reactive.Bidirectional.get checked
             |> Reactive.bind ~f:(fun init_checked ->
                    let initstatus =
                      if init_checked then [a_checked ()] else [] in
-                   generic_input ?id ?help ~kind:`Checkbox lbl
+                   generic_input ?id ?help ~kind:`Checkbox lbl ~active
                      ( initstatus
                      @ [ a_onclick
                            (Tyxml_lwd.Lwdom.attr
@@ -467,11 +468,12 @@ module Bootstrap = struct
 
     open Item
 
-    let input ?id ?placeholder ?help ?label content =
-      Input {input= {label; id; help}; placeholder; content}
+    let input ?(active = Reactive.pure true) ?id ?placeholder ?help ?label
+        content =
+      Input {input= {label; id; help; active}; placeholder; content}
 
-    let check_box ?id ?help ?label checked =
-      Check_box {input= {label; id; help}; checked}
+    let check_box ?(active = Reactive.pure true) ?id ?help ?label checked =
+      Check_box {input= {label; id; help; active}; checked}
 
     let submit_button ?(active = Reactive.pure true) label action =
       Button {action; active; label}
