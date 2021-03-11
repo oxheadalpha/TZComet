@@ -405,11 +405,9 @@ end
 
 module Blob = struct
   let guess_format s =
-    (* https://stackoverflow.com/questions/55869/determine-file-type-of-an-image *)
-    let prefixes =
-      [ ("\255\216\255\224", `Jpeg)
-      ; ("\255\216\255\225", `Jpeg2)
-      ; ("\137\080\078\071", `Png) ] in
+    (* https://stackoverflow.com/questions/55869/determine-file-type-of-an-image
+       https://en.wikipedia.org/wiki/JPEG *)
+    let prefixes = [("\255\216\255", `Jpeg); ("\137\080\078\071", `Png)] in
     List.find_map prefixes ~f:(fun (prefix, fmt) ->
         if String.is_prefix s ~prefix then Some fmt else None)
 end
