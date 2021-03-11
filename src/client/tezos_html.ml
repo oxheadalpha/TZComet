@@ -516,13 +516,13 @@ let multimedia_from_tzip16_uri ctxt ~title ~uri =
   let show = Reactive.var false in
   let result = Async_work.empty () in
   let hide_show_button =
+    let button = Bootstrap.button ~kind:`Info ~size:`Small ~outline:true in
     Reactive.bind_var show ~f:(function
       | true ->
-          Bootstrap.button (Fmt.kstr t "Hide Content") ~action:(fun () ->
+          button (Fmt.kstr t "Hide Content") ~action:(fun () ->
               Reactive.set show false)
       | false ->
-          Bootstrap.button (Fmt.kstr t "Fetch & Show Content")
-            ~action:(fun () ->
+          button (Fmt.kstr t "Fetch & Show Content") ~action:(fun () ->
               Async_work.wip result ;
               Reactive.set show true ;
               Async_work.log result (t "Getting image: " %% ct uri) ;
@@ -1182,31 +1182,82 @@ let metadata_substandards ?token_metadata_big_map
             (btn, dv) in
           let wip_explore_tokens = Async_work.empty () in
           let can_enumerate_tokens = add_explore_tokens_button in
-          let explore_tokens_btn =
-            match (can_enumerate_tokens, all_tokens) with
-            | true, Valid (_, view) ->
-                let action () =
-                  explore_tokens_action ctxt ~token_metadata_view:token_metadata
-                    ~is_tzip21 ?token_metadata_big_map
-                    ~how:(`All_tokens_view view) ~total_supply_view:total_supply
-                    wip_explore_tokens in
-                Bootstrap.button ~kind:`Primary ~size:`Small ~outline:true
-                  ~action
-                  ( t "Explore tokens using the off-chain-view"
-                  %% ct "all_tokens" )
-            | _ -> empty () in
-          let explore_tokens_yolo_btn =
-            match can_enumerate_tokens with
-            | true ->
-                let action () =
-                  explore_tokens_action ctxt ~token_metadata_view:token_metadata
-                    ~is_tzip21 ?token_metadata_big_map ~how:`Iter_until_fail
-                    ~total_supply_view:total_supply wip_explore_tokens in
-                Bootstrap.button ~kind:`Primary ~size:`Small ~outline:true
-                  ~action
-                  (t "Explore tokens iterating and hoping for the best")
-            | _ -> empty () in
           let tokens_exploration x = div x in
+          let explore_tokens_top_button, exploration_expedition_state =
+            match can_enumerate_tokens with
+            | false -> (empty (), empty ())
+            | true ->
+                let form_status = Reactive.var `Hidden in
+                let mk_button =
+                  Bootstrap.button ~kind:`Primary ~size:`Small ~outline:true
+                in
+                let top_button =
+                  Reactive.bind_var form_status ~f:(function
+                    | `Hidden ->
+                        mk_button (t "Explore Tokens") ~action:(fun () ->
+                            Reactive.set form_status `Form)
+                    | `Form ->
+                        mk_button (t "Cancel Exploration ↓")
+                          ~action:(fun () -> Reactive.set form_status `Hidden))
+                in
+                let exploration =
+                  Reactive.bind_var form_status ~f:(function
+                    | `Hidden -> empty ()
+                    | `Form ->
+                        let use_tzip_021 = Reactive.var is_tzip21 in
+                        let use_all_tokens =
+                          Reactive.var
+                            ( match all_tokens with
+                            | Valid (_, view) -> true
+                            | _ -> false ) in
+                        div
+                          ( bt "Exploration Options:"
+                          % Bootstrap.Form.(
+                              make
+                                [ check_box
+                                    ~label:
+                                      ( t "Assume the tokens use"
+                                      %% link ~target:tzip_021_url
+                                           (t "TZIP-021")
+                                      %% t "rich metadata." )
+                                    (Reactive.Bidirectional.of_var use_tzip_021)
+                                ; ( match all_tokens with
+                                  | Valid (_, _) ->
+                                      check_box
+                                        ~label:
+                                          ( t "Use the" %% ct "all_tokens"
+                                          %% t "off-chain-view." )
+                                        (Reactive.Bidirectional.of_var
+                                           use_all_tokens)
+                                  | _ ->
+                                      magic
+                                        (i
+                                           ( t "The" %% ct "all_tokens"
+                                           %% t
+                                                "off-chain-view is not \
+                                                 available to list the tokens."
+                                           )) )
+                                ; submit_button (t "Explore") (fun () ->
+                                      Reactive.set form_status `Hidden ;
+                                      let is_tzip21 =
+                                        is_tzip21 || Reactive.peek use_tzip_021
+                                      in
+                                      let how =
+                                        match Reactive.peek use_all_tokens with
+                                        | true -> (
+                                          match all_tokens with
+                                          | Valid (_, view) ->
+                                              `All_tokens_view view
+                                          | _ ->
+                                              Fmt.failwith
+                                                "Inconsistent form state" )
+                                        | false -> `Iter_until_fail in
+                                      explore_tokens_action ctxt
+                                        ~token_metadata_view:token_metadata
+                                        ~is_tzip21 ?token_metadata_big_map ~how
+                                        ~total_supply_view:total_supply
+                                        wip_explore_tokens) ]) )) in
+                (top_button, exploration) in
           let validity_qualifier =
             if add_explore_tokens_button then
               parens (t "using storage and metadata")
@@ -1226,8 +1277,10 @@ let metadata_substandards ?token_metadata_big_map
                 Bootstrap.color `Danger (t "it is invalid")
                 %% validity_qualifier % t "." )
           % div
-              ( show_validity_btn % explore_tokens_btn % explore_tokens_yolo_btn
+              ( show_validity_btn % explore_tokens_top_button
+              (* % explore_tokens_btn % explore_tokens_yolo_btn *)
               % validity_div
+              % exploration_expedition_state
               % Async_work.render
                   ~done_empty:(fun () ->
                     Bootstrap.alert ~kind:`Warning (bt "Found no tokens 😞"))
