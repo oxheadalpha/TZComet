@@ -475,7 +475,28 @@ module Content = struct
         ~f:(fun claim -> String.is_prefix claim "TZIP-021")
 
     type t =
-      {thumbnail: string option; display: string option; artifact: string option}
+      { description: string option
+      ; creators: string list option
+      ; transferable: bool option
+      ; boolean_amount: bool option
+      ; prefers_symbol: bool option
+      ; thumbnail: string option
+      ; display: string option
+      ; artifact: string option
+      ; warnings: Message.t list }
+
+    let is_empty = function
+      | { description= None
+        ; creators= None
+        ; transferable= None
+        ; boolean_amount= None
+        ; prefers_symbol= None
+        ; thumbnail= None
+        ; display= None
+        ; artifact= None
+        ; warnings= [] } ->
+          true
+      | _ -> false
 
     let from_extras l =
       let kvs, trash =
@@ -495,11 +516,52 @@ module Content = struct
         let v, ex = find_remove !extr ~key in
         extr := ex ;
         v in
+      let warnings = ref [] in
+      let warn m = warnings := m :: !warnings in
+      let find_remove_extr_bool key =
+        find_remove_extr key
+        |> Option.bind ~f:(function
+             | "true" -> Some true
+             | "false" -> Some false
+             | other ->
+                 warn
+                   Message.(
+                     t "Key" %% ct key
+                     %% t "should be a JSON boolean: "
+                     %% ct "true" %% t "or" %% ct "false") ;
+                 None) in
+      let find_remove_extr_string_list key =
+        find_remove_extr key
+        |> Option.bind ~f:(fun s ->
+               match Ezjsonm.(value_from_string s |> get_strings) with
+               | s -> Some s
+               | exception e ->
+                   warn
+                     Message.(
+                       t "Key" %% ct key
+                       %% t "is supposed to be an array of strings but got"
+                       %% ct s
+                       %% parens (t "Exception:" %% Fmt.kstr ct "%a" Exn.pp e)) ;
+                   None) in
+      let transferable = find_remove_extr_bool "isTransferable" in
+      let boolean_amount = find_remove_extr_bool "isBooleanAmount" in
+      let prefers_symbol = find_remove_extr_bool "shouldPreferSymbol" in
+      let description = find_remove_extr "description" in
+      let thumbnail = find_remove_extr "thumbnailUri" in
+      let display = find_remove_extr "displayUri" in
+      let artifact = find_remove_extr "artifactUri" in
+      let creators = find_remove_extr_string_list "creators" in
       let tzip21 =
-        (* We use side-effects here: *)
-        { thumbnail= find_remove_extr "thumbnailUri"
-        ; display= find_remove_extr "displayUri"
-        ; artifact= find_remove_extr "artifactUri" } in
+        (* We've used the side-effects here, we can get the warnings: *)
+        { description
+        ; creators
+        ; transferable
+        ; boolean_amount
+        ; prefers_symbol
+        ; thumbnail
+        ; display
+        ; artifact
+        ; warnings= !warnings } in
       (tzip21, List.map !extr ~f:Result.return @ trash)
   end
 end
