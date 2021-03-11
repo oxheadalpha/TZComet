@@ -24,6 +24,7 @@ let logs_div_id t = Fmt.str "logs-of-async-work-%d" t.id
 
 let reinit s =
   Reactive.Table.clear s.logs ;
+  Reactive.set s.content [] ;
   Reactive.set s.status Empty
 
 let log t item =
