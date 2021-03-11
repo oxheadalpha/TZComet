@@ -546,7 +546,8 @@ let multimedia_from_tzip16_uri ctxt ~title ~uri =
                           match format with
                           | Some `Png -> "image/png"
                           | Some `Jpeg -> "image/jpeg"
-                          | _ ->
+                          | Some `Gif -> "image/gif"
+                          | None ->
                               Async_work.log result
                                 (bt "WARNING: Cannot guess content type …") ;
                               "image/jpeg" in
@@ -569,7 +570,8 @@ let multimedia_from_tzip16_uri ctxt ~title ~uri =
                                     %% bt
                                          ( match f with
                                          | `Jpeg -> "JPEG"
-                                         | `Png -> "PNG" )
+                                         | `Png -> "PNG"
+                                         | `Gif -> "GIF" )
                                     %% parens
                                          (t "content-type:" %% ct content_type)
                                     ) )
