@@ -84,7 +84,7 @@ let async_catch :
               error wip (exn_to_html exn) ;
               return ()))
 
-let render work_status ~f =
+let render ?(done_empty = Meta_html.empty) work_status ~f =
   let open Meta_html in
   let show_logs ?(wip = false) () =
     let make_logs_map _ x = H5.li [x] in
@@ -106,7 +106,7 @@ let render work_status ~f =
       (fun () -> show_logs ~wip:false ()) in
   let content ~wip =
     Reactive.bind_var work_status.content ~f:(function
-      | [] -> empty ()
+      | [] -> if wip then empty () else done_empty ()
       | l ->
           ( if wip then
             div
