@@ -44,6 +44,19 @@ module Uri = struct
     | Web _ | Storage _ | Ipfs _ -> false
     | Hash {target; _} -> needs_context_address target
 
+  let to_ipfs_gateway ctxt ~cid ~path =
+    let gateway = "https://gateway.ipfs.io/ipfs/" in
+    let gatewayed = Fmt.str "%s%s%s" gateway cid path in
+    gatewayed
+
+  let to_web_address ctxt =
+    let open Tezos_contract_metadata.Metadata_uri in
+    function
+    | Web http -> Some http
+    | Ipfs {cid; path} -> Some (to_ipfs_gateway ctxt ~cid ~path)
+    | Hash {kind; value; target= Web http} -> Some http
+    | _ -> None
+
   let fetch ?(max_data_size = 1_000_000) ?(log = dbgf "Uri.fetch.log: %s") ctxt
       uri =
     let open Lwt.Infix in
@@ -80,9 +93,8 @@ module Uri = struct
                       Fmt.failwith "Getting %S returned code: %d" http other)
           >>= fun content -> Lwt.return content
       | Ipfs {cid; path} ->
-          let gateway = "https://gateway.ipfs.io/ipfs/" in
-          let gatewayed = Fmt.str "%s%s%s" gateway cid path in
-          logf "IPFS CID %S path %S, adding gateway %S" cid path gateway ;
+          logf "IPFS CID %S path %S" cid path ;
+          let gatewayed = to_ipfs_gateway ctxt ~cid ~path in
           resolve (Web gatewayed)
       | Storage {network= None; address; key} ->
           let addr =

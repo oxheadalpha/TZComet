@@ -516,6 +516,11 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
   let show = Reactive.var false in
   let result = Async_work.empty () in
   let known_mime_type = List.Assoc.find mime_types ~equal:String.equal uri in
+  let web_address =
+    let open Contract_metadata.Uri in
+    match validate uri with
+    | Ok uri16, _ -> to_web_address ctxt uri16
+    | _ -> None in
   let hide_show_button =
     let button = Bootstrap.button ~kind:`Info ~size:`Small ~outline:true in
     Reactive.bind_var show ~f:(function
@@ -591,7 +596,9 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
       | false -> empty ()) in
   div
     ( div
-        ( t "URI:" %% ct uri
+        ( t "URI:"
+        %% (let c = ct uri in
+            match web_address with Some target -> link ~target c | None -> c)
         %% ( match known_mime_type with
            | None -> empty ()
            | Some m -> parens (t "known MIME-Type:" %% ct m) )
