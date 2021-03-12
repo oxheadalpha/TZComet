@@ -132,7 +132,7 @@ module System = struct
   type t = {dev_mode: bool Reactive.var; http_timeout: float Reactive.var}
 
   let create ?(dev_mode = false) () =
-    {dev_mode= Reactive.var dev_mode; http_timeout= Reactive.var 3.}
+    {dev_mode= Reactive.var dev_mode; http_timeout= Reactive.var 5.}
 
   let get (state : < system: t ; .. > Context.t) = state#system
 
