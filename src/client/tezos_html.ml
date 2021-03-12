@@ -523,73 +523,100 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
     | _ -> None in
   let hide_show_button =
     let button = Bootstrap.button ~kind:`Info ~size:`Small ~outline:true in
+    let fetch_and_show () =
+      button (Fmt.kstr t "Fetch & Show Content") ~action:(fun () ->
+          Async_work.wip result ;
+          Reactive.set show true ;
+          Async_work.log result (t "Getting image: " %% ct uri) ;
+          Async_work.async_catch result
+            ~exn_to_html:(Errors_html.exception_html ctxt)
+            Lwt.Infix.(
+              fun ~mkexn () ->
+                match Contract_metadata.Uri.validate uri with
+                | Ok uri16, _ ->
+                    Lwt.catch
+                      (fun () ->
+                        Contract_metadata.Uri.fetch ctxt uri16 ~log:(fun s ->
+                            Async_work.log result (it "Fetching Image:" %% t s)))
+                      (fun e ->
+                        raise (mkexn (Errors_html.exception_html ctxt e)))
+                    >>= fun content ->
+                    let format = Blob.guess_format content in
+                    let content_type =
+                      match format with
+                      | Some `Png -> "image/png"
+                      | Some `Jpeg -> "image/jpeg"
+                      | Some `Gif -> "image/gif"
+                      | None ->
+                          Async_work.log result
+                            (bt "WARNING: Cannot guess content type …") ;
+                          "image/jpeg" in
+                    let src =
+                      Fmt.str "data:%s;base64,%s" content_type
+                        (Base64.encode_exn ~pad:true
+                           ~alphabet:Base64.default_alphabet content) in
+                    Async_work.ok result
+                      ( div
+                          ( match format with
+                          | None ->
+                              i
+                                ( t "Could not guess the format, so went with"
+                                %% ct content_type % t "." )
+                          | Some f ->
+                              i
+                                ( t "Guessed format"
+                                %% bt
+                                     ( match f with
+                                     | `Jpeg -> "JPEG"
+                                     | `Png -> "PNG"
+                                     | `Gif -> "GIF" )
+                                %% parens (t "content-type:" %% ct content_type)
+                                ) )
+                      %% link ~target:src
+                           (H5.img
+                              ~a:[H5.a_style (Lwd.pure "max-height: 500px")]
+                              ~src:(Lwd.pure src)
+                              ~alt:(Fmt.kstr Lwd.pure "Image: %s" title)
+                              ()) ) ;
+                    Lwt.return ()
+                | Error error, _ -> raise (mkexn (error_trace ctxt error))))
+    in
+    let show_button ~web ~mime () =
+      button (Fmt.kstr t "Show Content") ~action:(fun () ->
+          Reactive.set show true ;
+          let content =
+            match mime with
+            | image when String.is_prefix image ~prefix:"image/" ->
+                link ~target:web
+                  (H5.img ~a:[style "max-width: 100%"]
+                     ~alt:(Fmt.kstr Lwd.pure "%s at %s" title web)
+                     ~src:(Lwd.pure web) ())
+            | vid when String.is_prefix vid ~prefix:"video/" ->
+                H5.video
+                  ~a:[H5.a_controls (); style "max-width: 100%"]
+                  ~src:(Lwd.pure web) []
+            | _ ->
+                Bootstrap.alert ~kind:`Danger
+                  (bt "Unknown MIME-Type:" %% ct mime)
+                %% bt "You may try the fetch-and-guess method:"
+                %% fetch_and_show () in
+          Async_work.ok result content) in
     Reactive.bind_var show ~f:(function
       | true ->
           button (Fmt.kstr t "Hide Content") ~action:(fun () ->
               Reactive.set show false)
-      | false ->
-          button (Fmt.kstr t "Fetch & Show Content") ~action:(fun () ->
-              Async_work.wip result ;
-              Reactive.set show true ;
-              Async_work.log result (t "Getting image: " %% ct uri) ;
-              Async_work.async_catch result
-                ~exn_to_html:(Errors_html.exception_html ctxt)
-                Lwt.Infix.(
-                  fun ~mkexn () ->
-                    match Contract_metadata.Uri.validate uri with
-                    | Ok uri16, _ ->
-                        Lwt.catch
-                          (fun () ->
-                            Contract_metadata.Uri.fetch ctxt uri16
-                              ~log:(fun s ->
-                                Async_work.log result
-                                  (it "Fetching Image:" %% t s)))
-                          (fun e ->
-                            raise (mkexn (Errors_html.exception_html ctxt e)))
-                        >>= fun content ->
-                        let format = Blob.guess_format content in
-                        let content_type =
-                          match format with
-                          | Some `Png -> "image/png"
-                          | Some `Jpeg -> "image/jpeg"
-                          | Some `Gif -> "image/gif"
-                          | None ->
-                              Async_work.log result
-                                (bt "WARNING: Cannot guess content type …") ;
-                              "image/jpeg" in
-                        let src =
-                          Fmt.str "data:%s;base64,%s" content_type
-                            (Base64.encode_exn ~pad:true
-                               ~alphabet:Base64.default_alphabet content) in
-                        Async_work.ok result
-                          ( div
-                              ( match format with
-                              | None ->
-                                  i
-                                    ( t
-                                        "Could not guess the format, so went \
-                                         with"
-                                    %% ct content_type % t "." )
-                              | Some f ->
-                                  i
-                                    ( t "Guessed format"
-                                    %% bt
-                                         ( match f with
-                                         | `Jpeg -> "JPEG"
-                                         | `Png -> "PNG"
-                                         | `Gif -> "GIF" )
-                                    %% parens
-                                         (t "content-type:" %% ct content_type)
-                                    ) )
-                          %% link ~target:src
-                               (H5.img
-                                  ~a:[H5.a_style (Lwd.pure "max-height: 500px")]
-                                  ~src:(Lwd.pure src)
-                                  ~alt:(Fmt.kstr Lwd.pure "Image: %s" title)
-                                  ()) ) ;
-                        Lwt.return ()
-                    | Error error, _ -> raise (mkexn (error_trace ctxt error)))))
-  in
+      | false -> (
+        match (web_address, known_mime_type) with
+        | Some web, Some mime -> show_button ~web ~mime ()
+        | None, Some "video/mp4" ->
+            Bootstrap.alert ~kind:`Danger
+              ( bt "Not implemented:" %% t "Sorry," %% ct "tezos-storage:"
+              %% t "URIs that point to videos are not supported"
+              %% parens
+                   (t
+                      "Come on! You're running all of this in your browser, \
+                       what did you expect‽") )
+        | _, _ -> fetch_and_show () )) in
   let content =
     Reactive.bind_var show ~f:(function
       | true -> Async_work.render result ~f:Fn.id
