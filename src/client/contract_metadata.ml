@@ -44,7 +44,8 @@ module Uri = struct
     | Web _ | Storage _ | Ipfs _ -> false
     | Hash {target; _} -> needs_context_address target
 
-  let fetch ?(log = dbgf "Uri.fetch.log: %s") ctxt uri =
+  let fetch ?(max_data_size = 1_000_000) ?(log = dbgf "Uri.fetch.log: %s") ctxt
+      uri =
     let open Lwt.Infix in
     let logf fmt = Fmt.kstr (fun s -> dbgf "Uri.fetch: %s" s ; log s) fmt in
     let ni s = Fmt.failwith "Not Implemented: %s" s in
@@ -56,20 +57,27 @@ module Uri = struct
       function
       | Web http ->
           logf "HTTP %S (may fail because of origin policy)" http ;
-          Js_of_ocaml_lwt.XmlHttpRequest.(
-            perform_raw ~response_type:ArrayBuffer http
-            >>= fun frame ->
-            dbgf "%s -> code: %d" http frame.code ;
-            match frame.code with
-            | 200 ->
-                let res =
-                  Js_of_ocaml.Js.Opt.get frame.content (fun () ->
-                      Fmt.failwith "Getting %S gave no content" http) in
-                let as_string =
-                  Js_of_ocaml.Typed_array.String.of_arrayBuffer res in
-                logf "HTTP success (%d bytes)" (String.length as_string) ;
-                Lwt.return as_string
-            | other -> Fmt.failwith "Getting %S returned code: %d" http other)
+          System.with_timeout ctxt
+            ~raise:(fun timeout ->
+              Fmt.failwith "HTTP Call Timeouted: %.3f s" timeout)
+            ~f:
+              Js_of_ocaml_lwt.XmlHttpRequest.(
+                fun () ->
+                  perform_raw ~response_type:ArrayBuffer http
+                  >>= fun frame ->
+                  dbgf "%s -> code: %d" http frame.code ;
+                  match frame.code with
+                  | 200 ->
+                      let res =
+                        Js_of_ocaml.Js.Opt.get frame.content (fun () ->
+                            Fmt.failwith "Getting %S gave no content" http)
+                      in
+                      let as_string =
+                        Js_of_ocaml.Typed_array.String.of_arrayBuffer res in
+                      logf "HTTP success (%d bytes)" (String.length as_string) ;
+                      Lwt.return as_string
+                  | other ->
+                      Fmt.failwith "Getting %S returned code: %d" http other)
           >>= fun content -> Lwt.return content
       | Ipfs {cid; path} ->
           let gateway = "https://gateway.ipfs.io/ipfs/" in
