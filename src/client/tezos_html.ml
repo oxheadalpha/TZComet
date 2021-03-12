@@ -512,9 +512,10 @@ let metadata_validation_warning ctxt =
            %% michelson_instruction "ADDRESS" )
       %% t "in off-chain-views."
 
-let multimedia_from_tzip16_uri ctxt ~title ~uri =
+let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
   let show = Reactive.var false in
   let result = Async_work.empty () in
+  let known_mime_type = List.Assoc.find mime_types ~equal:String.equal uri in
   let hide_show_button =
     let button = Bootstrap.button ~kind:`Info ~size:`Small ~outline:true in
     Reactive.bind_var show ~f:(function
@@ -589,7 +590,12 @@ let multimedia_from_tzip16_uri ctxt ~title ~uri =
       | true -> Async_work.render result ~f:Fn.id
       | false -> empty ()) in
   div
-    ( div (t "URI:" %% ct uri %% hide_show_button %% t "(Potentially NSFW)")
+    ( div
+        ( t "URI:" %% ct uri
+        %% ( match known_mime_type with
+           | None -> empty ()
+           | Some m -> parens (t "known MIME-Type:" %% ct m) )
+        %% hide_show_button %% t "(Potentially NSFW)" )
     %% content )
 
 let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
@@ -1023,6 +1029,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                                      itembox
                                        ( Fmt.kstr bt "%s:" title
                                        %% multimedia_from_tzip16_uri ctxt ~title
+                                            ~mime_types:(uri_mime_types tzip21)
                                             ~uri )))
                           %% or_empty tzip21.formats (fun l ->
                                  itembox

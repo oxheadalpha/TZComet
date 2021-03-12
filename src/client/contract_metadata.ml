@@ -515,6 +515,14 @@ module Content = struct
           true
       | _ -> false
 
+    let uri_mime_types tzip21 =
+      match tzip21.formats with
+      | None -> []
+      | Some some ->
+          List.filter_map some ~f:(function
+            | {uri= Some u; mime_type= Some m; _} -> Some (u, m)
+            | _ -> None)
+
     let from_extras l =
       let kvs, trash =
         List.partition_map l ~f:(function
