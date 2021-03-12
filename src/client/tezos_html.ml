@@ -632,6 +632,224 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
         %% hide_show_button %% t "(Potentially NSFW)" )
     %% content )
 
+module Printer_dsl = struct
+  type t = [`Open_right_range of int | `Page of int | `Range of int * int] list
+
+  let parse ctxt iter_input =
+    let toint s =
+      try Int.of_string s
+      with _ -> Fmt.failwith "The string %S is not an integer." s in
+    match
+      List.concat_map (String.split ~on:',' iter_input) ~f:(fun item ->
+          match String.strip item with
+          | "" -> []
+          | item -> (
+            match String.split item ~on:'-' with
+            | [one] -> [`Page (toint one)]
+            | [one; ""] -> [`Open_right_range (toint one)]
+            | [one; two] -> [`Range (toint one, toint two)]
+            | _ -> Fmt.failwith "Cannot parse component: %S." item ))
+    with
+    | [] -> Ok (`Printer_spec [`Open_right_range 0])
+    | more -> Ok (`Printer_spec more)
+    | exception Failure s ->
+        Error Message.(t "Wrong format:" %% ct iter_input % t ":" %% t s)
+end
+
+let show_micheline_result = function
+  | Ok node -> ct (Michelson.micheline_node_to_string node)
+  | Error s -> Bootstrap.color `Danger (t s)
+
+let show_total_supply ctxt ?decimals = function
+  | Ok (Tezos_micheline.Micheline.Int (_, z)) -> (
+    match Option.map ~f:Int.of_string decimals with
+    | Some decimals ->
+        let dec = Float.(Z.to_float z / (10. ** of_int decimals)) in
+        Fmt.kstr t "%s (%a Units)"
+          (Float.to_string_hum ~delimiter:' ' ~decimals ~strip_zero:true dec)
+          Z.pp_print z
+    | None | (exception _) -> Fmt.kstr t "%a Units (no decimals)" Z.pp_print z
+    )
+  | other -> ct "Error: " %% show_micheline_result other
+
+let show_extras ctxt (extr : (String.t * String.t, Message.t) Result.t List.t) =
+  let show_bytes b =
+    match Michelson.Partial_type.bytes_guesses (`Raw_string b) with
+    | `Dont_know -> Fmt.kstr ct "%S" b
+    | `Number f -> it (Float.to_string_hum ~delimiter:' ' ~strip_zero:true f)
+    | `Bool true -> it "True"
+    | `Bool false -> it "False"
+    | `Web_uri wuri -> url it wuri
+    | `Tzip16_uri wuri -> tzip16_uri_short ctxt wuri
+    | `Json json -> pre (ct (Ezjsonm.value_to_string json ~minify:false))
+    | `Just_hex h -> ct h
+    | `Valid_utf_8 (_, [one_line]) -> t one_line
+    | `Valid_utf_8 (_, lines) ->
+        div
+          (list
+             (oxfordize_list ~map:t lines
+                ~sep:(fun () -> H5.br ())
+                ~last_sep:(fun () -> H5.br ()))) in
+  itemize
+    (List.map extr ~f:(function
+      | Ok (k, v) -> Fmt.kstr ct "%S" k %% t "→" %% show_bytes v
+      | Error m -> Message_html.render ctxt m))
+
+let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
+    ?low_level_contents ?tzip_021 ctxt ~id ~warnings =
+  let open Contract_metadata.Content in
+  let or_empty o f = match o with None -> empty () | Some o -> f o in
+  let basics =
+    List.filter_opt
+      [ Option.map symbol ~f:(fun s -> t "symbol:" %% ct s)
+      ; Option.map total_supply ~f:(fun s ->
+            t "total-supply:" %% show_total_supply ctxt ?decimals s)
+      ; Option.map decimals ~f:(fun s -> t "decimals:" %% ct s) ]
+    |> function
+    | [] -> empty ()
+    | more ->
+        t "["
+        %% list
+             (oxfordize_list more ~map:Fn.id
+                ~sep:(fun () -> t " | ")
+                ~last_sep:(fun () -> t " | "))
+        %% t "]" in
+  Bootstrap.bordered ~kind:`Info ~a:[style "padding: 5px"]
+    ( Bootstrap.div_lead
+        ( Fmt.kstr bt "Token %d" id
+        %% or_empty name (function
+             | "" -> Bootstrap.color `Danger (t "<empty-name>")
+             | n -> Bootstrap.color `Primary (Fmt.kstr it "“%s”" n))
+        %% basics )
+    %% ( match List.rev_map ~f:snd warnings with
+       | [] -> empty ()
+       | more ->
+           let one = match more with [_] -> true | _ -> false in
+           div
+             (Bootstrap.alert ~kind:`Warning
+                ( Fmt.kstr bt "TZIP-012 Warning%s:" (if one then "" else "s")
+                %% if one then List.hd_exn more else itemize more )) )
+    %% or_empty tzip_021 (fun tzip21 ->
+           let open Tzip_021 in
+           if is_empty tzip21 then div (t "No TZIP-021 was found by TZComet.")
+           else
+             div
+               (let intro =
+                  link ~target:tzip_021_url (bt "TZIP-021")
+                  %% Fmt.kstr bt
+                       "→ This claims to be a %stransferable %sFungible-Token"
+                       ( match tzip21.transferable with
+                       | Some false -> "non-"
+                       | _ -> "" )
+                       ( match tzip21.boolean_amount with
+                       | Some true -> "Non-"
+                       | _ -> "" ) in
+                let images =
+                  [ ("Thumbnail", tzip21.thumbnail)
+                  ; ("Display-Image", tzip21.display)
+                  ; ("Artifact", tzip21.artifact) ] in
+                let itembox c =
+                  div
+                    ~a:
+                      [ style
+                          "margin: 0px 10px 0px 10px;\n\
+                           border-left: solid 1px #888;\n\
+                           padding-left: 10px" ]
+                    (Bootstrap.bordered ~kind:`Light c) in
+                let local_warnings = ref [] in
+                let warn m = local_warnings := m :: !local_warnings in
+                let symbol_stuff =
+                  match (tzip21.prefers_symbol, symbol) with
+                  | Some true, Some symb ->
+                      itembox
+                        (bt "Prefers to go by its symbol:" %% ct symb % t ".")
+                  | Some true, None ->
+                      warn
+                        Message.(
+                          t
+                            "This token claims to prefer using its symbol but \
+                             it does not seem to have one.") ;
+                      empty ()
+                  | _, _ -> empty () in
+                intro
+                % or_empty tzip21.description (fun desc ->
+                      itembox (bt "Description:" %% blockquote (it desc)))
+                % symbol_stuff
+                % or_empty tzip21.creators (function
+                    | [] -> itembox (bt "Creators list is explicitly empty.")
+                    | [one] -> itembox (bt "Creator:" %% it one)
+                    | sl ->
+                        itembox (bt "Creators:" %% itemize (List.map sl ~f:it)))
+                % or_empty tzip21.tags (fun sl ->
+                      itembox
+                        ( bt "Tags:"
+                        %% list
+                             (oxfordize_list sl
+                                ~map:(fun t -> ct t)
+                                ~sep:(fun () -> t ", ")
+                                ~last_sep:(fun () -> t ", and ")) ))
+                %% list
+                     (List.map images ~f:(function
+                       | _, None -> empty ()
+                       | title, Some uri ->
+                           itembox
+                             ( Fmt.kstr bt "%s:" title
+                             %% multimedia_from_tzip16_uri ctxt ~title
+                                  ~mime_types:(uri_mime_types tzip21) ~uri )))
+                %% or_empty tzip21.formats (fun l ->
+                       itembox
+                         ( bt "Formats"
+                         %% itemize
+                              (List.map l ~f:(fun fmt ->
+                                   or_empty fmt.uri (fun u -> t "URI:" %% ct u)
+                                   %% or_empty fmt.mime_type (fun u ->
+                                          t "MIME-Type:" %% ct u)
+                                   %%
+                                   match fmt.other with
+                                   | [] -> empty ()
+                                   | more ->
+                                       t "+"
+                                       %% ct Ezjsonm.(value_to_string (`O more))))
+                         ))
+                %%
+                match tzip21.warnings with
+                | [] -> empty ()
+                | warns ->
+                    itembox
+                      (Bootstrap.alert ~kind:`Warning
+                         ( bt "TZIP-021 Warnings:"
+                         %% itemize
+                              (List.map warns ~f:(Message_html.render ctxt)) ))))
+    %% or_empty
+         (Option.bind extras ~f:(function [] -> None | s -> Some s))
+         (fun e -> div (bt "Extra-info (not parsed):" %% show_extras ctxt e))
+    %% or_empty low_level_contents (fun (uri, json) ->
+           let open Bootstrap.Collapse in
+           let collapse = make () in
+           let btn =
+             make_button collapse ~kind:`Secondary
+               (* ~style:(Reactive.pure (Fmt.str "width: 8em")) *)
+               (Reactive.bind (collapsed_state collapse) ~f:(function
+                 | true -> t "Show Low-Level Values"
+                 | false -> t "Hide Low-Level Values")) in
+           let dv =
+             make_div collapse (fun () ->
+                 div
+                   ( t "Low-level token-metadata:"
+                   % itemize
+                       [ t "Uri" %% ct uri
+                       ; t "Contents:"
+                         %% pre
+                              (code
+                                 (t
+                                    (Ezjsonm.value_to_string ~minify:false json)))
+                       ] )) in
+           btn %% dv)
+       (* %% itemize
+            (List.filter_map tok ~f:(function
+              | _, None -> None
+              | k, Some v -> Some (it k %% v))) *) )
+
 let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
     ~is_tzip21 ~total_supply_view wip_explore_tokens =
   let open Contract_metadata.Content in
@@ -691,43 +909,35 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
               Fmt.kstr log "Got list of tokens %a" Fmt.(Dump.list int) tokens ;
               Lwt.return (fun f -> Lwt_list.map_s f tokens)
           | `Printer_spec (spec : _ list) ->
-              let module M = struct
-                type t =
-                  [`Open_right_range of int | `Page of int | `Range of int * int]
-                  list
-
-                let x =
-                  Lwt.return (fun f ->
-                      let already_seen = ref (Set.empty (module Int)) in
-                      let failures = ref 0 in
-                      let max_failures = 3 in
-                      let rec go : t -> unit Lwt.t =
-                        let run_f n next =
-                          if Set.mem !already_seen n then Lwt.return_unit
-                          else
-                            Lwt.catch
-                              (fun () ->
-                                f n
-                                >>= fun () ->
-                                already_seen := Set.add !already_seen n ;
-                                go next)
-                              (fun exn -> Int.incr failures ; go next) in
-                        function
-                        | [] -> Lwt.return_unit
-                        | _ :: _ when !failures > max_failures ->
-                            Lwt.return_unit
-                        | `Page n :: more -> run_f n more
-                        | `Open_right_range n :: more ->
-                            let next = `Open_right_range (n + 1) :: more in
-                            run_f n next
-                        | `Range (l, r) :: more ->
-                            let next =
-                              if l >= r then more else `Range (l + 1, r) :: more
-                            in
-                            run_f l next in
-                      go spec >>= fun () -> Lwt.return_nil)
-              end in
-              M.x in
+              let open Printer_dsl in
+              Lwt.return (fun f ->
+                  let already_seen = ref (Set.empty (module Int)) in
+                  let failures = ref 0 in
+                  let max_failures = 3 in
+                  let rec go : t -> unit Lwt.t =
+                    let run_f n next =
+                      if Set.mem !already_seen n then Lwt.return_unit
+                      else
+                        Lwt.catch
+                          (fun () ->
+                            f n
+                            >>= fun () ->
+                            already_seen := Set.add !already_seen n ;
+                            go next)
+                          (fun exn -> Int.incr failures ; go next) in
+                    function
+                    | [] -> Lwt.return_unit
+                    | _ :: _ when !failures > max_failures -> Lwt.return_unit
+                    | `Page n :: more -> run_f n more
+                    | `Open_right_range n :: more ->
+                        let next = `Open_right_range (n + 1) :: more in
+                        run_f n next
+                    | `Range (l, r) :: more ->
+                        let next =
+                          if l >= r then more else `Range (l + 1, r) :: more
+                        in
+                        run_f l next in
+                  go spec >>= fun () -> Lwt.return_nil) in
         let explore_token id =
           log_prompt := Fmt.str "Exploring token %d" id ;
           let maybe_call_view view_validation ~parameter_string =
@@ -905,45 +1115,6 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                          t "URI" %% ct u %% t "does not point at a JSON object.") *) ]
             in
             match from_map @ from_json with [] -> None | l -> Some l in
-          let show_extras extr =
-            let show_bytes b =
-              match Michelson.Partial_type.bytes_guesses (`Raw_string b) with
-              | `Dont_know -> Fmt.kstr ct "%S" b
-              | `Number f ->
-                  it (Float.to_string_hum ~delimiter:' ' ~strip_zero:true f)
-              | `Bool true -> it "True"
-              | `Bool false -> it "False"
-              | `Web_uri wuri -> url it wuri
-              | `Tzip16_uri wuri -> tzip16_uri_short ctxt wuri
-              | `Json json ->
-                  pre (ct (Ezjsonm.value_to_string json ~minify:false))
-              | `Just_hex h -> ct h
-              | `Valid_utf_8 (_, [one_line]) -> t one_line
-              | `Valid_utf_8 (_, lines) ->
-                  div
-                    (list
-                       (oxfordize_list ~map:t lines
-                          ~sep:(fun () -> H5.br ())
-                          ~last_sep:(fun () -> H5.br ()))) in
-            itemize
-              (List.map extr ~f:(function
-                | Ok (k, v) -> Fmt.kstr ct "%S" k %% t "→" %% show_bytes v
-                | Error m -> Message_html.render ctxt m)) in
-          let default_show = function
-            | Ok node -> ct (Michelson.micheline_node_to_string node)
-            | Error s -> Bootstrap.color `Danger (t s) in
-          let show_total_supply = function
-            | Ok (Tezos_micheline.Micheline.Int (_, z)) -> (
-              match Option.map ~f:Int.of_string decimals with
-              | Some decimals ->
-                  let dec = Float.(Z.to_float z / (10. ** of_int decimals)) in
-                  Fmt.kstr t "%s (%a Units)"
-                    (Float.to_string_hum ~delimiter:' ' ~decimals
-                       ~strip_zero:true dec)
-                    Z.pp_print z
-              | None | (exception _) ->
-                  Fmt.kstr t "%a Units (no decimals)" Z.pp_print z )
-            | other -> ct "Error: " %% default_show other in
           let tzip_021, extras =
             match (is_tzip21, extras) with
             | false, e -> (None, e)
@@ -952,178 +1123,6 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                 let tzip21, e =
                   Contract_metadata.Content.Tzip_021.from_extras l in
                 (Some tzip21, Some e) in
-          let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
-              ?low_level_contents ?tzip_021 ctxt ~id ~warnings =
-            let or_empty o f = match o with None -> empty () | Some o -> f o in
-            let basics =
-              List.filter_opt
-                [ Option.map symbol ~f:(fun s -> t "symbol:" %% ct s)
-                ; Option.map total_supply ~f:(fun s ->
-                      t "total-supply:" %% show_total_supply s)
-                ; Option.map decimals ~f:(fun s -> t "decimals:" %% ct s) ]
-              |> function
-              | [] -> empty ()
-              | more ->
-                  t "["
-                  %% list
-                       (oxfordize_list more ~map:Fn.id
-                          ~sep:(fun () -> t " | ")
-                          ~last_sep:(fun () -> t " | "))
-                  %% t "]" in
-            Bootstrap.bordered ~kind:`Info ~a:[style "padding: 5px"]
-              ( Bootstrap.div_lead
-                  ( Fmt.kstr bt "Token %d" id
-                  %% or_empty name (function
-                       | "" -> Bootstrap.color `Danger (t "<empty-name>")
-                       | n ->
-                           Bootstrap.color `Primary (Fmt.kstr it "“%s”" n))
-                  %% basics )
-              %% ( match List.rev_map ~f:snd warnings with
-                 | [] -> empty ()
-                 | more ->
-                     let one = match more with [_] -> true | _ -> false in
-                     div
-                       (Bootstrap.alert ~kind:`Warning
-                          ( Fmt.kstr bt "TZIP-012 Warning%s:"
-                              (if one then "" else "s")
-                          %% if one then List.hd_exn more else itemize more ))
-                 )
-              %% or_empty tzip_021 (fun tzip21 ->
-                     let open Tzip_021 in
-                     if is_empty tzip21 then
-                       div (t "No TZIP-021 was found by TZComet.")
-                     else
-                       div
-                         (let intro =
-                            link ~target:tzip_021_url (bt "TZIP-021")
-                            %% Fmt.kstr bt
-                                 "→ This claims to be a %stransferable \
-                                  %sFungible-Token"
-                                 ( match tzip21.transferable with
-                                 | Some false -> "non-"
-                                 | _ -> "" )
-                                 ( match tzip21.boolean_amount with
-                                 | Some true -> "Non-"
-                                 | _ -> "" ) in
-                          let images =
-                            [ ("Thumbnail", tzip21.thumbnail)
-                            ; ("Display-Image", tzip21.display)
-                            ; ("Artifact", tzip21.artifact) ] in
-                          let itembox c =
-                            div
-                              ~a:
-                                [ style
-                                    "margin: 0px 10px 0px 10px;\n\
-                                     border-left: solid 1px #888;\n\
-                                     padding-left: 10px" ]
-                              (Bootstrap.bordered ~kind:`Light c) in
-                          let local_warnings = ref [] in
-                          let warn m = local_warnings := m :: !local_warnings in
-                          let symbol_stuff =
-                            match (tzip21.prefers_symbol, symbol) with
-                            | Some true, Some symb ->
-                                itembox
-                                  ( bt "Prefers to go by its symbol:"
-                                  %% ct symb % t "." )
-                            | Some true, None ->
-                                warn
-                                  Message.(
-                                    t
-                                      "This token claims to prefer using its \
-                                       symbol but it does not seem to have \
-                                       one.") ;
-                                empty ()
-                            | _, _ -> empty () in
-                          intro
-                          % or_empty tzip21.description (fun desc ->
-                                itembox
-                                  (bt "Description:" %% blockquote (it desc)))
-                          % symbol_stuff
-                          % or_empty tzip21.creators (function
-                              | [] ->
-                                  itembox
-                                    (bt "Creators list is explicitly empty.")
-                              | [one] -> itembox (bt "Creator:" %% it one)
-                              | sl ->
-                                  itembox
-                                    ( bt "Creators:"
-                                    %% itemize (List.map sl ~f:it) ))
-                          % or_empty tzip21.tags (fun sl ->
-                                itembox
-                                  ( bt "Tags:"
-                                  %% list
-                                       (oxfordize_list sl
-                                          ~map:(fun t -> ct t)
-                                          ~sep:(fun () -> t ", ")
-                                          ~last_sep:(fun () -> t ", and ")) ))
-                          %% list
-                               (List.map images ~f:(function
-                                 | _, None -> empty ()
-                                 | title, Some uri ->
-                                     itembox
-                                       ( Fmt.kstr bt "%s:" title
-                                       %% multimedia_from_tzip16_uri ctxt ~title
-                                            ~mime_types:(uri_mime_types tzip21)
-                                            ~uri )))
-                          %% or_empty tzip21.formats (fun l ->
-                                 itembox
-                                   ( bt "Formats"
-                                   %% itemize
-                                        (List.map l ~f:(fun fmt ->
-                                             or_empty fmt.uri (fun u ->
-                                                 t "URI:" %% ct u)
-                                             %% or_empty fmt.mime_type (fun u ->
-                                                    t "MIME-Type:" %% ct u)
-                                             %%
-                                             match fmt.other with
-                                             | [] -> empty ()
-                                             | more ->
-                                                 t "+"
-                                                 %% ct
-                                                      Ezjsonm.(
-                                                        value_to_string
-                                                          (`O more)))) ))
-                          %%
-                          match tzip21.warnings with
-                          | [] -> empty ()
-                          | warns ->
-                              itembox
-                                (Bootstrap.alert ~kind:`Warning
-                                   ( bt "TZIP-021 Warnings:"
-                                   %% itemize
-                                        (List.map warns
-                                           ~f:(Message_html.render ctxt)) ))))
-              %% or_empty
-                   (Option.bind extras ~f:(function [] -> None | s -> Some s))
-                   (fun e ->
-                     div (bt "Extra-info (not parsed):" %% show_extras e))
-              %% or_empty low_level_contents (fun (uri, json) ->
-                     let open Bootstrap.Collapse in
-                     let collapse = make () in
-                     let btn =
-                       make_button collapse ~kind:`Secondary
-                         (* ~style:(Reactive.pure (Fmt.str "width: 8em")) *)
-                         (Reactive.bind (collapsed_state collapse) ~f:(function
-                           | true -> t "Show Low-Level Values"
-                           | false -> t "Hide Low-Level Values")) in
-                     let dv =
-                       make_div collapse (fun () ->
-                           div
-                             ( t "Low-level token-metadata:"
-                             % itemize
-                                 [ t "Uri" %% ct uri
-                                 ; t "Contents:"
-                                   %% pre
-                                        (code
-                                           (t
-                                              (Ezjsonm.value_to_string
-                                                 ~minify:false json))) ] ))
-                     in
-                     btn %% dv)
-                 (* %% itemize
-                      (List.filter_map tok ~f:(function
-                        | _, None -> None
-                        | k, Some v -> Some (it k %% v))) *) ) in
           Async_work.wip_add_ok wip_explore_tokens
             (show_one_token ctxt ~id ?decimals ?total_supply ?symbol ?name
                ?low_level_contents:extra_contents ?tzip_021 ?extras
@@ -1313,36 +1312,7 @@ let metadata_substandards ?token_metadata_big_map
                                       "Congratulations! You found a bug! \
                                        Please report this:"
                                     %% ct Caml.__LOC__) )
-                          | false -> (
-                              let toint s =
-                                try Int.of_string s
-                                with _ ->
-                                  Fmt.failwith
-                                    "The string %S is not an integer." s in
-                              match
-                                List.concat_map
-                                  (String.split ~on:',' iter_input)
-                                  ~f:(fun item ->
-                                    match String.strip item with
-                                    | "" -> []
-                                    | item -> (
-                                      match String.split item ~on:'-' with
-                                      | [one] -> [`Page (toint one)]
-                                      | [one; ""] ->
-                                          [`Open_right_range (toint one)]
-                                      | [one; two] ->
-                                          [`Range (toint one, toint two)]
-                                      | _ ->
-                                          Fmt.failwith
-                                            "Cannot parse component: %S." item ))
-                              with
-                              | [] -> Ok (`Printer_spec [`Open_right_range 0])
-                              | more -> Ok (`Printer_spec more)
-                              | exception Failure s ->
-                                  Error
-                                    Message.(
-                                      t "Wrong format:" %% ct iter_input % t ":"
-                                      %% t s) ) in
+                          | false -> Printer_dsl.parse ctxt iter_input in
                         let method_document =
                           Reactive.(get iter_input ** get use_all_tokens)
                           |> Reactive.map
