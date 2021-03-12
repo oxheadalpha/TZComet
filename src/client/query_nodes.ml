@@ -306,6 +306,9 @@ let default_nodes : Node.t list =
         ~network:`Mainnet ~info_url:giga
     ; Node.create "Edonet-GigaNode" "https://edonet-tezos.giganode.io"
         ~network:`Edonet ~info_url:giga
+    ; Node.create "Florence-NoBA-net-GigaNode"
+        "https://florence-tezos.giganode.io" ~network:`Florence_NoBA
+        ~info_url:giga
     ; Node.create "Flextesabox-node" "http://127.0.0.1:20000" ~network:`Sandbox
         ~info_url:"https://assets.tqtezos.com/docs/setup/2-sandbox/" ]
 
