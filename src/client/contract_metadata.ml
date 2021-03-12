@@ -485,6 +485,7 @@ module Content = struct
     type t =
       { description: string option
       ; creators: string list option
+      ; tags: string list option
       ; transferable: bool option
       ; boolean_amount: bool option
       ; prefers_symbol: bool option
@@ -496,6 +497,7 @@ module Content = struct
     let is_empty = function
       | { description= None
         ; creators= None
+        ; tags= None
         ; transferable= None
         ; boolean_amount= None
         ; prefers_symbol= None
@@ -559,10 +561,12 @@ module Content = struct
       let display = find_remove_extr "displayUri" in
       let artifact = find_remove_extr "artifactUri" in
       let creators = find_remove_extr_string_list "creators" in
+      let tags = find_remove_extr_string_list "tags" in
       let tzip21 =
         (* We've used the side-effects here, we can get the warnings: *)
         { description
         ; creators
+        ; tags
         ; transferable
         ; boolean_amount
         ; prefers_symbol

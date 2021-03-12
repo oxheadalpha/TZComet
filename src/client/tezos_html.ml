@@ -1008,6 +1008,14 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                                   itembox
                                     ( bt "Creators:"
                                     %% itemize (List.map sl ~f:it) ))
+                          % or_empty tzip21.tags (fun sl ->
+                                itembox
+                                  ( bt "Tags:"
+                                  %% list
+                                       (oxfordize_list sl
+                                          ~map:(fun t -> ct t)
+                                          ~sep:(fun () -> t ", ")
+                                          ~last_sep:(fun () -> t ", and ")) ))
                           %% list
                                (List.map images ~f:(function
                                  | _, None -> empty ()
