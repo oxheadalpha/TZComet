@@ -1024,6 +1024,24 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                                        ( Fmt.kstr bt "%s:" title
                                        %% multimedia_from_tzip16_uri ctxt ~title
                                             ~uri )))
+                          %% or_empty tzip21.formats (fun l ->
+                                 itembox
+                                   ( bt "Formats"
+                                   %% itemize
+                                        (List.map l ~f:(fun fmt ->
+                                             or_empty fmt.uri (fun u ->
+                                                 t "URI:" %% ct u)
+                                             %% or_empty fmt.mime_type (fun u ->
+                                                    t "MIME-Type:" %% ct u)
+                                             %%
+                                             match fmt.other with
+                                             | [] -> empty ()
+                                             | more ->
+                                                 t "+"
+                                                 %% ct
+                                                      Ezjsonm.(
+                                                        value_to_string
+                                                          (`O more)))) ))
                           %%
                           match tzip21.warnings with
                           | [] -> empty ()

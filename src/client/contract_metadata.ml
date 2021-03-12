@@ -482,6 +482,11 @@ module Content = struct
       List.find metadata.Tezos_contract_metadata.Metadata_contents.interfaces
         ~f:(fun claim -> String.is_prefix claim "TZIP-021")
 
+    type uri_format =
+      { uri: string option
+      ; mime_type: string option
+      ; other: (string * Ezjsonm.value) list }
+
     type t =
       { description: string option
       ; creators: string list option
@@ -492,6 +497,7 @@ module Content = struct
       ; thumbnail: string option
       ; display: string option
       ; artifact: string option
+      ; formats: uri_format list option
       ; warnings: Message.t list }
 
     let is_empty = function
@@ -504,6 +510,7 @@ module Content = struct
         ; thumbnail= None
         ; display= None
         ; artifact= None
+        ; formats= None
         ; warnings= [] } ->
           true
       | _ -> false
@@ -540,19 +547,22 @@ module Content = struct
                      %% t "should be a JSON boolean: "
                      %% ct "true" %% t "or" %% ct "false") ;
                  None) in
-      let find_remove_extr_string_list key =
+      let find_remove_extr_json key ~parse_json ~expected =
         find_remove_extr key
         |> Option.bind ~f:(fun s ->
-               match Ezjsonm.(value_from_string s |> get_strings) with
+               match Ezjsonm.(value_from_string s |> parse_json) with
                | s -> Some s
                | exception e ->
                    warn
                      Message.(
                        t "Key" %% ct key
-                       %% t "is supposed to be an array of strings but got"
+                       %% Fmt.kstr t "is supposed to be %s but got" expected
                        %% ct s
                        %% parens (t "Exception:" %% Fmt.kstr ct "%a" Exn.pp e)) ;
                    None) in
+      let find_remove_extr_string_list key =
+        find_remove_extr_json key ~parse_json:Ezjsonm.get_strings
+          ~expected:"an array of strings" in
       let transferable = find_remove_extr_bool "isTransferable" in
       let boolean_amount = find_remove_extr_bool "isBooleanAmount" in
       let prefers_symbol = find_remove_extr_bool "shouldPreferSymbol" in
@@ -562,6 +572,37 @@ module Content = struct
       let artifact = find_remove_extr "artifactUri" in
       let creators = find_remove_extr_string_list "creators" in
       let tags = find_remove_extr_string_list "tags" in
+      let formats =
+        find_remove_extr_json "formats"
+          ~parse_json:
+            Ezjsonm.(
+              fun j ->
+                let parse_one j =
+                  let d = get_dict j in
+                  let get_string_field key =
+                    List.find_map d ~f:(function
+                      | k, `String s when String.equal key k -> Some s
+                      | k, other when String.equal key k ->
+                          warn
+                            Message.(
+                              t "In the" %% ct "\"formats\""
+                              %% t "field, the object"
+                              %% ct Ezjsonm.(value_to_string ~minify:true j)
+                              %% t "at key" %% Fmt.kstr ct "%S" key
+                              %% t "should have a string, not"
+                              %% ct Ezjsonm.(value_to_string ~minify:true other)
+                              %% t ".") ;
+                          None
+                      | _ -> None) in
+                  let uri = get_string_field "uri" in
+                  let mime_type = get_string_field "mimeType" in
+                  let other =
+                    List.filter d ~f:(fun (k, _) ->
+                        not (List.mem ["uri"; "mimeType"] ~equal:String.equal k))
+                  in
+                  {uri; mime_type; other} in
+                get_list parse_one j)
+          ~expected:"an array of objects" in
       let tzip21 =
         (* We've used the side-effects here, we can get the warnings: *)
         { description
@@ -573,6 +614,7 @@ module Content = struct
         ; thumbnail
         ; display
         ; artifact
+        ; formats
         ; warnings= !warnings } in
       (tzip21, List.map !extr ~f:Result.return @ trash)
   end
