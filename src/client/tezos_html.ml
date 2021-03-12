@@ -650,24 +650,44 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                          )) in
               Fmt.kstr log "Got list of tokens %a" Fmt.(Dump.list int) tokens ;
               Lwt.return (fun f -> Lwt_list.map_s f tokens)
-          | `Iter_until_fail ->
-              let max_failures = 3 in
-              Fmt.kstr log
-                "Going to try token-ids in order up to %d failures! YOLO !!"
-                max_failures ;
-              Lwt.return (fun f ->
-                  let rec go acc failures n =
-                    Lwt.catch
-                      (fun () ->
-                        f n >>= fun res -> go (res :: acc) failures (n + 1))
-                      (fun exn ->
-                        let failures = failures + 1 in
-                        Fmt.kstr log "Got the %dth failure: %a" failures Exn.pp
-                          exn ;
-                        if failures > max_failures then
-                          Lwt.return (List.rev acc)
-                        else go acc failures (n + 1)) in
-                  go [] 0 0) in
+          | `Printer_spec (spec : _ list) ->
+              let module M = struct
+                type t =
+                  [`Open_right_range of int | `Page of int | `Range of int * int]
+                  list
+
+                let x =
+                  Lwt.return (fun f ->
+                      let already_seen = ref (Set.empty (module Int)) in
+                      let failures = ref 0 in
+                      let max_failures = 3 in
+                      let rec go : t -> unit Lwt.t =
+                        let run_f n next =
+                          if Set.mem !already_seen n then Lwt.return_unit
+                          else
+                            Lwt.catch
+                              (fun () ->
+                                f n
+                                >>= fun () ->
+                                already_seen := Set.add !already_seen n ;
+                                go next)
+                              (fun exn -> Int.incr failures ; go next) in
+                        function
+                        | [] -> Lwt.return_unit
+                        | _ :: _ when !failures > max_failures ->
+                            Lwt.return_unit
+                        | `Page n :: more -> run_f n more
+                        | `Open_right_range n :: more ->
+                            let next = `Open_right_range (n + 1) :: more in
+                            run_f n next
+                        | `Range (l, r) :: more ->
+                            let next =
+                              if l >= r then more else `Range (l + 1, r) :: more
+                            in
+                            run_f l next in
+                      go spec >>= fun () -> Lwt.return_nil)
+              end in
+              M.x in
         let explore_token id =
           log_prompt := Fmt.str "Exploring token %d" id ;
           let maybe_call_view view_validation ~parameter_string =
@@ -937,7 +957,8 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                          (let intro =
                             link ~target:tzip_021_url (bt "TZIP-021")
                             %% Fmt.kstr bt
-                                 "→ This is a %stransferable %sFungible-Token"
+                                 "→ This claims to be a %stransferable \
+                                  %sFungible-Token"
                                  ( match tzip21.transferable with
                                  | Some false -> "non-"
                                  | _ -> "" )
@@ -1185,6 +1206,7 @@ let metadata_substandards ?token_metadata_big_map
           let wip_explore_tokens = Async_work.empty () in
           let can_enumerate_tokens = add_explore_tokens_button in
           let tokens_exploration x = div x in
+          let iter_input = Reactive.var "" in
           let explore_tokens_top_button, exploration_expedition_state =
             match can_enumerate_tokens with
             | false -> (empty (), empty ())
@@ -1212,6 +1234,75 @@ let metadata_substandards ?token_metadata_big_map
                             ( match all_tokens with
                             | Valid (_, view) -> true
                             | _ -> false ) in
+                        let compute_method ~use_all_tokens ~iter_input =
+                          match use_all_tokens with
+                          | true -> (
+                            match all_tokens with
+                            | Valid (_, view) -> Ok (`All_tokens_view view)
+                            | _ ->
+                                Error
+                                  Message.(
+                                    t
+                                      "Congratulations! You found a bug! \
+                                       Please report this:"
+                                    %% ct Caml.__LOC__) )
+                          | false -> (
+                              let toint s =
+                                try Int.of_string s
+                                with _ ->
+                                  Fmt.failwith
+                                    "The string %S is not an integer." s in
+                              match
+                                List.concat_map
+                                  (String.split ~on:',' iter_input)
+                                  ~f:(fun item ->
+                                    match String.strip item with
+                                    | "" -> []
+                                    | item -> (
+                                      match String.split item ~on:'-' with
+                                      | [one] -> [`Page (toint one)]
+                                      | [one; ""] ->
+                                          [`Open_right_range (toint one)]
+                                      | [one; two] ->
+                                          [`Range (toint one, toint two)]
+                                      | _ ->
+                                          Fmt.failwith
+                                            "Cannot parse component: %S." item ))
+                              with
+                              | [] -> Ok (`Printer_spec [`Open_right_range 0])
+                              | more -> Ok (`Printer_spec more)
+                              | exception Failure s ->
+                                  Error
+                                    Message.(
+                                      t "Wrong format:" %% ct iter_input % t ":"
+                                      %% t s) ) in
+                        let method_document =
+                          Reactive.(get iter_input ** get use_all_tokens)
+                          |> Reactive.map
+                               ~f:(fun (iter_input, use_all_tokens) ->
+                                 compute_method ~iter_input ~use_all_tokens)
+                        in
+                        let submit_action () =
+                          Reactive.set form_status `Hidden ;
+                          let is_tzip21 =
+                            is_tzip21 || Reactive.peek use_tzip_021 in
+                          let how =
+                            match
+                              compute_method
+                                ~use_all_tokens:(Reactive.peek use_all_tokens)
+                                ~iter_input:(Reactive.peek iter_input)
+                            with
+                            | Ok o -> o
+                            | Error e ->
+                                Fmt.failwith
+                                  "You found a bug or bypassed form \
+                                   validation! %s"
+                                  Caml.__LOC__ in
+                          explore_tokens_action ctxt
+                            ~token_metadata_view:token_metadata ~is_tzip21
+                            ?token_metadata_big_map ~how
+                            ~total_supply_view:total_supply wip_explore_tokens
+                        in
                         div
                           ( bt "Exploration Options:"
                           % Bootstrap.Form.(
@@ -1239,26 +1330,73 @@ let metadata_substandards ?token_metadata_big_map
                                                 "off-chain-view is not \
                                                  available to list the tokens."
                                            )) )
-                                ; submit_button (t "Explore") (fun () ->
-                                      Reactive.set form_status `Hidden ;
-                                      let is_tzip21 =
-                                        is_tzip21 || Reactive.peek use_tzip_021
-                                      in
-                                      let how =
-                                        match Reactive.peek use_all_tokens with
-                                        | true -> (
-                                          match all_tokens with
-                                          | Valid (_, view) ->
-                                              `All_tokens_view view
-                                          | _ ->
-                                              Fmt.failwith
-                                                "Inconsistent form state" )
-                                        | false -> `Iter_until_fail in
-                                      explore_tokens_action ctxt
-                                        ~token_metadata_view:token_metadata
-                                        ~is_tzip21 ?token_metadata_big_map ~how
-                                        ~total_supply_view:total_supply
-                                        wip_explore_tokens) ]) )) in
+                                ; (let active =
+                                     Reactive.(get use_all_tokens |> map ~f:not)
+                                   in
+                                   input ~label:(t "Search parameters:") ~active
+                                     ~placeholder:
+                                       (Reactive.map active ~f:(function
+                                         | true -> ""
+                                         | false -> "Disabled"))
+                                     ~help:
+                                       ( t "How to iterate over Token-Ids."
+                                       %% t
+                                            "It should look like the \
+                                             “pages” thing of a printer \
+                                             job, like"
+                                       %% ct "1-4,5,6-"
+                                       %% t ", leave the field empty for"
+                                       %% ct "0-"
+                                       %% t "a.k.a. the YOLO method."
+                                       %% Reactive.bind_var iter_input
+                                            ~f:(fun s ->
+                                              match
+                                                compute_method
+                                                  ~use_all_tokens:false
+                                                  ~iter_input:s
+                                              with
+                                              | Ok _ -> empty ()
+                                              | Error err ->
+                                                  Bootstrap.color `Danger
+                                                    (t "WRONG !")) )
+                                     (Reactive.Bidirectional.of_var iter_input))
+                                ; magic
+                                    ( method_document
+                                    |> Reactive.bind ~f:(function
+                                         | Ok (`All_tokens_view _) ->
+                                             t "Explore using the"
+                                             %% ct "all_tokens" %% t "view."
+                                         | Ok (`Printer_spec l) ->
+                                             t "Explore using the"
+                                             %% bt "Printer-style"
+                                             %% t "method:"
+                                             %% list
+                                                  (oxfordize_list l
+                                                     ~map:(function
+                                                       | `Page n ->
+                                                           Fmt.kstr t "page %d"
+                                                             n
+                                                       | `Open_right_range n ->
+                                                           Fmt.kstr it
+                                                             "pages [%d, ∞)" n
+                                                       | `Range (l, r) ->
+                                                           Fmt.kstr it
+                                                             "pages [%d, %d]" l
+                                                             r)
+                                                     ~sep:(fun () -> t ", ")
+                                                     ~last_sep:(fun () ->
+                                                       t ", and "))
+                                             % t "."
+                                         | Error err ->
+                                             Bootstrap.alert ~kind:`Danger
+                                               (Message_html.render ctxt err))
+                                    )
+                                ; submit_button
+                                    ~active:
+                                      (Reactive.map method_document ~f:(function
+                                        | Ok _ -> true
+                                        | Error _ -> false))
+                                    (t "Explore!") submit_action ]) )) in
                 (top_button, exploration) in
           let validity_qualifier =
             if add_explore_tokens_button then
