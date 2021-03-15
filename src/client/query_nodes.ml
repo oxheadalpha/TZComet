@@ -39,13 +39,17 @@ module Node = struct
     { name: string
     ; prefix: string
     ; status: (float * Node_status.t) Reactive.var
-    ; rpc_cache: Rpc_cache.t }
+    ; rpc_cache: Rpc_cache.t
+    ; network: Network.t
+    ; info_url: string option }
 
-  let create name prefix =
+  let create ~network ?info_url name prefix =
     { name
     ; prefix
     ; status= Reactive.var (0., Uninitialized)
-    ; rpc_cache= Rpc_cache.create () }
+    ; rpc_cache= Rpc_cache.create ()
+    ; network
+    ; info_url }
 
   let status n = Reactive.get n.status
 
@@ -284,21 +288,33 @@ let add_node ?dev ctxt nod =
   Reactive.set (nodes ctxt)
     (Node_list.add ?dev (Reactive.peek (nodes ctxt)) nod)
 
-let default_nodes =
+let default_nodes : Node.t list =
+  let smartpy = "https://smartpy.io/nodes" in
+  let giga = "https://giganode.io/" in
   List.rev
-    [ Node.create "Delphinet-GigaNode" "https://delphinet-tezos.giganode.io"
-    ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
-    ; Node.create "Current-Testnet-GigaNode" "https://testnet-tezos.giganode.io"
-    ; Node.create "Edonet-GigaNode" "https://edonet-tezos.giganode.io"
-    ; Node.create "Carthagenet-SmartPy" "https://carthagenet.smartpy.io"
-    ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
+    [ Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
+        ~network:`Mainnet ~info_url:smartpy
+    ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ~network:`Edonet
+        ~info_url:smartpy
     ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io"
-    ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ]
+        ~network:`Delphinet ~info_url:smartpy
+    ; Node.create "Florence-NoBA-net-SmartPy" ~network:`Florence_NoBA
+        "https://florencenobanet.smartpy.io/" ~info_url:smartpy
+    ; Node.create "Florencenet-SmartPy" "https://florencenet.smartpy.io"
+        ~network:`Florence_BA ~info_url:smartpy
+    ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
+        ~network:`Mainnet ~info_url:giga
+    ; Node.create "Edonet-GigaNode" "https://edonet-tezos.giganode.io"
+        ~network:`Edonet ~info_url:giga
+    ; Node.create "Florence-NoBA-net-GigaNode"
+        "https://florence-tezos.giganode.io" ~network:`Florence_NoBA
+        ~info_url:giga
+    ; Node.create "Flextesabox-node" "http://127.0.0.1:20000" ~network:`Sandbox
+        ~info_url:"https://assets.tqtezos.com/docs/setup/2-sandbox/" ]
 
 let dev_nodes =
   List.rev
-    [ Node.create "Dev:Wrong-node" "http://example.com/nothing"
-    ; Node.create "Dev:Minibox-node" "http://127.0.0.1:20000" ]
+    [Node.create "Dev:Wrong-node" "http://example.com/nothing" ~network:`Sandbox]
 
 let add_default_nodes ctxt =
   List.iter ~f:(add_node ~dev:true ctxt) dev_nodes ;
@@ -366,7 +382,9 @@ let find_node_with_contract ctxt addr =
             (fun () ->
               Fmt.kstr (Node.rpc_get ctxt node)
                 "/chains/main/blocks/head/context/contracts/%s/storage" addr
-              >>= fun _ -> return_true)
+              >>= fun _ ->
+              State.set_current_network ctxt node.Node.network ;
+              return_true)
             (fun exn ->
               trace := exn :: !trace ;
               return_false))

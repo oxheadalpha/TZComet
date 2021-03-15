@@ -44,7 +44,21 @@ module Uri = struct
     | Web _ | Storage _ | Ipfs _ -> false
     | Hash {target; _} -> needs_context_address target
 
-  let fetch ?(log = dbgf "Uri.fetch.log: %s") ctxt uri =
+  let to_ipfs_gateway ctxt ~cid ~path =
+    let gateway = "https://gateway.ipfs.io/ipfs/" in
+    let gatewayed = Fmt.str "%s%s%s" gateway cid path in
+    gatewayed
+
+  let to_web_address ctxt =
+    let open Tezos_contract_metadata.Metadata_uri in
+    function
+    | Web http -> Some http
+    | Ipfs {cid; path} -> Some (to_ipfs_gateway ctxt ~cid ~path)
+    | Hash {kind; value; target= Web http} -> Some http
+    | _ -> None
+
+  let fetch ?(max_data_size = 1_000_000) ?(log = dbgf "Uri.fetch.log: %s") ctxt
+      uri =
     let open Lwt.Infix in
     let logf fmt = Fmt.kstr (fun s -> dbgf "Uri.fetch: %s" s ; log s) fmt in
     let ni s = Fmt.failwith "Not Implemented: %s" s in
@@ -56,20 +70,31 @@ module Uri = struct
       function
       | Web http ->
           logf "HTTP %S (may fail because of origin policy)" http ;
-          Js_of_ocaml_lwt.XmlHttpRequest.(
-            get http
-            >>= fun frame ->
-            dbgf "%s -> code: %d" http frame.code ;
-            match frame.code with
-            | 200 ->
-                logf "HTTP success (%d bytes)" (String.length frame.content) ;
-                Lwt.return frame.content
-            | other -> Fmt.failwith "Getting %S returned code: %d" http other)
+          System.with_timeout ctxt
+            ~raise:(fun timeout ->
+              Fmt.failwith "HTTP Call Timeouted: %.3f s" timeout)
+            ~f:
+              Js_of_ocaml_lwt.XmlHttpRequest.(
+                fun () ->
+                  perform_raw ~response_type:ArrayBuffer http
+                  >>= fun frame ->
+                  dbgf "%s -> code: %d" http frame.code ;
+                  match frame.code with
+                  | 200 ->
+                      let res =
+                        Js_of_ocaml.Js.Opt.get frame.content (fun () ->
+                            Fmt.failwith "Getting %S gave no content" http)
+                      in
+                      let as_string =
+                        Js_of_ocaml.Typed_array.String.of_arrayBuffer res in
+                      logf "HTTP success (%d bytes)" (String.length as_string) ;
+                      Lwt.return as_string
+                  | other ->
+                      Fmt.failwith "Getting %S returned code: %d" http other)
           >>= fun content -> Lwt.return content
       | Ipfs {cid; path} ->
-          let gateway = "https://gateway.ipfs.io/ipfs/" in
-          let gatewayed = Fmt.str "%s%s%s" gateway cid path in
-          logf "IPFS CID %S path %S, adding gateway %S" cid path gateway ;
+          logf "IPFS CID %S path %S" cid path ;
+          let gatewayed = to_ipfs_gateway ctxt ~cid ~path in
           resolve (Web gatewayed)
       | Storage {network= None; address; key} ->
           let addr =
@@ -369,9 +394,12 @@ module Content = struct
     let open Metadata_contents in
     let looks_like_tzip_12 ?token_metadata_big_map ~found metadata =
       let interface_claim =
-        List.find metadata.interfaces ~f:(String.is_prefix ~prefix:"TZIP-012")
+        List.find metadata.interfaces ~f:(fun s ->
+            String.is_prefix s ~prefix:"TZIP-12"
+            || String.is_prefix s ~prefix:"TZIP-012")
         |> Option.map ~f:(function
              | "TZIP-012" -> `Just_interface
+             | "TZIP-12" -> `Invalid "TZIP-12"
              | itf -> (
                match String.chop_prefix itf ~prefix:"TZIP-012-" with
                | None -> `Invalid itf
@@ -439,7 +467,7 @@ module Content = struct
           { metadata with
             unknown=
               List.filter metadata.unknown ~f:(function
-                | "permissions", _ | "tokens", _ -> false
+                | "permissions", _ -> false
                 | _ -> true) } in
         found
           (Tzip_12
@@ -460,4 +488,154 @@ module Content = struct
           metadata ;
         Tzip_16 metadata
       with Found x -> x
+
+  module Tzip_021 = struct
+    let claim metadata =
+      List.find metadata.Tezos_contract_metadata.Metadata_contents.interfaces
+        ~f:(fun claim -> String.is_prefix claim "TZIP-021")
+
+    type uri_format =
+      { uri: string option
+      ; mime_type: string option
+      ; other: (string * Ezjsonm.value) list }
+
+    type t =
+      { description: string option
+      ; creators: string list option
+      ; tags: string list option
+      ; transferable: bool option
+      ; boolean_amount: bool option
+      ; prefers_symbol: bool option
+      ; thumbnail: string option
+      ; display: string option
+      ; artifact: string option
+      ; formats: uri_format list option
+      ; warnings: Message.t list }
+
+    let is_empty = function
+      | { description= None
+        ; creators= None
+        ; tags= None
+        ; transferable= None
+        ; boolean_amount= None
+        ; prefers_symbol= None
+        ; thumbnail= None
+        ; display= None
+        ; artifact= None
+        ; formats= None
+        ; warnings= [] } ->
+          true
+      | _ -> false
+
+    let uri_mime_types tzip21 =
+      match tzip21.formats with
+      | None -> []
+      | Some some ->
+          List.filter_map some ~f:(function
+            | {uri= Some u; mime_type= Some m; _} -> Some (u, m)
+            | _ -> None)
+
+    let from_extras l =
+      let kvs, trash =
+        List.partition_map l ~f:(function
+          | Ok kv -> First kv
+          | Error _ as e -> Second e) in
+      let extr = ref kvs in
+      let find_remove l ~key =
+        let rec go found acc = function
+          | [] -> (found, List.rev acc)
+          | one :: more when Option.is_some found -> go found (one :: acc) more
+          | (kone, vone) :: more ->
+              if String.equal kone key then go (Some vone) acc more
+              else go found ((kone, vone) :: acc) more in
+        go None [] l in
+      let find_remove_extr key =
+        let v, ex = find_remove !extr ~key in
+        extr := ex ;
+        v in
+      let warnings = ref [] in
+      let warn m = warnings := m :: !warnings in
+      let find_remove_extr_bool key =
+        find_remove_extr key
+        |> Option.bind ~f:(function
+             | "true" -> Some true
+             | "false" -> Some false
+             | other ->
+                 warn
+                   Message.(
+                     t "Key" %% ct key
+                     %% t "should be a JSON boolean: "
+                     %% ct "true" %% t "or" %% ct "false") ;
+                 None) in
+      let find_remove_extr_json key ~parse_json ~expected =
+        find_remove_extr key
+        |> Option.bind ~f:(fun s ->
+               match Ezjsonm.(value_from_string s |> parse_json) with
+               | s -> Some s
+               | exception e ->
+                   warn
+                     Message.(
+                       t "Key" %% ct key
+                       %% Fmt.kstr t "is supposed to be %s but got" expected
+                       %% ct s
+                       %% parens (t "Exception:" %% Fmt.kstr ct "%a" Exn.pp e)) ;
+                   None) in
+      let find_remove_extr_string_list key =
+        find_remove_extr_json key ~parse_json:Ezjsonm.get_strings
+          ~expected:"an array of strings" in
+      let transferable = find_remove_extr_bool "isTransferable" in
+      let boolean_amount = find_remove_extr_bool "isBooleanAmount" in
+      let prefers_symbol = find_remove_extr_bool "shouldPreferSymbol" in
+      let description = find_remove_extr "description" in
+      let thumbnail = find_remove_extr "thumbnailUri" in
+      let display = find_remove_extr "displayUri" in
+      let artifact = find_remove_extr "artifactUri" in
+      let creators = find_remove_extr_string_list "creators" in
+      let tags = find_remove_extr_string_list "tags" in
+      let formats =
+        find_remove_extr_json "formats"
+          ~parse_json:
+            Ezjsonm.(
+              fun j ->
+                let parse_one j =
+                  let d = get_dict j in
+                  let get_string_field key =
+                    List.find_map d ~f:(function
+                      | k, `String s when String.equal key k -> Some s
+                      | k, other when String.equal key k ->
+                          warn
+                            Message.(
+                              t "In the" %% ct "\"formats\""
+                              %% t "field, the object"
+                              %% ct Ezjsonm.(value_to_string ~minify:true j)
+                              %% t "at key" %% Fmt.kstr ct "%S" key
+                              %% t "should have a string, not"
+                              %% ct Ezjsonm.(value_to_string ~minify:true other)
+                              %% t ".") ;
+                          None
+                      | _ -> None) in
+                  let uri = get_string_field "uri" in
+                  let mime_type = get_string_field "mimeType" in
+                  let other =
+                    List.filter d ~f:(fun (k, _) ->
+                        not (List.mem ["uri"; "mimeType"] ~equal:String.equal k))
+                  in
+                  {uri; mime_type; other} in
+                get_list parse_one j)
+          ~expected:"an array of objects" in
+      let tzip21 =
+        (* We've used the side-effects here, we can get the warnings: *)
+        { description
+        ; creators
+        ; tags
+        ; transferable
+        ; boolean_amount
+        ; prefers_symbol
+        ; thumbnail
+        ; display
+        ; artifact
+        ; formats
+        ; warnings= !warnings } in
+      (tzip21, List.map !extr ~f:Result.return @ trash)
+  end
 end

@@ -1,22 +1,30 @@
 open! Import
 
 type log_item = Html_types.div_content_fun Meta_html.H5.elt
-type 'a status = Empty | Work_in_progress | Done of ('a, log_item) Result.t
+type status = Empty | Work_in_progress | Done
+type 'a content = ('a, log_item) Result.t list
 
 type 'a t =
-  {logs: log_item Reactive.Table.t; status: 'a status Reactive.var; id: int}
+  { logs: log_item Reactive.Table.t
+  ; status: status Reactive.var
+  ; id: int
+  ; content: 'a content Reactive.var }
 
 let _id = ref 0
 
 let empty () =
   let id = !_id in
   Caml.incr _id ;
-  {logs= Reactive.Table.make (); status= Reactive.var Empty; id}
+  { logs= Reactive.Table.make ()
+  ; status= Reactive.var Empty
+  ; id
+  ; content= Reactive.var [] }
 
 let logs_div_id t = Fmt.str "logs-of-async-work-%d" t.id
 
 let reinit s =
   Reactive.Table.clear s.logs ;
+  Reactive.set s.content [] ;
   Reactive.set s.status Empty
 
 let log t item =
@@ -36,8 +44,20 @@ let log t item =
   ()
 
 let wip t = Reactive.set t.status Work_in_progress
-let ok t o = Reactive.set t.status (Done (Ok o))
-let error t o = Reactive.set t.status (Done (Error o))
+let wip_add_ok t ok = Reactive.set t.content (Ok ok :: Reactive.peek t.content)
+
+let wip_add_error t err =
+  Reactive.set t.content (Error err :: Reactive.peek t.content)
+
+let ok t o =
+  Reactive.set t.status Done ;
+  Reactive.set t.content [Ok o]
+
+let error t o =
+  Reactive.set t.status Done ;
+  Reactive.set t.content [Error o]
+
+let finish t = Reactive.set t.status Done
 
 let busy {status; _} =
   Reactive.(
@@ -65,7 +85,7 @@ let async_catch :
               error wip (exn_to_html exn) ;
               return ()))
 
-let render work_status ~f =
+let render ?(done_empty = Meta_html.empty) work_status ~f =
   let open Meta_html in
   let show_logs ?(wip = false) () =
     let make_logs_map _ x = H5.li [x] in
@@ -85,10 +105,20 @@ let render work_status ~f =
       ~width:"12em" ~kind:`Secondary
       ~button:(function true -> t "Show Logs" | false -> t "Collapse Logs")
       (fun () -> show_logs ~wip:false ()) in
+  let content ~wip =
+    Reactive.bind_var work_status.content ~f:(function
+      | [] -> if wip then empty () else done_empty ()
+      | l ->
+          ( if wip then
+            div
+              ( it "Work in progress …"
+              %% Bootstrap.spinner ~kind:`Info (t "Working …") )
+          else empty () )
+          % list
+              (List.rev_map l ~f:(function
+                | Ok o -> div (f o)
+                | Error e -> Bootstrap.bordered ~kind:`Danger (div e)))) in
   Reactive.bind_var work_status.status ~f:(function
     | Empty -> empty ()
-    | Work_in_progress ->
-        Bootstrap.alert ~kind:`Secondary (show_logs ~wip:true ())
-    | Done (Ok x) -> div (f x) % collapsing_logs ()
-    | Done (Error e) ->
-        Bootstrap.bordered ~kind:`Danger (div e %% collapsing_logs ()))
+    | Work_in_progress -> content ~wip:true %% show_logs ~wip:true ()
+    | Done -> content ~wip:false %% collapsing_logs ())

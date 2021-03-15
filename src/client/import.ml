@@ -132,7 +132,7 @@ module System = struct
   type t = {dev_mode: bool Reactive.var; http_timeout: float Reactive.var}
 
   let create ?(dev_mode = false) () =
-    {dev_mode= Reactive.var dev_mode; http_timeout= Reactive.var 3.}
+    {dev_mode= Reactive.var dev_mode; http_timeout= Reactive.var 5.}
 
   let get (state : < system: t ; .. > Context.t) = state#system
 
@@ -401,4 +401,14 @@ module Ezjsonm = struct
             t "JSON Parsing: at line" %% int ct line %% t ", column"
             %% int ct col % t ":" %% err_message % t ".")
     | exception e -> Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
+end
+
+module Blob = struct
+  let guess_format s =
+    (* https://stackoverflow.com/questions/55869/determine-file-type-of-an-image
+       https://en.wikipedia.org/wiki/JPEG *)
+    let prefixes =
+      [("\255\216\255", `Jpeg); ("\137\080\078\071", `Png); ("GIF", `Gif)] in
+    List.find_map prefixes ~f:(fun (prefix, fmt) ->
+        if String.is_prefix s ~prefix then Some fmt else None)
 end
