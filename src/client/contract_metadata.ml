@@ -639,3 +639,95 @@ module Content = struct
       (tzip21, List.map !extr ~f:Result.return @ trash)
   end
 end
+
+module Token = struct
+  type warning =
+    [ `Fetching_uri of string * exn
+    | `Parsing_uri of
+      string
+      * Tezos_error_monad.Error_monad.error
+        Tezos_error_monad.Error_monad.TzTrace.trace ]
+
+  type t =
+    { address: string
+    ; id: int
+    ; network: Network.t option
+    ; warnings: (string * warning) list }
+
+  let make ?network ?(warnings = []) address id =
+    {address; id; network; warnings}
+
+  let fetch ctxt ~address ~id ~log =
+    let open Lwt.Infix in
+    let logs prefix msg = log Message.(t prefix %% t "👉" %% t msg) in
+    let warnings = ref [] in
+    let warn k e =
+      if List.exists !warnings ~f:(fun (key, _) -> String.equal key k) then ()
+      else warnings := (k, e) :: !warnings in
+    Lwt.catch
+      (fun () ->
+        Content.token_metadata_value ctxt ~address ~key:""
+          ~log:(logs "Getting %token_metadata big-map")
+        >>= fun token_metadata -> Lwt.return_some token_metadata)
+      (fun _exn ->
+        log Message.(t "Attempt at getting a %token_metadata big-map failed.") ;
+        Lwt.return_none)
+    >>= fun token_metadata_big_map ->
+    match token_metadata_big_map with
+    | None ->
+        Decorate_error.raise
+          Message.(t "Non-straightforward tokens:" %% ct "NOT IMPLEMENTED")
+    | Some big_map_id -> (
+        let log = logs "Fetching metadata from big-map" in
+        Query_nodes.find_node_with_contract ctxt address
+        >>= fun node ->
+        Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
+        Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node ~log
+          ~big_map_id ~key:id
+        >>= function
+        | Prim (_, "Pair", [_; full_map], _) ->
+            let key_values =
+              Michelson.Partial_type.micheline_string_bytes_map_exn full_map
+            in
+            let get l ~k = List.Assoc.find l k ~equal:String.equal in
+            let _get_exn l ~k =
+              match get l ~k with
+              | Some s -> s
+              | None ->
+                  Decorate_error.raise
+                    Message.(
+                      t "Could not find piece-of-metadata at key" %% ct k) in
+            let uri = get key_values ~k:"" in
+            ( match uri with
+            | None -> Lwt.return_none
+            | Some u -> (
+              match Uri.validate u with
+              | Ok uri, _ ->
+                  Lwt.catch
+                    (fun () ->
+                      Uri.fetch ctxt uri ~log:(fun s ->
+                          Fmt.kstr log "Fetching %s" u)
+                      >>= fun s ->
+                      Lwt.return_some (u, Ezjsonm.value_from_string s))
+                    (fun exn ->
+                      warn "fetch-uri" (`Fetching_uri (u, exn)) ;
+                      Lwt.return_none)
+              | Error error, _ ->
+                  warn "parsing-uri" (`Parsing_uri (u, error)) ;
+                  Lwt.return_none ) )
+            >>= fun _ ->
+            Lwt.return
+              (make ~network:node.Query_nodes.Node.network address id
+                 ~warnings:!warnings)
+            (* Decorate_error.raise
+               Message.(
+                 t "WIP"
+                 %% Fmt.kstr t "%a"
+                      Fmt.Dump.(list (pair string string))
+                      key_values *)
+        | other ->
+            Decorate_error.raise
+              Message.(
+                t "Metadata result has wrong structure:"
+                %% ct (Michelson.micheline_node_to_string other)) )
+end

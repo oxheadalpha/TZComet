@@ -1,15 +1,16 @@
 open! Import
 
 module Page = struct
-  type t = Explorer | Settings | About | Editor
+  type t = Explorer | Settings | Token_viewer | About | Editor
 
   let to_string = function
     | Explorer -> "Explorer"
     | Editor -> "Editor"
+    | Token_viewer -> "TokenViewer"
     | Settings -> "Settings"
     | About -> "About"
 
-  let all_in_order = [Explorer; Editor; Settings; About]
+  let all_in_order = [Explorer; Editor; Token_viewer; Settings; About]
 end
 
 open Page
@@ -48,6 +49,8 @@ type t =
   ; editor_mode: Editor_mode.t Reactive.var
   ; editor_load: bool Reactive.var
   ; editor_should_load: bool Reactive.var
+  ; token_address: string Reactive.var
+  ; token_id: string Reactive.var
   ; check_micheline_indentation: bool Reactive.var
   ; current_network: Network.t Reactive.var }
 
@@ -60,7 +63,8 @@ module Fragment = struct
   let page_to_path page = Fmt.str "/%s" (Page.to_string page |> String.lowercase)
 
   let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go
-      ~editor_mode ~check_micheline_indentation ~editor_load =
+      ~editor_mode ~token_address ~token_id ~check_micheline_indentation
+      ~editor_load =
     let query =
       match explorer_input with "" -> [] | more -> [("explorer-input", [more])]
     in
@@ -79,6 +83,10 @@ module Fragment = struct
       | other -> ("editor-mode", [Editor_mode.to_string other]) :: query in
     let query =
       if editor_load then ("load-storage", ["true"]) :: query else query in
+    let query =
+      match (token_address, token_id) with
+      | "", _ -> query
+      | kt, id -> ("token", [Fmt.str "%s/%s" kt id]) :: query in
     Uri.make () ~path:(page_to_path page) ~query
 
   let change_for_page t page = Uri.with_path t (page_to_path page)
@@ -113,6 +121,14 @@ module Fragment = struct
     let editor_load = true_in_query "load-storage" in
     let editor_input =
       match in_query "editor-input" with Some [one] -> one | _ -> "" in
+    let token_address, token_id =
+      match in_query "token" with
+      | Some [one] -> (
+        match String.split one ~on:'/' with
+        | [k] -> (k, "0")
+        | [k; t] -> (k, t)
+        | _ -> ("", "") )
+      | _ -> ("", "") in
     ( System.create ~dev_mode ()
     , { page= Reactive.var (`Page page)
       ; explorer_input= Reactive.var explorer_input
@@ -127,6 +143,8 @@ module Fragment = struct
       ; editor_load= Reactive.var editor_load
       ; editor_should_load=
           Reactive.var (editor_load && String.is_empty editor_input)
+      ; token_address= Reactive.var token_address
+      ; token_id= Reactive.var token_id
       ; check_micheline_indentation= Reactive.var mich_indent
       ; current_network= Reactive.var `Mainnet } )
 end
@@ -190,6 +208,9 @@ let transform_editor_content ctxt ~f =
            Reactive.set variable v)
   *)
 
+let token_address ctxt = (get ctxt).token_address
+let token_id ctxt = (get ctxt).token_id
+
 let check_micheline_indentation ctxt =
   Reactive.peek (get ctxt).check_micheline_indentation
 
@@ -213,7 +234,7 @@ let make_fragment ?(side_effects = true) ctxt =
   let explorer_go = Reactive.get state.explorer_go in
   Reactive.(
     dev ** page ** explorer_input ** explorer_go ** editor_input
-    ** get state.editor_mode
+    ** get state.editor_mode ** get state.token_address ** get state.token_id
     ** get state.check_micheline_indentation
     ** get state.editor_load)
   |> Reactive.map
@@ -223,8 +244,10 @@ let make_fragment ?(side_effects = true) ctxt =
               , ( explorer_input
                 , ( explorer_go
                   , ( editor_input
-                    , (editor_mode, (check_micheline_indentation, editor_load))
-                    ) ) ) ) )
+                    , ( editor_mode
+                      , ( token_address
+                        , (token_id, (check_micheline_indentation, editor_load))
+                        ) ) ) ) ) ) )
           ->
          let now =
            Fragment.(
@@ -232,7 +255,8 @@ let make_fragment ?(side_effects = true) ctxt =
                if String.length editor_input < 40 then editor_input else ""
              in
              make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input
-               ~editor_mode ~check_micheline_indentation ~editor_load) in
+               ~token_address ~token_id ~editor_mode
+               ~check_micheline_indentation ~editor_load) in
          if side_effects then (
            let current = Js_of_ocaml.Url.Current.get_fragment () in
            dbgf "Updating fragment %S → %a" current Fragment.pp now ;
