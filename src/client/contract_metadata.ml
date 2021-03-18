@@ -672,16 +672,22 @@ module Token = struct
     | `Parsing_uri of
       string
       * Tezos_error_monad.Error_monad.error
-        Tezos_error_monad.Error_monad.TzTrace.trace ]
+        Tezos_error_monad.Error_monad.TzTrace.trace
+    | `Getting_metadata_field of Message.t ]
 
   type t =
     { address: string
     ; id: int
     ; network: Network.t option
+    ; symbol: string option
+    ; name: string option
+    ; decimals: string option
+    ; tzip21: Content.Tzip_021.t
     ; warnings: (string * warning) list }
 
-  let make ?network ?(warnings = []) address id =
-    {address; id; network; warnings}
+  let make ?symbol ?name ?decimals ?network ~tzip21 ?(warnings = []) address id
+      =
+    {address; id; network; warnings; symbol; name; decimals; tzip21}
 
   let piece_of_metadata ?(json_type = `String) ~warn ~key ~metadata_map
       ~metadata_json =
@@ -802,16 +808,40 @@ module Token = struct
               | Error error, _ ->
                   warn "parsing-uri" (`Parsing_uri (u, error)) ;
                   Lwt.return_none ) )
-            >>= fun _ ->
+            >>= fun metadata_json ->
+            let piece_of_metadata ?json_type key =
+              piece_of_metadata ?json_type
+                ~warn:(fun k m -> warn k (`Getting_metadata_field m))
+                ~key ~metadata_map:key_values ~metadata_json in
+            let symbol = piece_of_metadata "symbol" in
+            let name =
+              match piece_of_metadata "name" with
+              | Some "" ->
+                  warn "name-is-empty"
+                    (`Getting_metadata_field
+                      Message.(
+                        t "The" %% ct "name" %% t "field is the empty string.")) ;
+                  None
+              | o -> o in
+            let decimals = piece_of_metadata ~json_type:`Int "decimals" in
+            let tzip21, _ =
+              Content.Tzip_021.from_extras
+                ( List.map key_values ~f:Result.return
+                @
+                match metadata_json with
+                | None -> []
+                | Some (_, `O l) ->
+                    let f = function
+                      | `String s -> s
+                      | `Float f -> Float.to_string f
+                      | `Bool b -> Bool.to_string b
+                      | other -> Ezjsonm.value_to_string other in
+                    List.map l ~f:(fun (k, v) -> Ok (k, f v))
+                | Some (_, _) -> [] ) in
             Lwt.return
-              (make ~network:node.Query_nodes.Node.network address id
+              (make ?symbol ?name ?decimals ~tzip21
+                 ~network:node.Query_nodes.Node.network address id
                  ~warnings:!warnings)
-            (* Decorate_error.raise
-               Message.(
-                 t "WIP"
-                 %% Fmt.kstr t "%a"
-                      Fmt.Dump.(list (pair string string))
-                      key_values *)
         | other ->
             Decorate_error.raise
               Message.(

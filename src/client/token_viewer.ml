@@ -25,16 +25,72 @@ let go_action ctxt ~wip =
         >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) ;
   ()
 
-let show_token ctxt Contract_metadata.Token.{address; id; warnings; network} =
+let show_token ctxt
+    Contract_metadata.Token.
+      {address; id; warnings; network; symbol; name; decimals; tzip21} =
   let open Meta_html in
-  h3
-    ( t "Token"
-    %% Fmt.kstr ct "%s/%d" address id
-    %% parens
-         ( t "on"
-         %% t
-              (Option.value_map ~f:Network.to_string ~default:"unknown network"
-                 network) ) )
+  let open Contract_metadata.Content.Tzip_021 in
+  let warning = function
+    | `Fetching_uri (uri, e) ->
+        t "Fetching URI" %% ct uri %% Errors_html.exception_html ctxt e
+    | `Parsing_uri (uri, err) ->
+        t "Parsing URI" %% ct uri %% Tezos_html.error_trace ctxt err
+    | `Getting_metadata_field m ->
+        t "Parsing metadata" %% Message_html.render ctxt m in
+  let warnings = List.map warnings ~f:(fun (k, v) -> (k, warning v)) in
+  let metaname =
+    match (name, symbol, tzip21.prefers_symbol) with
+    | _, Some s, Some true -> bt s
+    | Some n, _, _ -> bt n
+    | None, _, _ -> Fmt.kstr ct "%s/%d" address id in
+  let or_empty o f = match o with None -> empty () | Some o -> f o in
+  let metadescription = or_empty tzip21.description it in
+  let multimedia =
+    let choice =
+      match (tzip21.artifact, tzip21.display, tzip21.thumbnail) with
+      | Some a, _, _ -> Some ("Artifact", a)
+      | _, Some a, _ -> Some ("Display", a)
+      | _, _, Some a -> Some ("Thumbnail", a)
+      | _ -> None in
+    or_empty choice (fun (title, uri) ->
+        Tezos_html.multimedia_from_tzip16_uri ctxt ~title
+          ~mime_types:(uri_mime_types tzip21) ~uri) in
+  let creators =
+    or_empty tzip21.creators (function
+      | [] -> bt "Creators list is explicitly empty."
+      | [one] -> bt "Creator:" %% it one
+      | sl -> bt "Creators:" %% itemize (List.map sl ~f:it)) in
+  let tags =
+    or_empty tzip21.tags (fun sl ->
+        bt "Tags:"
+        %% list
+             (oxfordize_list sl
+                ~map:(fun t -> ct t)
+                ~sep:(fun () -> t ", ")
+                ~last_sep:(fun () -> t ", and "))) in
+  let main_content =
+    h3
+      ( metaname
+      %% i
+           (parens
+              ( t "on"
+              %% t
+                   (Option.value_map ~f:Network.to_string
+                      ~default:"unknown network" network) )) )
+    % multimedia
+    % Bootstrap.p_lead metadescription
+    % div creators % div tags in
+  Bootstrap.bordered
+    ~a:[style "padding: 3em; margin-left: auto"]
+    ~kind:`Primary main_content
+  % Bootstrap.Collapse.(
+      fixed_width_reactive_button_with_div_below (make ()) ~kind:`Secondary
+        ~width:(* Same as async_work *) "12em")
+      ~button:(function
+        | true -> t "Show token details" | false -> t "Hide details")
+      (fun () ->
+        Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
+          ~id ~warnings)
 
 let render ctxt =
   let open Meta_html in
