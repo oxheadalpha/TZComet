@@ -390,6 +390,32 @@ module Content = struct
     logf "Token-Metadata big-map: %s" (Z.to_string tmbm_id) ;
     Lwt.return tmbm_id
 
+  let call_view_from_string (ctxt : _ Context.t) view ~address ~parameter_string
+      ~log =
+    let open Lwt.Infix in
+    let parameter =
+      let open Michelson in
+      parse_micheline_exn ~check_indentation:false parameter_string
+        ~check_primitives:false in
+    Query_nodes.call_off_chain_view ctxt ~log ~address ~view ~parameter
+    >>= function
+    | Ok (result, _) -> Lwt.return (Ok result) | Error s -> Lwt.return (Error s)
+
+  let call_view_or_fail ctxt view ~parameter_string ~address ~log =
+    let open Lwt.Infix in
+    call_view_from_string ctxt view ~address ~parameter_string ~log
+    >>= function
+    | Ok o -> Lwt.return o
+    | Error s -> Decorate_error.raise Message.(t "Calling view failed" %% ct s)
+
+  let maybe_call_view ctxt view_validation ~parameter_string ~address ~log =
+    let open Lwt.Infix in
+    match view_validation with
+    | Invalid _ | Missing | No_michelson_implementation _ -> Lwt.return_none
+    | Valid (_, view) ->
+        call_view_from_string ctxt view ~parameter_string ~address ~log
+        >>= fun res -> Lwt.return_some res
+
   let classify : ?token_metadata_big_map:Z.t -> metadata -> classified =
     let open Metadata_contents in
     let looks_like_tzip_12 ?token_metadata_big_map ~found metadata =
@@ -656,6 +682,67 @@ module Token = struct
 
   let make ?network ?(warnings = []) address id =
     {address; id; network; warnings}
+
+  let piece_of_metadata ?(json_type = `String) ~warn ~key ~metadata_map
+      ~metadata_json =
+    let in_json =
+      match metadata_json with
+      | None -> None
+      | Some (_, `O l) -> (
+        match
+          ( List.filter_map l ~f:(function
+              | k, v when String.equal k key -> Some v
+              | _ -> None)
+          , json_type )
+        with
+        | [], _ -> None
+        | [`String one], `String -> Some one
+        | [`Float one], `Int -> Some (Float.to_int one |> Int.to_string)
+        | (`String one :: _ as more), `String ->
+            warn
+              (Fmt.str "fields-of-object-at-%s" key)
+              Message.(
+                t "Token-metadata URI objects has"
+                %% Fmt.kstr ct "%d" (List.length more)
+                %% t "fields called" %% Fmt.kstr ct "%S" key) ;
+            Some one
+        | (`Float one :: _ as more), `Int ->
+            warn
+              (Fmt.str "fields-of-object-at-%s" key)
+              Message.(
+                t "Token-metadata URI objects has"
+                %% Fmt.kstr ct "%d" (List.length more)
+                %% t "fields called" %% Fmt.kstr ct "%S" key) ;
+            Some (Float.to_int one |> Int.to_string)
+        | other :: _, _ ->
+            warn
+              (Fmt.str "type-of-field-of-object-at-%s" key)
+              Message.(
+                t "Token-metadata URI points a JSON where field"
+                %% Fmt.kstr ct "%S" key %% t "has the wrong type:"
+                %% ct (Ezjsonm.value_to_string other)) ;
+            None )
+      | Some (uri, other) ->
+          warn
+            (Fmt.str "uri-wrong-json-%s" uri)
+            Message.(
+              t "Metadata URI" %% ct uri
+              %% t "does not point at a JSON object, I got:"
+              %% ct (Ezjsonm.value_to_string other)) ;
+          None in
+    match (List.Assoc.find ~equal:String.equal metadata_map key, in_json) with
+    | None, Some s -> Some s
+    | Some s, None -> Some s
+    | Some s, Some same when String.equal s same -> Some s
+    | Some s, Some ignored ->
+        warn
+          (Fmt.str "field-double-%s" key)
+          Message.(
+            t "Field" %% Fmt.kstr ct "%S" key
+            %% t "is defined twice differently:"
+            %% Fmt.kstr ct "%S" ignored) ;
+        Some s
+    | None, None -> None
 
   let fetch ctxt ~address ~id ~log =
     let open Lwt.Infix in
