@@ -201,8 +201,7 @@ let list_field name field f =
 
 let network (net : Network.t) =
   match net with
-  | `Edonet | `Florence_BA | `Florence_NoBA | `Delphinet | `Mainnet | `Sandbox
-    ->
+  | `Edonet | `Florencenet | `Delphinet | `Mainnet | `Sandbox ->
       it (Network.to_string net)
 
 let protocol s =
