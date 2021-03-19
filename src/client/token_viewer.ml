@@ -210,8 +210,11 @@ let render ctxt =
         [ row
             [ cell 2
                 (submit_button (t "Pick A Random Token") (fun () ->
-                     Reactive.set token_address "KT1todotododod" ;
-                     Reactive.set token_id "1.3"))
+                     List.random_element (State.Examples.tokens ctxt)
+                     |> Option.iter ~f:(fun ((add, id), _) ->
+                            Reactive.set token_address add ;
+                            Reactive.set token_id (Int.to_string id)) ;
+                     enter_action ()))
             ; cell 4
                 (input
                    ~placeholder:(Reactive.pure "Contract address")

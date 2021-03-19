@@ -328,6 +328,13 @@ module Examples = struct
     ; michelson_bytes: item list
     ; michelson_concretes: item list }
 
+  let aggl ?(dev = false) () =
+    let all = ref [] in
+    let add v desc = all := (v, desc) :: !all in
+    let add_dev v desc = if dev then add v desc else () in
+    let all () = List.rev !all in
+    (add, add_dev, all)
+
   let get state =
     let https_ok =
       "https://raw.githubusercontent.com/tqtezos/TZComet/8d95f7b/data/metadata_example0.json"
@@ -345,17 +352,11 @@ module Examples = struct
         (Uri.pct_encode https_ok) in
     dev_mode state
     |> Reactive.map ~f:(fun dev ->
-           let aggl () =
-             let all = ref [] in
-             let add v desc = all := (v, desc) :: !all in
-             let add_dev v desc = if dev then add v desc else () in
-             let all () = List.rev !all in
-             (add, add_dev, all) in
-           let kt1, kt1_dev, kt1_all = aggl () in
-           let uri, uri_dev, uri_all = aggl () in
-           let mtb, mtb_dev, mtb_all = aggl () in
-           let mby, mby_dev, mby_all = aggl () in
-           let tzc, tzc_dev, tzc_all = aggl () in
+           let kt1, kt1_dev, kt1_all = aggl ~dev () in
+           let uri, uri_dev, uri_all = aggl ~dev () in
+           let mtb, mtb_dev, mtb_all = aggl ~dev () in
+           let mby, mby_dev, mby_all = aggl ~dev () in
+           let tzc, tzc_dev, tzc_all = aggl ~dev () in
            let kt1_one_view = "KT1V8ghqePSqVW5jYC1T9zj2udQ6qZQjBqNf" in
            kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
              "Should not exist any where." ;
@@ -423,6 +424,24 @@ module Examples = struct
            ; metadata_blobs= mtb_all ()
            ; michelson_bytes= mby_all ()
            ; michelson_concretes= tzc_all () })
+
+  let tokens_global =
+    lazy
+      (let tok, _, tok_all = aggl () in
+       let _ =
+         List.init 16 ~f:(fun idx ->
+             tok
+               ("KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc", idx)
+               (Fmt.str "The Alchememist Token #%d." idx)) in
+       let _ =
+         List.init 16 ~f:(fun idx ->
+             let idx = idx + 3000 in
+             tok
+               ("KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", idx)
+               (Fmt.str "The HicEtNunc Token #%d." idx)) in
+       tok_all ())
+
+  let tokens (_ : _ Context.t) = Lazy.force tokens_global
 end
 
 module Metadata_metadata = struct
