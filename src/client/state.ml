@@ -93,13 +93,6 @@ module Fragment = struct
 
   let parse fragment =
     let uri = Uri.of_string (Uri.pct_decode fragment) in
-    let pagename = Uri.path uri |> String.chop_prefix_if_exists ~prefix:"/" in
-    let page =
-      List.find all_in_order ~f:(fun page ->
-          String.equal
-            (String.lowercase (Page.to_string page))
-            (pagename |> String.lowercase))
-      |> Option.value ~default:Explorer in
     let query = Uri.query uri in
     let in_query = List.Assoc.find ~equal:String.equal query in
     let true_in_query q =
@@ -121,14 +114,30 @@ module Fragment = struct
     let editor_load = true_in_query "load-storage" in
     let editor_input =
       match in_query "editor-input" with Some [one] -> one | _ -> "" in
-    let token_address, token_id =
-      match in_query "token" with
-      | Some [one] -> (
-        match String.split one ~on:'/' with
-        | [k] -> (k, "0")
-        | [k; t] -> (k, t)
-        | _ -> ("", "") )
-      | _ -> ("", "") in
+    let page, (token_address, token_id) =
+      let path_split =
+        Uri.path uri
+        |> String.chop_prefix_if_exists ~prefix:"/"
+        |> String.split ~on:'/' in
+      let token_in_query () =
+        match in_query "token" with
+        | Some [one] -> (
+          match String.split one ~on:'/' with
+          | [k] -> (k, "0")
+          | [k; t] -> (k, t)
+          | _ -> ("", "") )
+        | _ -> ("", "") in
+      match path_split with
+      | [pagename] ->
+          let page =
+            List.find all_in_order ~f:(fun page ->
+                String.equal
+                  (String.lowercase (Page.to_string page))
+                  (pagename |> String.lowercase))
+            |> Option.value ~default:Explorer in
+          (page, token_in_query ())
+      | ["token"; addr; id] -> (Token_viewer, (addr, id))
+      | _ -> (Explorer, token_in_query ()) in
     ( System.create ~dev_mode ()
     , { page= Reactive.var (`Page page)
       ; explorer_input= Reactive.var explorer_input
