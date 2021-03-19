@@ -72,34 +72,51 @@ let show_token ctxt
                 | true ->
                     Fmt.kstr t "Show %s (potentially NSFW)"
                       ( match mm.format with
+                      | `Image, "svg+xml" -> "Vector Graphics"
                       | `Image, _ -> "Image"
                       | `Video, _ -> "Video" )
                 | false -> t "Hide Multimedia")
               f in
+        let wrap_mm c =
+          div c
+            ~a:
+              [ style
+                  (* Can seem to limit the height and keeping the
+                     images “inside”: *)
+                  "max-width: 40vw; /*max-height: 60vh;*/ padding: 3em; \
+                   margin: auto; width: 100%; height: 100%" ] in
+        let mm_style =
+          "height: 100%; width: 100%; object-fit: contain"
+          (* "max-width: 100%; max-height: 100%" *) in
         maybe_censor (fun () ->
             match mm.format with
             | `Image, "svg+xml" ->
-                link ~target:mm.converted_uri
-                  (H5.object_
-                     ~a:
-                       [ H5.a_mime_type (Lwd.pure "image/svg+xml")
-                       ; H5.a_data (Lwd.pure mm.converted_uri) ]
-                     [ H5.img ~a:[style "max-width: 100%"]
-                         ~alt:
-                           (Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
-                         ~src:(Lwd.pure mm.converted_uri)
-                         () ])
+                wrap_mm
+                  (link ~target:mm.converted_uri
+                     (H5.object_
+                        ~a:
+                          [ H5.a_mime_type (Lwd.pure "image/svg+xml")
+                          ; H5.a_data (Lwd.pure mm.converted_uri) ]
+                        [ H5.img ~a:[style mm_style]
+                            ~alt:
+                              (Fmt.kstr Lwd.pure "%s at %s" title
+                                 mm.converted_uri)
+                            ~src:(Lwd.pure mm.converted_uri)
+                            () ]))
             | `Image, _ ->
-                link ~target:mm.converted_uri
-                  (H5.img ~a:[style "max-width: 100%"]
-                     ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
-                     ~src:(Lwd.pure mm.converted_uri)
-                     ())
+                wrap_mm
+                  (link ~target:mm.converted_uri
+                     (H5.img ~a:[style mm_style]
+                        ~alt:
+                          (Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
+                        ~src:(Lwd.pure mm.converted_uri)
+                        ()))
             | `Video, _ ->
-                H5.video
-                  ~a:[H5.a_controls (); style "max-width: 100%"]
-                  ~src:(Lwd.pure mm.converted_uri)
-                  [])
+                wrap_mm
+                  (H5.video
+                     ~a:[H5.a_controls (); style mm_style]
+                     ~src:(Lwd.pure mm.converted_uri)
+                     []))
     (* Tezos_html.multimedia_from_tzip16_uri ctxt ~title
        ~mime_types:(uri_mime_types tzip21) ~uri) *) in
   let creators =
@@ -114,9 +131,10 @@ let show_token ctxt
              (oxfordize_list sl
                 ~map:(fun t -> ct t)
                 ~sep:(fun () -> t ", ")
-                ~last_sep:(fun () -> t ", and "))) in
+                ~last_sep:(fun () -> t ", "))) in
   let main_content =
     h3
+      ~a:[style "text-align: center"]
       ( metaname
       %% i
            (parens
