@@ -404,11 +404,31 @@ module Ezjsonm = struct
 end
 
 module Blob = struct
-  let guess_format s =
+  module Format = struct
+    type t = [`Image | `Video] * string
+
+    let gif = (`Image, "gif")
+    let jpeg = (`Image, "jpeg")
+    let png = (`Image, "png")
+
+    let of_mime_exn = function
+      | image when String.is_prefix image ~prefix:"image/" ->
+          (`Image, String.chop_prefix_exn image ~prefix:"image/")
+      | vid when String.is_prefix vid ~prefix:"video/" ->
+          (`Video, String.chop_prefix_exn vid ~prefix:"video/")
+      | other -> Fmt.failwith "Unknown MIME type: %S" other
+
+    let to_mime = function
+      | `Image, f -> "image/" ^ f
+      | `Video, f -> "video/" ^ f
+  end
+
+  let guess_format s : Format.t option =
     (* https://stackoverflow.com/questions/55869/determine-file-type-of-an-image
        https://en.wikipedia.org/wiki/JPEG *)
+    let open Format in
     let prefixes =
-      [("\255\216\255", `Jpeg); ("\137\080\078\071", `Png); ("GIF", `Gif)] in
+      [("\255\216\255", jpeg); ("\137\080\078\071", png); ("GIF", gif)] in
     List.find_map prefixes ~f:(fun (prefix, fmt) ->
         if String.is_prefix s ~prefix then Some fmt else None)
 end

@@ -413,3 +413,19 @@ module Examples = struct
            ; michelson_bytes= mby_all ()
            ; michelson_concretes= tzc_all () })
 end
+
+module Metadata_metadata = struct
+  let alchememist =
+    List.map
+      [ "ipfs://QmeayPYZeicG1MJSKoVnVM54qafYcvCCZbYLZuNdg36GWF"
+      ; "ipfs://QmXmktVYyJ3AtzsDYAZCgpbL9MtPGv2U95wECaXcRL3Cqv" ] ~f:(fun uri ->
+        (Blob.Format.jpeg, uri))
+
+  let static_sfw_multimedia : (Blob.Format.t * string) list = alchememist
+
+  let sfw_multimedia (ctxt : _ Context.t) uri =
+    Lwt.return
+      (List.find_map static_sfw_multimedia ~f:(function
+        | fmt, k when String.equal k uri -> Some fmt
+        | _ -> None))
+end

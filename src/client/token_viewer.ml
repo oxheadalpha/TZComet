@@ -27,7 +27,15 @@ let go_action ctxt ~wip =
 
 let show_token ctxt
     Contract_metadata.Token.
-      {address; id; warnings; network; symbol; name; decimals; tzip21} =
+      { address
+      ; id
+      ; warnings
+      ; network
+      ; symbol
+      ; name
+      ; decimals
+      ; main_multimedia
+      ; tzip21 } =
   let open Meta_html in
   let open Contract_metadata.Content.Tzip_021 in
   let warning = function
@@ -46,15 +54,54 @@ let show_token ctxt
   let or_empty o f = match o with None -> empty () | Some o -> f o in
   let metadescription = or_empty tzip21.description it in
   let multimedia =
-    let choice =
-      match (tzip21.artifact, tzip21.display, tzip21.thumbnail) with
-      | Some a, _, _ -> Some ("Artifact", a)
-      | _, Some a, _ -> Some ("Display", a)
-      | _, _, Some a -> Some ("Thumbnail", a)
-      | _ -> None in
-    or_empty choice (fun (title, uri) ->
-        Tezos_html.multimedia_from_tzip16_uri ctxt ~title
-          ~mime_types:(uri_mime_types tzip21) ~uri) in
+    match main_multimedia with
+    | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
+    | Some (Error exn) ->
+        Bootstrap.alert ~kind:`Danger
+          ( t "Error while getting multimedia content:"
+          %% Errors_html.exception_html ctxt exn )
+    | Some (Ok (title, mm)) ->
+        let open Contract_metadata.Multimedia in
+        let maybe_censor f =
+          if mm.sfw then f ()
+          else
+            Bootstrap.Collapse.(
+              fixed_width_reactive_button_with_div_below (make ())
+                ~kind:`Secondary ~width:"100%")
+              ~button:(function
+                | true ->
+                    Fmt.kstr t "Show %s (potentially NSFW)"
+                      ( match mm.format with
+                      | `Image, _ -> "Image"
+                      | `Video, _ -> "Video" )
+                | false -> t "Hide Multimedia")
+              f in
+        maybe_censor (fun () ->
+            match mm.format with
+            | `Image, "svg+xml" ->
+                link ~target:mm.converted_uri
+                  (H5.object_
+                     ~a:
+                       [ H5.a_mime_type (Lwd.pure "image/svg+xml")
+                       ; H5.a_data (Lwd.pure mm.converted_uri) ]
+                     [ H5.img ~a:[style "max-width: 100%"]
+                         ~alt:
+                           (Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
+                         ~src:(Lwd.pure mm.converted_uri)
+                         () ])
+            | `Image, _ ->
+                link ~target:mm.converted_uri
+                  (H5.img ~a:[style "max-width: 100%"]
+                     ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
+                     ~src:(Lwd.pure mm.converted_uri)
+                     ())
+            | `Video, _ ->
+                H5.video
+                  ~a:[H5.a_controls (); style "max-width: 100%"]
+                  ~src:(Lwd.pure mm.converted_uri)
+                  [])
+    (* Tezos_html.multimedia_from_tzip16_uri ctxt ~title
+       ~mime_types:(uri_mime_types tzip21) ~uri) *) in
   let creators =
     or_empty tzip21.creators (function
       | [] -> bt "Creators list is explicitly empty."
@@ -78,10 +125,18 @@ let show_token ctxt
                    (Option.value_map ~f:Network.to_string
                       ~default:"unknown network" network) )) )
     % multimedia
+    (* % p
+        (Fmt.kstr t "mm: %a"
+           Fmt.(
+             option
+               (result
+                  ~ok:(pair string Contract_metadata.Multimedia.pp)
+                  ~error:Exn.pp))
+           main_multimedia) *)
     % Bootstrap.p_lead metadescription
     % div creators % div tags in
   Bootstrap.bordered
-    ~a:[style "padding: 3em; margin-left: auto"]
+    ~a:[style "padding: 3em; border: solid 3px #aaa"; classes ["col-8"]]
     ~kind:`Primary main_content
   % Bootstrap.Collapse.(
       fixed_width_reactive_button_with_div_below (make ()) ~kind:`Secondary

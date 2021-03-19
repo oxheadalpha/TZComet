@@ -543,10 +543,8 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                     let format = Blob.guess_format content in
                     let content_type =
                       match format with
-                      | Some `Png -> "image/png"
-                      | Some `Jpeg -> "image/jpeg"
-                      | Some `Gif -> "image/gif"
-                      | None ->
+                      | Some ((`Image, _) as f) -> Blob.Format.to_mime f
+                      | _ ->
                           Async_work.log result
                             (bt "WARNING: Cannot guess content type …") ;
                           "image/jpeg" in
@@ -561,16 +559,8 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                               i
                                 ( t "Could not guess the format, so went with"
                                 %% ct content_type % t "." )
-                          | Some f ->
-                              i
-                                ( t "Guessed format"
-                                %% bt
-                                     ( match f with
-                                     | `Jpeg -> "JPEG"
-                                     | `Png -> "PNG"
-                                     | `Gif -> "GIF" )
-                                %% parens (t "content-type:" %% ct content_type)
-                                ) )
+                          | Some _ -> i (t "Guessed format" %% bt content_type)
+                          )
                       %% link ~target:src
                            (H5.img
                               ~a:[H5.a_style (Lwd.pure "max-height: 500px")]

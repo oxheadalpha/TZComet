@@ -666,6 +666,75 @@ module Content = struct
   end
 end
 
+module Multimedia = struct
+  type t = {uri: string; converted_uri: string; sfw: bool; format: Blob.Format.t}
+
+  let pp ppf t =
+    let open Fmt in
+    pf ppf "{%s@ %s@ %s[%s]}" t.uri
+      (Blob.Format.to_mime t.format)
+      ( try String.sub t.converted_uri ~pos:0 ~len:10 ^ "..."
+        with _ -> t.converted_uri )
+      (if t.sfw then "SFW" else "NSFW")
+
+  let prepare_and_guess ~mime_types (ctxt : _ Context.t) ~uri ~log =
+    let open Lwt.Infix in
+    (* let rec first_some = function
+         | [] -> Lwt.return_none
+         | f :: t -> (
+             f () >>= function Some s -> Lwt.return_some s | None -> first_some t )
+       in *)
+    let found ~format ?(sfw = false) ~converted uri =
+      Lwt.return {uri; sfw; format; converted_uri= converted} in
+    let known_mime_type = List.Assoc.find mime_types ~equal:String.equal uri in
+    let failf fmt =
+      Fmt.kstr
+        (fun s ->
+          Decorate_error.raise
+            Message.(
+              t "Preparing and guess format for" %% ct uri % t ":" %% t s))
+        fmt in
+    let convert ~format uri =
+      let open Uri in
+      match validate uri with
+      | Ok uri16, _ -> (
+        match (to_web_address ctxt uri16, format) with
+        | Some s, Some f -> Lwt.return (f, s)
+        | Some s, None ->
+            (* TODO: fetch for format *)
+            failf "No-format but web-address not implemented"
+        | None, _ ->
+            Lwt.catch
+              (fun () ->
+                fetch ctxt uri16 ~log
+                >>= fun content ->
+                let format = Blob.guess_format content in
+                match format with
+                | Some format ->
+                    let content_type = Blob.Format.to_mime format in
+                    let src =
+                      Fmt.str "data:%s;base64,%s" content_type
+                        (Base64.encode_exn ~pad:true
+                           ~alphabet:Base64.default_alphabet content) in
+                    Lwt.return (format, src)
+                | None -> failf "could not guess the format of the content")
+              (function
+                | Decorate_error.E _ as e -> raise e
+                | other -> failf "failed to fetch the URI: %a" Exn.pp other)
+            (* Decorate_error.raise
+                           Message.(t
+                        raise (mkexn (Errors_html.exception_html ctxt e)))
+                    >>= fun content -> *) )
+      | Error e, _ ->
+          failf "failed to validate the URI: %a"
+            Tezos_error_monad.Error_monad.pp_print_error e in
+    State.Metadata_metadata.sfw_multimedia ctxt uri
+    >>= fun format ->
+    let sfw = Option.is_some format in
+    convert uri ~format:(Option.first_some format known_mime_type)
+    >>= fun (format, converted) -> found ~converted ~format ~sfw uri
+end
+
 module Token = struct
   type warning =
     [ `Fetching_uri of string * exn
@@ -683,11 +752,20 @@ module Token = struct
     ; name: string option
     ; decimals: string option
     ; tzip21: Content.Tzip_021.t
+    ; main_multimedia: (string * Multimedia.t, exn) Result.t Option.t
     ; warnings: (string * warning) list }
 
-  let make ?symbol ?name ?decimals ?network ~tzip21 ?(warnings = []) address id
-      =
-    {address; id; network; warnings; symbol; name; decimals; tzip21}
+  let make ?symbol ?name ?decimals ?network ?main_multimedia ~tzip21
+      ?(warnings = []) address id =
+    { address
+    ; id
+    ; network
+    ; warnings
+    ; symbol
+    ; name
+    ; decimals
+    ; main_multimedia
+    ; tzip21 }
 
   let piece_of_metadata ?(json_type = `String) ~warn ~key ~metadata_map
       ~metadata_json =
@@ -838,8 +916,29 @@ module Token = struct
                       | other -> Ezjsonm.value_to_string other in
                     List.map l ~f:(fun (k, v) -> Ok (k, f v))
                 | Some (_, _) -> [] ) in
+            let multimedia_choice =
+              match (tzip21.artifact, tzip21.display, tzip21.thumbnail) with
+              | Some a, _, _ -> Some ("Artifact", a)
+              | _, Some a, _ -> Some ("Display", a)
+              | _, _, Some a -> Some ("Thumbnail", a)
+              | _ -> None in
+            ( match multimedia_choice with
+            | None -> Lwt.return_none
+            | Some (title, uri) ->
+                Lwt.catch
+                  (fun () ->
+                    Multimedia.prepare_and_guess ~uri ~log ctxt
+                      ~mime_types:
+                        ( Content.Tzip_021.uri_mime_types tzip21
+                        |> List.filter_map ~f:(fun (u, m) ->
+                               Option.try_with (fun () ->
+                                   (u, Blob.Format.of_mime_exn m))) )
+                    >>= fun mm -> Lwt.return_ok (title, mm))
+                  (fun exn -> Lwt.return_error exn)
+                >|= Option.some )
+            >>= fun main_multimedia ->
             Lwt.return
-              (make ?symbol ?name ?decimals ~tzip21
+              (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia
                  ~network:node.Query_nodes.Node.network address id
                  ~warnings:!warnings)
         | other ->
