@@ -697,6 +697,11 @@ module Multimedia = struct
             Message.(
               t "Preparing and guess format for" %% ct uri % t ":" %% t s))
         fmt in
+    let guess_format content =
+      let format = Blob.guess_format content in
+      match format with
+      | Some format -> Lwt.return format
+      | None -> failf "could not guess the format of the content" in
     let convert ~format uri =
       let open Uri in
       match validate uri with
@@ -705,22 +710,22 @@ module Multimedia = struct
         | Some s, Some f -> Lwt.return (f, s)
         | Some s, None ->
             (* TODO: fetch for format *)
-            failf "No-format but web-address not implemented"
+            fetch ~limit_bytes:128 ctxt uri16 ~log
+            >>= fun content ->
+            guess_format content >>= fun format -> Lwt.return (format, s)
         | None, _ ->
             Lwt.catch
               (fun () ->
                 fetch ctxt uri16 ~log
                 >>= fun content ->
-                let format = Blob.guess_format content in
-                match format with
-                | Some format ->
-                    let content_type = Blob.Format.to_mime format in
-                    let src =
-                      Fmt.str "data:%s;base64,%s" content_type
-                        (Base64.encode_exn ~pad:true
-                           ~alphabet:Base64.default_alphabet content) in
-                    Lwt.return (format, src)
-                | None -> failf "could not guess the format of the content")
+                guess_format content
+                >>= fun format ->
+                let content_type = Blob.Format.to_mime format in
+                let src =
+                  Fmt.str "data:%s;base64,%s" content_type
+                    (Base64.encode_exn ~pad:true
+                       ~alphabet:Base64.default_alphabet content) in
+                Lwt.return (format, src))
               (function
                 | Decorate_error.E _ as e -> raise e
                 | other -> failf "failed to fetch the URI: %a" Exn.pp other)
