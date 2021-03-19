@@ -695,7 +695,7 @@ module Multimedia = struct
         (fun s ->
           Decorate_error.raise
             Message.(
-              t "Preparing and guess format for" %% ct uri % t ":" %% t s))
+              t "Preparing and guessing format for" %% ct uri % t ":" %% t s))
         fmt in
     let guess_format content =
       let format = Blob.guess_format content in
@@ -836,13 +836,17 @@ module Token = struct
         Some s
     | None, None -> None
 
-  let fetch ctxt ~address ~id ~log =
+  let fetch (ctxt : _ Context.t) ~address ~id ~log =
     let open Lwt.Infix in
     let logs prefix msg = log Message.(t prefix %% t "👉" %% t msg) in
     let warnings = ref [] in
     let warn k e =
       if List.exists !warnings ~f:(fun (key, _) -> String.equal key k) then ()
       else warnings := (k, e) :: !warnings in
+    let failm msg =
+      Decorate_error.raise
+        Message.(Fmt.kstr t "Fetching %s/%d:" address id %% msg) in
+    Uri.Fetcher.set_current_contract ctxt address ;
     Lwt.catch
       (fun () ->
         Content.token_metadata_value ctxt ~address ~key:""
@@ -852,106 +856,157 @@ module Token = struct
         log Message.(t "Attempt at getting a %token_metadata big-map failed.") ;
         Lwt.return_none)
     >>= fun token_metadata_big_map ->
-    match token_metadata_big_map with
-    | None ->
-        Decorate_error.raise
-          Message.(t "Non-straightforward tokens:" %% ct "NOT IMPLEMENTED")
-    | Some big_map_id -> (
-        let log = logs "Fetching metadata from big-map" in
-        Query_nodes.find_node_with_contract ctxt address
-        >>= fun node ->
-        Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
-        Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node ~log
-          ~big_map_id ~key:id
-        >>= function
-        | Prim (_, "Pair", [_; full_map], _) ->
-            let key_values =
-              Michelson.Partial_type.micheline_string_bytes_map_exn full_map
-            in
-            let get l ~k = List.Assoc.find l k ~equal:String.equal in
-            let _get_exn l ~k =
-              match get l ~k with
-              | Some s -> s
-              | None ->
-                  Decorate_error.raise
-                    Message.(
-                      t "Could not find piece-of-metadata at key" %% ct k) in
-            let uri = get key_values ~k:"" in
-            ( match uri with
-            | None -> Lwt.return_none
-            | Some u -> (
-              match Uri.validate u with
-              | Ok uri, _ ->
-                  Lwt.catch
-                    (fun () ->
-                      Uri.fetch ctxt uri ~log:(fun s ->
-                          Fmt.kstr log "Fetching %s" u)
-                      >>= fun s ->
-                      Lwt.return_some (u, Ezjsonm.value_from_string s))
-                    (fun exn ->
-                      warn "fetch-uri" (`Fetching_uri (u, exn)) ;
-                      Lwt.return_none)
-              | Error error, _ ->
-                  warn "parsing-uri" (`Parsing_uri (u, error)) ;
-                  Lwt.return_none ) )
-            >>= fun metadata_json ->
-            let piece_of_metadata ?json_type key =
-              piece_of_metadata ?json_type
-                ~warn:(fun k m -> warn k (`Getting_metadata_field m))
-                ~key ~metadata_map:key_values ~metadata_json in
-            let symbol = piece_of_metadata "symbol" in
-            let name =
-              match piece_of_metadata "name" with
-              | Some "" ->
-                  warn "name-is-empty"
-                    (`Getting_metadata_field
-                      Message.(
-                        t "The" %% ct "name" %% t "field is the empty string.")) ;
-                  None
-              | o -> o in
-            let decimals = piece_of_metadata ~json_type:`Int "decimals" in
-            let tzip21, _ =
-              Content.Tzip_021.from_extras
-                ( List.map key_values ~f:Result.return
-                @
-                match metadata_json with
-                | None -> []
-                | Some (_, `O l) ->
-                    let f = function
-                      | `String s -> s
-                      | `Float f -> Float.to_string f
-                      | `Bool b -> Bool.to_string b
-                      | other -> Ezjsonm.value_to_string other in
-                    List.map l ~f:(fun (k, v) -> Ok (k, f v))
-                | Some (_, _) -> [] ) in
-            let multimedia_choice =
-              match (tzip21.artifact, tzip21.display, tzip21.thumbnail) with
-              | Some a, _, _ -> Some ("Artifact", a)
-              | _, Some a, _ -> Some ("Display", a)
-              | _, _, Some a -> Some ("Thumbnail", a)
-              | _ -> None in
-            ( match multimedia_choice with
-            | None -> Lwt.return_none
-            | Some (title, uri) ->
-                Lwt.catch
-                  (fun () ->
-                    Multimedia.prepare_and_guess ~uri ~log ctxt
-                      ~mime_types:
-                        ( Content.Tzip_021.uri_mime_types tzip21
-                        |> List.filter_map ~f:(fun (u, m) ->
-                               Option.try_with (fun () ->
-                                   (u, Blob.Format.of_mime_exn m))) )
-                    >>= fun mm -> Lwt.return_ok (title, mm))
-                  (fun exn -> Lwt.return_error exn)
-                >|= Option.some )
-            >>= fun main_multimedia ->
-            Lwt.return
-              (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia
-                 ~network:node.Query_nodes.Node.network address id
-                 ~warnings:!warnings)
-        | other ->
-            Decorate_error.raise
+    let get_token_metadata_map_with_view () =
+      Query_nodes.metadata_value ctxt ~address ~key:"" ~log:(logs "Getting URI")
+      >>= fun metadata_uri ->
+      let uri =
+        match Uri.validate metadata_uri with
+        | Ok uri, _ -> uri
+        | Error error, _ ->
+            failm
               Message.(
-                t "Metadata result has wrong structure:"
-                %% ct (Michelson.micheline_node_to_string other)) )
+                t "failed to parse/validate the metadata URI:"
+                %% Fmt.kstr ct "%a" Tezos_error_monad.Error_monad.pp_print_error
+                     error) in
+      Uri.fetch ctxt uri ~log:(logs "Fetching Metadata")
+      >>= fun json_code ->
+      let open Tezos_contract_metadata.Metadata_contents in
+      let metadata =
+        match Content.of_json json_code with
+        | Ok (_, con) -> con
+        | Error error ->
+            failm
+              Message.(
+                t "failed to parse/validate the metadata URI:"
+                %% Fmt.kstr ct "%a" Tezos_error_monad.Error_monad.pp_print_error
+                     error) in
+      let total_supply_validation, token_metadata_validation =
+        match Content.classify ?token_metadata_big_map metadata with
+        | Tzip_16 t ->
+            failm
+              Message.(
+                t "This is not a TZIP-012 token at all. See interfaces claimed:"
+                %% list
+                     (oxfordize_list ~map:ct
+                        ~sep:(fun () -> t ", ")
+                        ~last_sep:(fun () -> t ", and ")
+                        metadata.interfaces))
+        | Tzip_12
+            { metadata
+            ; interface_claim
+            ; get_balance
+            ; total_supply
+            ; all_tokens
+            ; is_operator
+            ; token_metadata
+            ; permissions_descriptor } ->
+            (total_supply, token_metadata) in
+      Content.maybe_call_view ctxt token_metadata_validation
+        ~parameter_string:(Int.to_string id) ~address ~log:logs in
+    let get_token_metadata_map_with_big_map ~log ~node big_map_id =
+      Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node ~log
+        ~big_map_id ~key:id in
+    let log = logs "Fetching token-metadata" in
+    Query_nodes.find_node_with_contract ctxt address
+    >>= fun node ->
+    Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
+    begin
+      match token_metadata_big_map with
+      | None -> (
+          get_token_metadata_map_with_view ()
+          >>= function
+          | Some (Ok s) -> Lwt.return s
+          | _ -> failm Message.(Fmt.kstr t "Token-metadata view failed.") )
+      | Some big_map_id ->
+          get_token_metadata_map_with_big_map ~log ~node big_map_id
+    end
+    >>= function
+    | Prim (_, "Pair", [_; full_map], _) ->
+        let key_values =
+          Michelson.Partial_type.micheline_string_bytes_map_exn full_map in
+        let get l ~k = List.Assoc.find l k ~equal:String.equal in
+        let _get_exn l ~k =
+          match get l ~k with
+          | Some s -> s
+          | None ->
+              Decorate_error.raise
+                Message.(t "Could not find piece-of-metadata at key" %% ct k)
+        in
+        let uri = get key_values ~k:"" in
+        ( match uri with
+        | None -> Lwt.return_none
+        | Some u -> (
+          match Uri.validate u with
+          | Ok uri, _ ->
+              Lwt.catch
+                (fun () ->
+                  Uri.fetch ctxt uri ~log:(fun s ->
+                      Fmt.kstr log "Fetching %s" u)
+                  >>= fun s -> Lwt.return_some (u, Ezjsonm.value_from_string s))
+                (fun exn ->
+                  warn "fetch-uri" (`Fetching_uri (u, exn)) ;
+                  Lwt.return_none)
+          | Error error, _ ->
+              warn "parsing-uri" (`Parsing_uri (u, error)) ;
+              Lwt.return_none ) )
+        >>= fun metadata_json ->
+        let piece_of_metadata ?json_type key =
+          piece_of_metadata ?json_type
+            ~warn:(fun k m -> warn k (`Getting_metadata_field m))
+            ~key ~metadata_map:key_values ~metadata_json in
+        let symbol = piece_of_metadata "symbol" in
+        let name =
+          match piece_of_metadata "name" with
+          | Some "" ->
+              warn "name-is-empty"
+                (`Getting_metadata_field
+                  Message.(
+                    t "The" %% ct "name" %% t "field is the empty string.")) ;
+              None
+          | o -> o in
+        let decimals = piece_of_metadata ~json_type:`Int "decimals" in
+        let tzip21, _ =
+          Content.Tzip_021.from_extras
+            ( List.map key_values ~f:Result.return
+            @
+            match metadata_json with
+            | None -> []
+            | Some (_, `O l) ->
+                let f = function
+                  | `String s -> s
+                  | `Float f -> Float.to_string f
+                  | `Bool b -> Bool.to_string b
+                  | other -> Ezjsonm.value_to_string other in
+                List.map l ~f:(fun (k, v) -> Ok (k, f v))
+            | Some (_, _) -> [] ) in
+        let multimedia_choice =
+          match (tzip21.artifact, tzip21.display, tzip21.thumbnail) with
+          | Some a, _, _ -> Some ("Artifact", a)
+          | _, Some a, _ -> Some ("Display", a)
+          | _, _, Some a -> Some ("Thumbnail", a)
+          | _ -> None in
+        ( match multimedia_choice with
+        | None -> Lwt.return_none
+        | Some (title, uri) ->
+            Lwt.catch
+              (fun () ->
+                Multimedia.prepare_and_guess ~uri ~log ctxt
+                  ~mime_types:
+                    ( Content.Tzip_021.uri_mime_types tzip21
+                    |> List.filter_map ~f:(fun (u, m) ->
+                           Option.try_with (fun () ->
+                               (u, Blob.Format.of_mime_exn m))) )
+                >>= fun mm -> Lwt.return_ok (title, mm))
+              (fun exn -> Lwt.return_error exn)
+            >|= Option.some )
+        >>= fun main_multimedia ->
+        Lwt.return
+          (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia
+             ~network:node.Query_nodes.Node.network address id
+             ~warnings:!warnings)
+    | other ->
+        Decorate_error.raise
+          Message.(
+            t "Metadata result has wrong structure:"
+            %% ct (Michelson.micheline_node_to_string other))
 end
