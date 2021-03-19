@@ -164,16 +164,15 @@ let linkify_text s =
            ct handle
            % sup
                (let handle = String.chop_prefix_exn handle ~prefix:"@" in
+                let img_a = [style "max-height: 0.9em"] in
                 link
                   ~target:(Fmt.str "https://twitter.com/%s" handle)
-                  (H5.img
-                     ~a:[style "max-height: 0.8em"]
-                     ~src:(Lwd.pure twitter_icon) ~alt:(Lwd.pure "Twitter") ())
+                  (H5.img ~a:img_a ~src:(Lwd.pure twitter_icon)
+                     ~alt:(Lwd.pure "Twitter") ())
+                % t " "
                 % link
                     ~target:(Fmt.str "https://instagram.com/%s" handle)
-                    (H5.img
-                       ~a:[style "max-height: 0.8em"]
-                       ~src:(Lwd.pure instagram_icon)
+                    (H5.img ~a:img_a ~src:(Lwd.pure instagram_icon)
                        ~alt:(Lwd.pure "Instagram") ()))
        | tz_address
          when prefix_and_for_all ~prefix:"tz" ~for_all:is_twitter_handle
