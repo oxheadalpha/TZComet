@@ -83,11 +83,13 @@ module Fragment = struct
       | other -> ("editor-mode", [Editor_mode.to_string other]) :: query in
     let query =
       if editor_load then ("load-storage", ["true"]) :: query else query in
-    let query =
-      match (token_address, token_id) with
-      | "", _ -> query
-      | kt, id -> ("token", [Fmt.str "%s/%s" kt id]) :: query in
-    Uri.make () ~path:(page_to_path page) ~query
+    let path, query =
+      match (page, token_address, token_id) with
+      | _, "", "" -> (page_to_path page, query)
+      | Token_viewer, kt, id -> (Fmt.str "/token/%s/%s" kt id, query)
+      | _, kt, id ->
+          (page_to_path page, ("token", [Fmt.str "%s/%s" kt id]) :: query) in
+    Uri.make () ~path ~query
 
   let change_for_page t page = Uri.with_path t (page_to_path page)
 
