@@ -83,7 +83,7 @@ let show_token ctxt
               [ style
                   (* Can seem to limit the height and keeping the
                      images “inside”: *)
-                  "max-width: 40vw; /*max-height: 60vh;*/ padding: 3em; \
+                  "max-width: 100%; /*max-height: 60vh;*/ padding: 2px; \
                    margin: auto; width: 100%; height: 100%" ] in
         let mm_style =
           "height: 100%; width: 100%; object-fit: contain"
@@ -153,9 +153,9 @@ let show_token ctxt
            main_multimedia) *)
     % Bootstrap.p_lead metadescription
     % div creators % div tags in
-  Bootstrap.bordered
-    ~a:[style "padding: 3em; border: solid 3px #aaa"; classes ["col-8"]]
-    ~kind:`Primary main_content
+  div
+    ~a:[style "padding: 1em; border: solid 3px #aaa; max-width: 800px"]
+    main_content
   % Bootstrap.Collapse.(
       fixed_width_reactive_button_with_div_below (make ()) ~kind:`Secondary
         ~width:(* Same as async_work *) "12em")

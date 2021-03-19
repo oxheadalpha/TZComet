@@ -442,13 +442,14 @@ module Examples = struct
 end
 
 module Metadata_metadata = struct
-  let alchememist =
+  let jpegs =
     List.map
       [ "ipfs://QmeayPYZeicG1MJSKoVnVM54qafYcvCCZbYLZuNdg36GWF"
-      ; "ipfs://QmXmktVYyJ3AtzsDYAZCgpbL9MtPGv2U95wECaXcRL3Cqv" ] ~f:(fun uri ->
+      ; "ipfs://QmXmktVYyJ3AtzsDYAZCgpbL9MtPGv2U95wECaXcRL3Cqv"
+      ; "ipfs://QmYGFcSb4z3TmpR4C6tyDWFzSWFCdqzcnjkBPeSwNZTex6" ] ~f:(fun uri ->
         (Blob.Format.jpeg, uri))
 
-  let static_sfw_multimedia : (Blob.Format.t * string) list = alchememist
+  let static_sfw_multimedia : (Blob.Format.t * string) list = jpegs
 
   let sfw_multimedia (ctxt : _ Context.t) uri =
     Lwt.return
