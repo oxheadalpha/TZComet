@@ -57,8 +57,7 @@ module Uri = struct
     | Hash {kind; value; target= Web http} -> Some http
     | _ -> None
 
-  let fetch ?(max_data_size = 1_000_000) ?(log = dbgf "Uri.fetch.log: %s") ctxt
-      uri =
+  let fetch ?limit_bytes ?(log = dbgf "Uri.fetch.log: %s") ctxt uri =
     let open Lwt.Infix in
     let logf fmt = Fmt.kstr (fun s -> dbgf "Uri.fetch: %s" s ; log s) fmt in
     let ni s = Fmt.failwith "Not Implemented: %s" s in
@@ -76,11 +75,15 @@ module Uri = struct
             ~f:
               Js_of_ocaml_lwt.XmlHttpRequest.(
                 fun () ->
-                  perform_raw ~response_type:ArrayBuffer http
+                  let headers =
+                    Option.map limit_bytes ~f:(fun b ->
+                        [("Range", Fmt.str "bytes=0-%d" b)]) in
+                  perform_raw ~response_type:ArrayBuffer ?headers http
                   >>= fun frame ->
                   dbgf "%s -> code: %d" http frame.code ;
                   match frame.code with
-                  | 200 ->
+                  | ok when ok = 200 || (ok = 206 && Option.is_some limit_bytes)
+                    ->
                       let res =
                         Js_of_ocaml.Js.Opt.get frame.content (fun () ->
                             Fmt.failwith "Getting %S gave no content" http)
