@@ -426,22 +426,19 @@ module Examples = struct
            ; michelson_concretes= tzc_all () })
 
   let tokens_global =
-    lazy
-      (let tok, _, tok_all = aggl () in
-       let _ =
-         List.init 16 ~f:(fun idx ->
-             tok
-               ("KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc", idx)
-               (Fmt.str "The Alchememist Token #%d." idx)) in
-       let _ =
-         List.init 16 ~f:(fun idx ->
-             let idx = idx + 3000 in
-             tok
-               ("KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", idx)
-               (Fmt.str "The HicEtNunc Token #%d." idx)) in
-       tok_all ())
+    (* weight, name, kt1, min-token, max-token *)
+    [ (0.2, "Alchememist", "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc", 0, 15)
+    ; (0.8, "HicEtNunc", "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", 300, 8500) ]
 
-  let tokens (_ : _ Context.t) = Lazy.force tokens_global
+  let random_token (_ : _ Context.t) =
+    let _, _, k, m, x =
+      List.find tokens_global ~f:(fun (wg, _, _, m, x) ->
+          let open Float in
+          let size = of_int Int.(x - m) in
+          Random.float size /. size < wg)
+      |> function Some s -> s | None -> List.random_element_exn tokens_global
+    in
+    (k, Random.int_incl m x)
 end
 
 module Metadata_metadata = struct
