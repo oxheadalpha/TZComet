@@ -147,41 +147,62 @@ AAABwAAAA+AAAAfwAAAP
 
 let linkify_text s =
   let open Meta_html in
-  let sep () = t " " in
   let prefix_and_for_all ~prefix ~for_all s =
     String.is_prefix s ~prefix
     && String.for_all (String.chop_prefix_exn s ~prefix) ~f:for_all in
   let is_twitter_handle = function
     | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '_' | '.' -> true
     | _ -> false in
-  String.split_on_chars s ~on:[' '; '\n'; '\t']
-  |> oxfordize_list ~sep ~last_sep:sep ~map:(function
-       | uri when String.is_prefix uri ~prefix:"https://" ->
-           link ~target:uri (t uri)
-       | handle
-         when prefix_and_for_all ~prefix:"@" ~for_all:is_twitter_handle handle
-         ->
-           ct handle
-           % sup
-               (let handle = String.chop_prefix_exn handle ~prefix:"@" in
-                let img_a = [style "max-height: 0.9em"] in
-                link
-                  ~target:(Fmt.str "https://twitter.com/%s" handle)
-                  (H5.img ~a:img_a ~src:(Lwd.pure twitter_icon)
-                     ~alt:(Lwd.pure "Twitter") ())
-                % t " "
-                % link
-                    ~target:(Fmt.str "https://instagram.com/%s" handle)
-                    (H5.img ~a:img_a ~src:(Lwd.pure instagram_icon)
-                       ~alt:(Lwd.pure "Instagram") ()))
-       | tz_address
-         when prefix_and_for_all ~prefix:"tz" ~for_all:is_twitter_handle
-                tz_address ->
-           link
+  let output = ref (empty ()) in
+  let print c = output := !output % c in
+  let is_word_sep = function
+    | ' ' | '\'' | '(' | ')' | '!' | '[' | ']' -> true
+    | _ -> false in
+  let next_sep s ~pos =
+    match String.lfindi ~pos s ~f:(fun _ -> is_word_sep) with
+    | Some new_pos ->
+        Some (new_pos + 1, s.[new_pos], String.sub s ~pos ~len:(new_pos - pos))
+    | None -> None in
+  let handle_tok = function
+    | uri when String.is_prefix uri ~prefix:"https://" ->
+        print (link ~target:uri (t uri))
+    | handle
+      when prefix_and_for_all ~prefix:"@" ~for_all:is_twitter_handle handle ->
+        let heavy c =
+          let a = [style "font-weight: bold"] in
+          span ~a c in
+        print
+          ( heavy (t handle)
+          % sup
+              (let handle = String.chop_prefix_exn handle ~prefix:"@" in
+               let img_a = [style "max-height: 0.9em"] in
+               link
+                 ~target:(Fmt.str "https://twitter.com/%s" handle)
+                 (H5.img ~a:img_a ~src:(Lwd.pure twitter_icon)
+                    ~alt:(Lwd.pure "Twitter") ())
+               % t " "
+               % link
+                   ~target:(Fmt.str "https://instagram.com/%s" handle)
+                   (H5.img ~a:img_a ~src:(Lwd.pure instagram_icon)
+                      ~alt:(Lwd.pure "Instagram") ())) )
+    | tz_address
+      when prefix_and_for_all ~prefix:"tz" ~for_all:is_twitter_handle tz_address
+      ->
+        print
+          (link
              ~target:(Fmt.str "https://tzkt.io/%s" tz_address)
-             (bt (ellipsize_string ~max_length:8 tz_address))
-       | other -> t other)
-  |> list
+             (bt (ellipsize_string ~max_length:8 tz_address)))
+    | tok -> print (t tok) in
+  let rec go pos =
+    match next_sep ~pos s with
+    | Some (npos, sep, tok) ->
+        handle_tok tok ;
+        print (Fmt.kstr t "%c" sep) ;
+        go npos
+    | None ->
+        let tok = String.sub s ~pos ~len:(String.length s - pos) in
+        handle_tok tok ; () in
+  go 0 ; !output
 
 let show_token ctxt
     Contract_metadata.Token.
