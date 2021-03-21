@@ -383,12 +383,13 @@ let render ctxt =
           | false, more ->
               content %% Bootstrap.color `Danger (ct more %% t "is wrong.")))
   in
-  let enter_action () = go_action ctxt ~wip:result in
-  let _once_in_tab =
+  let enter_action () =
     if
       is_token_id_valid (Reactive.peek token_id)
       && is_address_valid (Reactive.peek token_address)
-    then enter_action () in
+      && not (Async_work.peek_busy result)
+    then go_action ctxt ~wip:result in
+  let _once_in_tab = enter_action () in
   h2 (t "Token Viewer")
   % Bootstrap.Form.(
       State.if_explorer_should_go ctxt enter_action ;
