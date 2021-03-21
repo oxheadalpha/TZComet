@@ -191,7 +191,7 @@ let linkify_text s =
         print
           (link
              ~target:(Fmt.str "https://tzkt.io/%s" tz_address)
-             (bt (ellipsize_string ~max_length:8 tz_address)))
+             (bt (ellipsize_string ~ellipsis:"…" ~max_length:8 tz_address)))
     | tok -> print (t tok) in
   let rec go pos =
     match next_sep ~pos s with
