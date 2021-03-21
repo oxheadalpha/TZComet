@@ -427,15 +427,14 @@ module Examples = struct
 
   let tokens_global =
     (* weight, name, kt1, min-token, max-token *)
-    [ (0.2, "Alchememist", "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc", 0, 15)
-    ; (0.8, "HicEtNunc", "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", 300, 8560) ]
+    [ (0.1, "Alchememist", "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc", 0, 15)
+    ; (0.9, "HicEtNunc", "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", 300, 9738) ]
 
   let random_token (_ : _ Context.t) =
     let _, _, k, m, x =
-      List.find tokens_global ~f:(fun (wg, _, _, m, x) ->
+      List.find tokens_global ~f:(fun (wg, _, _, _, _) ->
           let open Float in
-          let size = of_int Int.(x - m) in
-          Random.float size /. size < wg)
+          Random.float 1. < wg)
       |> function Some s -> s | None -> List.random_element_exn tokens_global
     in
     (k, Random.int_incl m x)
