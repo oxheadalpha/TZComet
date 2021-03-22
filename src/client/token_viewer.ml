@@ -242,7 +242,7 @@ let show_token ctxt
     | Some (Ok (title, mm)) ->
         let open Contract_metadata.Multimedia in
         let maybe_censor f =
-          if mm.sfw then f ()
+          if mm.sfw || State.always_show_multimedia ctxt then f ()
           else
             Bootstrap.Collapse.(
               fixed_width_reactive_button_with_div_below (make ())

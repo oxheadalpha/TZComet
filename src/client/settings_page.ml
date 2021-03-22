@@ -153,6 +153,17 @@ let render ctxt =
                   "Make the Micheline parser (in the Editor) also check for \
                    proper indentation like"
               %% ct "tezos-client" %% t "does." )
+        ; check_box
+            (State.always_show_multimedia_bidirectional ctxt)
+            ~label:
+              (t "Always show all multimedia, without NSFW warning-button.")
+            ~help:
+              ( t "The Token-Viewer knows about some multimedia that is tagged"
+              %% it "“safe-for-all-audiences,”"
+              %% t
+                   "and hides everything else behind a show/hide button. Check \
+                    this box to disable this and just show everything wherever \
+                    it comes from." )
         ; input
             ~placeholder:(Reactive.pure "Number of seconds (with decimals).")
             ~help:

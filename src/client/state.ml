@@ -52,6 +52,7 @@ type t =
   ; token_address: string Reactive.var
   ; token_id: string Reactive.var
   ; check_micheline_indentation: bool Reactive.var
+  ; always_show_multimedia: bool Reactive.var
   ; current_network: Network.t Reactive.var }
 
 let get (state : < gui: t ; .. > Context.t) = state#gui
@@ -64,7 +65,7 @@ module Fragment = struct
 
   let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go
       ~editor_mode ~token_address ~token_id ~check_micheline_indentation
-      ~editor_load =
+      ~editor_load ~always_show_multimedia =
     let query =
       match explorer_input with "" -> [] | more -> [("explorer-input", [more])]
     in
@@ -83,6 +84,10 @@ module Fragment = struct
       | other -> ("editor-mode", [Editor_mode.to_string other]) :: query in
     let query =
       if editor_load then ("load-storage", ["true"]) :: query else query in
+    let query =
+      if always_show_multimedia then
+        ("always-show-multimedia", ["true"]) :: query
+      else query in
     let path, query =
       match (page, token_address, token_id) with
       | _, "", "" -> (page_to_path page, query)
@@ -114,6 +119,7 @@ module Fragment = struct
       |> Option.value ~default:`Guess in
     let explorer_go = true_in_query "go" in
     let editor_load = true_in_query "load-storage" in
+    let always_show_multimedia = true_in_query "always-show-multimedia" in
     let editor_input =
       match in_query "editor-input" with Some [one] -> one | _ -> "" in
     let page, (token_address, token_id) =
@@ -157,6 +163,7 @@ module Fragment = struct
       ; token_address= Reactive.var token_address
       ; token_id= Reactive.var token_id
       ; check_micheline_indentation= Reactive.var mich_indent
+      ; always_show_multimedia= Reactive.var always_show_multimedia
       ; current_network= Reactive.var `Mainnet } )
 end
 
@@ -228,6 +235,12 @@ let check_micheline_indentation ctxt =
 let check_micheline_indentation_bidirectional ctxt =
   Reactive.Bidirectional.of_var (get ctxt).check_micheline_indentation
 
+let always_show_multimedia ctxt =
+  Reactive.peek (get ctxt).always_show_multimedia
+
+let always_show_multimedia_bidirectional ctxt =
+  Reactive.Bidirectional.of_var (get ctxt).always_show_multimedia
+
 let make_fragment ?(side_effects = true) ctxt =
   (* WARNING: for now it is important for this to be attached "somewhere"
      in the DOM.
@@ -247,7 +260,8 @@ let make_fragment ?(side_effects = true) ctxt =
     dev ** page ** explorer_input ** explorer_go ** editor_input
     ** get state.editor_mode ** get state.token_address ** get state.token_id
     ** get state.check_micheline_indentation
-    ** get state.editor_load)
+    ** get state.editor_load
+    ** get state.always_show_multimedia)
   |> Reactive.map
        ~f:(fun
             ( dev_mode
@@ -257,8 +271,10 @@ let make_fragment ?(side_effects = true) ctxt =
                   , ( editor_input
                     , ( editor_mode
                       , ( token_address
-                        , (token_id, (check_micheline_indentation, editor_load))
-                        ) ) ) ) ) ) )
+                        , ( token_id
+                          , ( check_micheline_indentation
+                            , (editor_load, always_show_multimedia) ) ) ) ) ) )
+                ) ) )
           ->
          let now =
            Fragment.(
@@ -266,7 +282,7 @@ let make_fragment ?(side_effects = true) ctxt =
                if String.length editor_input < 40 then editor_input else ""
              in
              make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input
-               ~token_address ~token_id ~editor_mode
+               ~token_address ~token_id ~editor_mode ~always_show_multimedia
                ~check_micheline_indentation ~editor_load) in
          if side_effects then (
            let current = Js_of_ocaml.Url.Current.get_fragment () in
