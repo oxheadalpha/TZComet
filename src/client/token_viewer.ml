@@ -214,6 +214,7 @@ let show_token ctxt
       ; name
       ; decimals
       ; main_multimedia
+      ; metadata
       ; tzip21 } =
   let open Meta_html in
   let open Contract_metadata.Content.Tzip_021 in
@@ -316,19 +317,63 @@ let show_token ctxt
                 ~sep:(fun () -> t ", ")
                 ~last_sep:(fun () -> t ", "))) in
   let contract_info =
+    let open Tezos_contract_metadata.Metadata_contents in
     let sep () = t ", " in
-    bt "Contract:" %% ct address %% t "is on"
-    %% it
-         (Option.value_map ~f:Network.to_string ~default:"an unknown network"
-            network)
-    %% t "→ Open in"
-    %% State.link_to_explorer ctxt (t "Explorer") ~search:address
-    % sep ()
-    %% list
-         Tezos_html.Block_explorer.(
-           oxfordize_list all_vendors ~sep ~last_sep:sep ~map:(fun vend ->
-               link (t (vendor_show_name vend)) ~target:(kt1_url vend address)))
-  in
+    let item c = div (bt "→" %% c) in
+    let itemo o = or_empty o item in
+    bt "Contract:"
+    %% item
+         ( abbreviation address
+             (ct (ellipsize_string ~ellipsis:"…" ~max_length:10 address))
+         %% t "is on"
+         %% it
+              (Option.value_map ~f:Network.to_string
+                 ~default:"an unknown network" network)
+         %% parens
+              ( t "Open in"
+              %% State.link_to_explorer ctxt (t "Explorer") ~search:address
+              % sep ()
+              %% list
+                   Tezos_html.Block_explorer.(
+                     oxfordize_list all_vendors ~sep ~last_sep:sep
+                       ~map:(fun vend ->
+                         link
+                           (t (vendor_show_name vend))
+                           ~target:(kt1_url vend address))) ) )
+    %% itemo
+         (let open Option in
+         let target =
+           first_some metadata.homepage
+             (bind metadata.source ~f:(fun s -> s.location)) in
+         let name_part =
+           first_some (map metadata.name ~f:(Fmt.str "“%s”")) target in
+         let link_part =
+           Option.map name_part ~f:(fun apart ->
+               match target with
+               | Some target -> link (bt apart) ~target
+               | None -> bt apart) in
+         let version_part =
+           match metadata.version with
+           | None -> empty ()
+           | Some v -> t "version" %% bt v in
+         let authors_part =
+           match metadata.authors with
+           | [] -> empty ()
+           | al ->
+               t " by"
+               %% list
+                    (oxfordize_list al
+                       ~map:(Tezos_html.author ~namet:bt)
+                       ~sep:(fun () -> t ", ")
+                       ~last_sep:(fun () -> t ", and ")) in
+         let description_part =
+           or_empty metadata.description (fun s -> t ":" %% i (linkify_text s))
+         in
+         let tail = version_part % authors_part % description_part in
+         match (link_part, metadata.authors) with
+         | Some l, _ -> Some (l %% tail)
+         | None, [] -> None
+         | None, _ -> Some (it "NOT-NAMED" %% tail)) in
   let main_content =
     h3 ~a:[style "text-align: center"] metaname
     % multimedia

@@ -44,6 +44,7 @@ module H = struct
 end
 
 let hr = H5.hr
+let br = H5.br
 
 include H
 

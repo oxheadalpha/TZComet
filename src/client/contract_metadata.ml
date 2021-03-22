@@ -761,10 +761,11 @@ module Token = struct
     ; decimals: string option
     ; tzip21: Content.Tzip_021.t
     ; main_multimedia: (string * Multimedia.t, exn) Result.t Option.t
+    ; metadata: Tezos_contract_metadata.Metadata_contents.t
     ; warnings: (string * warning) list }
 
   let make ?symbol ?name ?decimals ?network ?main_multimedia ~tzip21
-      ?(warnings = []) address id =
+      ?(warnings = []) ~metadata address id =
     { address
     ; id
     ; network
@@ -773,6 +774,7 @@ module Token = struct
     ; name
     ; decimals
     ; main_multimedia
+    ; metadata
     ; tzip21 }
 
   let piece_of_metadata ?(json_type = `String) ~warn ~key ~metadata_map
@@ -836,7 +838,7 @@ module Token = struct
         Some s
     | None, None -> None
 
-  let fetch (ctxt : _ Context.t) ~address ~id ~log =
+  let fetch (ctxt : _ Context.t) ~address ~id ~log : t Lwt.t =
     let open Lwt.Infix in
     let logs prefix msg = log Message.(t prefix %% t "👉" %% t msg) in
     let warnings = ref [] in
@@ -856,32 +858,33 @@ module Token = struct
         log Message.(t "Attempt at getting a %token_metadata big-map failed.") ;
         Lwt.return_none)
     >>= fun token_metadata_big_map ->
+    Query_nodes.metadata_value ctxt ~address ~key:"" ~log:(logs "Getting URI")
+    >>= (fun metadata_uri ->
+          let uri =
+            match Uri.validate metadata_uri with
+            | Ok uri, _ -> uri
+            | Error error, _ ->
+                failm
+                  Message.(
+                    t "failed to parse/validate the metadata URI:"
+                    %% Fmt.kstr ct "%a"
+                         Tezos_error_monad.Error_monad.pp_print_error error)
+          in
+          Uri.fetch ctxt uri ~log:(logs "Fetching Metadata")
+          >>= fun json_code ->
+          let open Tezos_contract_metadata.Metadata_contents in
+          match Content.of_json json_code with
+          | Ok (_, con) -> Lwt.return con
+          | Error error ->
+              failm
+                Message.(
+                  t "failed to parse/validate the metadata URI:"
+                  %% Fmt.kstr ct "%a"
+                       Tezos_error_monad.Error_monad.pp_print_error error))
+    >>= fun metadata_contents ->
     let get_token_metadata_map_with_view () =
-      Query_nodes.metadata_value ctxt ~address ~key:"" ~log:(logs "Getting URI")
-      >>= fun metadata_uri ->
-      let uri =
-        match Uri.validate metadata_uri with
-        | Ok uri, _ -> uri
-        | Error error, _ ->
-            failm
-              Message.(
-                t "failed to parse/validate the metadata URI:"
-                %% Fmt.kstr ct "%a" Tezos_error_monad.Error_monad.pp_print_error
-                     error) in
-      Uri.fetch ctxt uri ~log:(logs "Fetching Metadata")
-      >>= fun json_code ->
-      let open Tezos_contract_metadata.Metadata_contents in
-      let metadata =
-        match Content.of_json json_code with
-        | Ok (_, con) -> con
-        | Error error ->
-            failm
-              Message.(
-                t "failed to parse/validate the metadata URI:"
-                %% Fmt.kstr ct "%a" Tezos_error_monad.Error_monad.pp_print_error
-                     error) in
       let total_supply_validation, token_metadata_validation =
-        match Content.classify ?token_metadata_big_map metadata with
+        match Content.classify ?token_metadata_big_map metadata_contents with
         | Tzip_16 t ->
             failm
               Message.(
@@ -890,7 +893,7 @@ module Token = struct
                      (oxfordize_list ~map:ct
                         ~sep:(fun () -> t ", ")
                         ~last_sep:(fun () -> t ", and ")
-                        metadata.interfaces))
+                        metadata_contents.interfaces))
         | Tzip_12
             { metadata
             ; interface_claim
@@ -1002,8 +1005,8 @@ module Token = struct
         >>= fun main_multimedia ->
         Lwt.return
           (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia
-             ~network:node.Query_nodes.Node.network address id
-             ~warnings:!warnings)
+             ~metadata:metadata_contents ~network:node.Query_nodes.Node.network
+             address id ~warnings:!warnings)
     | other ->
         Decorate_error.raise
           Message.(

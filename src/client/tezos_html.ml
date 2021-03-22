@@ -1386,6 +1386,21 @@ let metadata_substandards ?token_metadata_big_map
                   wip_explore_tokens ~f:tokens_exploration ) in
         (metadata, [field "TZIP-012 Implementation Claim" tzip_12_block]))
 
+let author ~namet s =
+  try
+    match String.split (String.strip s) ~on:'<' with
+    | [name; id] -> (
+      match String.lsplit2 id ~on:'>' with
+      | Some (u, "") when String.is_prefix u ~prefix:"http" ->
+          namet name %% parens (url monot u)
+      | Some (u, "")
+      (* we won't get into email address regexps here, sorry *)
+        when String.mem u '@' ->
+          namet name %% parens (link ~target:("mailto:" ^ u) (ct u))
+      | _ -> failwith "" )
+    | _ -> failwith ""
+  with _ -> ct s
+
 let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
     ?open_in_editor_link ctxt =
   let open Tezos_contract_metadata.Metadata_contents in
@@ -1398,21 +1413,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
             Fmt.kstr t " → %s" d) in
     let url_elt u = url ct u in
     let authors_elt l =
-      let author s =
-        try
-          match String.split (String.strip s) ~on:'<' with
-          | [name; id] -> (
-            match String.lsplit2 id ~on:'>' with
-            | Some (u, "") when String.is_prefix u ~prefix:"http" ->
-                t name %% parens (url_elt u)
-            | Some (u, "")
-            (* we won't get into email address regexps here, sorry *)
-              when String.mem u '@' ->
-                t name %% parens (link ~target:("mailto:" ^ u) (ct u))
-            | _ -> failwith "" )
-          | _ -> failwith ""
-        with _ -> ct s in
-      oxfordize_list l ~map:author
+      oxfordize_list l ~map:(author ~namet:t)
         ~sep:(fun () -> t ", ")
         ~last_sep:(fun () -> t ", and ")
       |> list in
