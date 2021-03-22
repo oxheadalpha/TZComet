@@ -265,7 +265,10 @@ let show_token ctxt
                   "max-width: 100%; /*max-height: 60vh;*/ padding: 2px; \
                    margin: auto; width: 100%; height: 100%" ] in
         let mm_style =
-          "height: 100%; width: 100%; object-fit: contain"
+          let loadingable =
+            "background: transparent url(./loading.gif) no-repeat scroll \
+             center center;" in
+          "height: 100%; width: 100%; object-fit: contain; " ^ loadingable
           (* "max-width: 100%; max-height: 100%" *) in
         maybe_censor (fun () ->
             match mm.format with
