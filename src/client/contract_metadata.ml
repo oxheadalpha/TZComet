@@ -891,14 +891,15 @@ module Token = struct
     let total_supply_validation, token_metadata_validation =
       match Content.classify ?token_metadata_big_map metadata_contents with
       | Tzip_16 t ->
-          failm
+          log
             Message.(
               t "This is not a TZIP-012 token at all. See interfaces claimed:"
               %% list
                    (oxfordize_list ~map:ct
                       ~sep:(fun () -> t ", ")
                       ~last_sep:(fun () -> t ", and ")
-                      metadata_contents.interfaces))
+                      metadata_contents.interfaces)) ;
+          Content.(Missing, Missing)
       | Tzip_12
           { metadata
           ; interface_claim
