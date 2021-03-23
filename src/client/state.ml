@@ -1,15 +1,16 @@
 open! Import
 
 module Page = struct
-  type t = Explorer | Settings | About | Editor
+  type t = Explorer | Settings | Token_viewer | About | Editor
 
   let to_string = function
     | Explorer -> "Explorer"
     | Editor -> "Editor"
+    | Token_viewer -> "TokenViewer"
     | Settings -> "Settings"
     | About -> "About"
 
-  let all_in_order = [Explorer; Editor; Settings; About]
+  let all_in_order = [Explorer; Editor; Token_viewer; Settings; About]
 end
 
 open Page
@@ -48,7 +49,10 @@ type t =
   ; editor_mode: Editor_mode.t Reactive.var
   ; editor_load: bool Reactive.var
   ; editor_should_load: bool Reactive.var
+  ; token_address: string Reactive.var
+  ; token_id: string Reactive.var
   ; check_micheline_indentation: bool Reactive.var
+  ; always_show_multimedia: bool Reactive.var
   ; current_network: Network.t Reactive.var }
 
 let get (state : < gui: t ; .. > Context.t) = state#gui
@@ -60,7 +64,8 @@ module Fragment = struct
   let page_to_path page = Fmt.str "/%s" (Page.to_string page |> String.lowercase)
 
   let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go
-      ~editor_mode ~check_micheline_indentation ~editor_load =
+      ~editor_mode ~token_address ~token_id ~check_micheline_indentation
+      ~editor_load ~always_show_multimedia =
     let query =
       match explorer_input with "" -> [] | more -> [("explorer-input", [more])]
     in
@@ -79,19 +84,22 @@ module Fragment = struct
       | other -> ("editor-mode", [Editor_mode.to_string other]) :: query in
     let query =
       if editor_load then ("load-storage", ["true"]) :: query else query in
-    Uri.make () ~path:(page_to_path page) ~query
+    let query =
+      if always_show_multimedia then
+        ("always-show-multimedia", ["true"]) :: query
+      else query in
+    let path, query =
+      match (page, token_address, token_id) with
+      | _, "", "" -> (page_to_path page, query)
+      | Token_viewer, kt, id -> (Fmt.str "/token/%s/%s" kt id, query)
+      | _, kt, id ->
+          (page_to_path page, ("token", [Fmt.str "%s/%s" kt id]) :: query) in
+    Uri.make () ~path ~query
 
   let change_for_page t page = Uri.with_path t (page_to_path page)
 
   let parse fragment =
     let uri = Uri.of_string (Uri.pct_decode fragment) in
-    let pagename = Uri.path uri |> String.chop_prefix_if_exists ~prefix:"/" in
-    let page =
-      List.find all_in_order ~f:(fun page ->
-          String.equal
-            (String.lowercase (Page.to_string page))
-            (pagename |> String.lowercase))
-      |> Option.value ~default:Explorer in
     let query = Uri.query uri in
     let in_query = List.Assoc.find ~equal:String.equal query in
     let true_in_query q =
@@ -111,8 +119,33 @@ module Fragment = struct
       |> Option.value ~default:`Guess in
     let explorer_go = true_in_query "go" in
     let editor_load = true_in_query "load-storage" in
+    let always_show_multimedia = true_in_query "always-show-multimedia" in
     let editor_input =
       match in_query "editor-input" with Some [one] -> one | _ -> "" in
+    let page, (token_address, token_id) =
+      let path_split =
+        Uri.path uri
+        |> String.chop_prefix_if_exists ~prefix:"/"
+        |> String.split ~on:'/' in
+      let token_in_query () =
+        match in_query "token" with
+        | Some [one] -> (
+          match String.split one ~on:'/' with
+          | [k] -> (k, "0")
+          | [k; t] -> (k, t)
+          | _ -> ("", "") )
+        | _ -> ("", "") in
+      match path_split with
+      | [pagename] ->
+          let page =
+            List.find all_in_order ~f:(fun page ->
+                String.equal
+                  (String.lowercase (Page.to_string page))
+                  (pagename |> String.lowercase))
+            |> Option.value ~default:Explorer in
+          (page, token_in_query ())
+      | ["token"; addr; id] -> (Token_viewer, (addr, id))
+      | _ -> (Explorer, token_in_query ()) in
     ( System.create ~dev_mode ()
     , { page= Reactive.var (`Page page)
       ; explorer_input= Reactive.var explorer_input
@@ -127,7 +160,10 @@ module Fragment = struct
       ; editor_load= Reactive.var editor_load
       ; editor_should_load=
           Reactive.var (editor_load && String.is_empty editor_input)
+      ; token_address= Reactive.var token_address
+      ; token_id= Reactive.var token_id
       ; check_micheline_indentation= Reactive.var mich_indent
+      ; always_show_multimedia= Reactive.var always_show_multimedia
       ; current_network= Reactive.var `Mainnet } )
 end
 
@@ -190,11 +226,20 @@ let transform_editor_content ctxt ~f =
            Reactive.set variable v)
   *)
 
+let token_address ctxt = (get ctxt).token_address
+let token_id ctxt = (get ctxt).token_id
+
 let check_micheline_indentation ctxt =
   Reactive.peek (get ctxt).check_micheline_indentation
 
 let check_micheline_indentation_bidirectional ctxt =
   Reactive.Bidirectional.of_var (get ctxt).check_micheline_indentation
+
+let always_show_multimedia ctxt =
+  Reactive.peek (get ctxt).always_show_multimedia
+
+let always_show_multimedia_bidirectional ctxt =
+  Reactive.Bidirectional.of_var (get ctxt).always_show_multimedia
 
 let make_fragment ?(side_effects = true) ctxt =
   (* WARNING: for now it is important for this to be attached "somewhere"
@@ -213,9 +258,10 @@ let make_fragment ?(side_effects = true) ctxt =
   let explorer_go = Reactive.get state.explorer_go in
   Reactive.(
     dev ** page ** explorer_input ** explorer_go ** editor_input
-    ** get state.editor_mode
+    ** get state.editor_mode ** get state.token_address ** get state.token_id
     ** get state.check_micheline_indentation
-    ** get state.editor_load)
+    ** get state.editor_load
+    ** get state.always_show_multimedia)
   |> Reactive.map
        ~f:(fun
             ( dev_mode
@@ -223,8 +269,12 @@ let make_fragment ?(side_effects = true) ctxt =
               , ( explorer_input
                 , ( explorer_go
                   , ( editor_input
-                    , (editor_mode, (check_micheline_indentation, editor_load))
-                    ) ) ) ) )
+                    , ( editor_mode
+                      , ( token_address
+                        , ( token_id
+                          , ( check_micheline_indentation
+                            , (editor_load, always_show_multimedia) ) ) ) ) ) )
+                ) ) )
           ->
          let now =
            Fragment.(
@@ -232,7 +282,8 @@ let make_fragment ?(side_effects = true) ctxt =
                if String.length editor_input < 40 then editor_input else ""
              in
              make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input
-               ~editor_mode ~check_micheline_indentation ~editor_load) in
+               ~token_address ~token_id ~editor_mode ~always_show_multimedia
+               ~check_micheline_indentation ~editor_load) in
          if side_effects then (
            let current = Js_of_ocaml.Url.Current.get_fragment () in
            dbgf "Updating fragment %S → %a" current Fragment.pp now ;
@@ -293,6 +344,13 @@ module Examples = struct
     ; michelson_bytes: item list
     ; michelson_concretes: item list }
 
+  let aggl ?(dev = false) () =
+    let all = ref [] in
+    let add v desc = all := (v, desc) :: !all in
+    let add_dev v desc = if dev then add v desc else () in
+    let all () = List.rev !all in
+    (add, add_dev, all)
+
   let get state =
     let https_ok =
       "https://raw.githubusercontent.com/tqtezos/TZComet/8d95f7b/data/metadata_example0.json"
@@ -310,17 +368,11 @@ module Examples = struct
         (Uri.pct_encode https_ok) in
     dev_mode state
     |> Reactive.map ~f:(fun dev ->
-           let aggl () =
-             let all = ref [] in
-             let add v desc = all := (v, desc) :: !all in
-             let add_dev v desc = if dev then add v desc else () in
-             let all () = List.rev !all in
-             (add, add_dev, all) in
-           let kt1, kt1_dev, kt1_all = aggl () in
-           let uri, uri_dev, uri_all = aggl () in
-           let mtb, mtb_dev, mtb_all = aggl () in
-           let mby, mby_dev, mby_all = aggl () in
-           let tzc, tzc_dev, tzc_all = aggl () in
+           let kt1, kt1_dev, kt1_all = aggl ~dev () in
+           let uri, uri_dev, uri_all = aggl ~dev () in
+           let mtb, mtb_dev, mtb_all = aggl ~dev () in
+           let mby, mby_dev, mby_all = aggl ~dev () in
+           let tzc, tzc_dev, tzc_all = aggl ~dev () in
            let kt1_one_view = "KT1V8ghqePSqVW5jYC1T9zj2udQ6qZQjBqNf" in
            kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
              "Should not exist any where." ;
@@ -388,4 +440,36 @@ module Examples = struct
            ; metadata_blobs= mtb_all ()
            ; michelson_bytes= mby_all ()
            ; michelson_concretes= tzc_all () })
+
+  let tokens_global =
+    (* weight, name, kt1, min-token, max-token *)
+    [ (0.05, "Alchememist", "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc", 0, 15)
+    ; (0.85, "HicEtNunc", "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", 300, 11400)
+    ; (0.1, "Kalamint", "KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse", 1, 254) ]
+
+  let random_token (_ : _ Context.t) =
+    let _, _, k, m, x =
+      List.find tokens_global ~f:(fun (wg, _, _, _, _) ->
+          let open Float in
+          Random.float 1. < wg)
+      |> function Some s -> s | None -> List.random_element_exn tokens_global
+    in
+    (k, Random.int_incl m x)
+end
+
+module Metadata_metadata = struct
+  let jpegs =
+    List.map
+      [ "ipfs://QmeayPYZeicG1MJSKoVnVM54qafYcvCCZbYLZuNdg36GWF"
+      ; "ipfs://QmXmktVYyJ3AtzsDYAZCgpbL9MtPGv2U95wECaXcRL3Cqv"
+      ; "ipfs://QmYGFcSb4z3TmpR4C6tyDWFzSWFCdqzcnjkBPeSwNZTex6" ] ~f:(fun uri ->
+        (Blob.Format.jpeg, uri))
+
+  let static_sfw_multimedia : (Blob.Format.t * string) list = jpegs
+
+  let sfw_multimedia (ctxt : _ Context.t) uri =
+    Lwt.return
+      (List.find_map static_sfw_multimedia ~f:(function
+        | fmt, k when String.equal k uri -> Some fmt
+        | _ -> None))
 end

@@ -23,7 +23,10 @@ module H = struct
   let code ?a l = singletize H5.code ?a l
   let button ?a l = singletize H5.button ?a l
   let span ?a l = singletize H5.span ?a l
+  let sub ?a l = singletize H5.sub ?a l
+  let sup ?a l = singletize H5.sup ?a l
   let small ?a l = singletize H5.small ?a l
+  let strong ?a l = singletize H5.strong ?a l
   let abbr ?a l = singletize H5.abbr ?a l
   let a ?a l = singletize H5.a ?a l
   let div ?a l = singletize H5.div ?a l
@@ -41,6 +44,7 @@ module H = struct
 end
 
 let hr = H5.hr
+let br = H5.br
 
 include H
 

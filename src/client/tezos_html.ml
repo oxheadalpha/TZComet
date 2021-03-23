@@ -201,8 +201,7 @@ let list_field name field f =
 
 let network (net : Network.t) =
   match net with
-  | `Edonet | `Florence_BA | `Florence_NoBA | `Delphinet | `Mainnet | `Sandbox
-    ->
+  | `Edonet | `Florencenet | `Delphinet | `Mainnet | `Sandbox ->
       it (Network.to_string net)
 
 let protocol s =
@@ -544,10 +543,8 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                     let format = Blob.guess_format content in
                     let content_type =
                       match format with
-                      | Some `Png -> "image/png"
-                      | Some `Jpeg -> "image/jpeg"
-                      | Some `Gif -> "image/gif"
-                      | None ->
+                      | Some ((`Image, _) as f) -> Blob.Format.to_mime f
+                      | _ ->
                           Async_work.log result
                             (bt "WARNING: Cannot guess content type …") ;
                           "image/jpeg" in
@@ -562,16 +559,8 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                               i
                                 ( t "Could not guess the format, so went with"
                                 %% ct content_type % t "." )
-                          | Some f ->
-                              i
-                                ( t "Guessed format"
-                                %% bt
-                                     ( match f with
-                                     | `Jpeg -> "JPEG"
-                                     | `Png -> "PNG"
-                                     | `Gif -> "GIF" )
-                                %% parens (t "content-type:" %% ct content_type)
-                                ) )
+                          | Some _ -> i (t "Guessed format" %% bt content_type)
+                          )
                       %% link ~target:src
                            (H5.img
                               ~a:[H5.a_style (Lwd.pure "max-height: 500px")]
@@ -660,16 +649,18 @@ let show_micheline_result = function
   | Ok node -> ct (Michelson.micheline_node_to_string node)
   | Error s -> Bootstrap.color `Danger (t s)
 
-let show_total_supply ctxt ?decimals = function
-  | Ok (Tezos_micheline.Micheline.Int (_, z)) -> (
-    match Option.map ~f:Int.of_string decimals with
-    | Some decimals ->
-        let dec = Float.(Z.to_float z / (10. ** of_int decimals)) in
-        Fmt.kstr t "%s (%a Units)"
-          (Float.to_string_hum ~delimiter:' ' ~decimals ~strip_zero:true dec)
-          Z.pp_print z
-    | None | (exception _) -> Fmt.kstr t "%a Units (no decimals)" Z.pp_print z
-    )
+let show_total_supply (ctxt : _ Context.t) ?decimals z =
+  match Option.map ~f:Int.of_string decimals with
+  | Some decimals ->
+      let dec = Float.(Z.to_float z / (10. ** of_int decimals)) in
+      Fmt.kstr t "%s (%a Units)"
+        (Float.to_string_hum ~delimiter:' ' ~decimals ~strip_zero:true dec)
+        Z.pp_print z
+  | None | (exception _) -> Fmt.kstr t "%a Units (no decimals)" Z.pp_print z
+
+let show_total_supply_result ctxt ?decimals = function
+  | Ok (Tezos_micheline.Micheline.Int (_, z)) ->
+      show_total_supply ctxt ?decimals z
   | other -> ct "Error: " %% show_micheline_result other
 
 let show_extras ctxt (extr : (String.t * String.t, Message.t) Result.t List.t) =
@@ -703,7 +694,7 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
     List.filter_opt
       [ Option.map symbol ~f:(fun s -> t "symbol:" %% ct s)
       ; Option.map total_supply ~f:(fun s ->
-            t "total-supply:" %% show_total_supply ctxt ?decimals s)
+            t "total-supply:" %% show_total_supply_result ctxt ?decimals s)
       ; Option.map decimals ~f:(fun s -> t "decimals:" %% ct s) ]
     |> function
     | [] -> empty ()
@@ -868,25 +859,12 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
     ~exn_to_html:(Errors_html.exception_html ctxt)
     Lwt.Infix.(
       fun ~mkexn () ->
-        let call_view_here view ~parameter_string =
-          let parameter =
-            let open Michelson in
-            parse_micheline_exn ~check_indentation:false parameter_string
-              ~check_primitives:false in
-          Query_nodes.call_off_chain_view ctxt ~log
-            ~address:(Reactive.peek address) ~view ~parameter
-          >>= function
-          | Ok (result, _) -> Lwt.return (Ok result)
-          | Error s -> Lwt.return (Error s) in
-        let call_view_or_fail view ~parameter_string =
-          call_view_here view ~parameter_string
-          >>= function
-          | Ok o -> Lwt.return o
-          | Error s -> raise (mkexn (t "Calling view failed" %% ct s)) in
+        let address = Reactive.peek address in
         let make_map_tokens () =
           match how with
           | `All_tokens_view all_tokens_view ->
-              call_view_or_fail all_tokens_view ~parameter_string:"Unit"
+              Contract_metadata.Content.call_view_or_fail ctxt all_tokens_view
+                ~parameter_string:"Unit" ~address ~log
               >>= fun tokens_mich ->
               let tokens =
                 match tokens_mich with
@@ -940,15 +918,8 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                   go spec >>= fun () -> Lwt.return_nil) in
         let explore_token id =
           log_prompt := Fmt.str "Exploring token %d" id ;
-          let maybe_call_view view_validation ~parameter_string =
-            match view_validation with
-            | Invalid _ | Missing | No_michelson_implementation _ ->
-                Lwt.return_none
-            | Valid (_, view) ->
-                call_view_here view ~parameter_string
-                >>= fun res -> Lwt.return_some res in
-          maybe_call_view token_metadata_view
-            ~parameter_string:(Int.to_string id)
+          Contract_metadata.Content.maybe_call_view ctxt token_metadata_view
+            ~parameter_string:(Int.to_string id) ~address ~log
           >>= fun metadata_map_opt ->
           begin
             match (metadata_map_opt, token_metadata_big_map) with
@@ -957,7 +928,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                 Lwt.return s
             | None, Some big_map_id ->
                 log "Using the %token_metadata big-map." ;
-                Query_nodes.find_node_with_contract ctxt (Reactive.peek address)
+                Query_nodes.find_node_with_contract ctxt address
                 >>= fun node ->
                 Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
                 Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node
@@ -968,7 +939,8 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
             | None, None -> Decorate_error.raise Message.(t "Not available")
           end
           >>= fun metadata_map ->
-          maybe_call_view total_supply_view ~parameter_string:(Int.to_string id)
+          Contract_metadata.Content.maybe_call_view ctxt total_supply_view
+            ~parameter_string:(Int.to_string id) ~address ~log
           >>= fun total_supply ->
           let unpaired_metadata =
             try
@@ -1022,60 +994,12 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                   Lwt.return_none )
           end
           >>= fun extra_contents ->
-          let piece_of_metadata ?(json_type = `String) key =
-            let in_json =
-              match extra_contents with
-              | None -> None
-              | Some (_, `O l) -> (
-                match
-                  ( List.filter_map l ~f:(function
-                      | k, v when String.equal k key -> Some v
-                      | _ -> None)
-                  , json_type )
-                with
-                | [], _ -> None
-                | [`String one], `String -> Some one
-                | [`Float one], `Int -> Some (Float.to_int one |> Int.to_string)
-                | (`String one :: _ as more), `String ->
-                    warn
-                      (Fmt.str "fields-of-object-at-%s" key)
-                      ( t "Token-metadata URI objects has"
-                      %% Fmt.kstr ct "%d" (List.length more)
-                      %% t "fields called" %% Fmt.kstr ct "%S" key ) ;
-                    Some one
-                | (`Float one :: _ as more), `Int ->
-                    warn
-                      (Fmt.str "fields-of-object-at-%s" key)
-                      ( t "Token-metadata URI objects has"
-                      %% Fmt.kstr ct "%d" (List.length more)
-                      %% t "fields called" %% Fmt.kstr ct "%S" key ) ;
-                    Some (Float.to_int one |> Int.to_string)
-                | other :: _, _ ->
-                    warn
-                      (Fmt.str "type-of-field-of-object-at-%s" key)
-                      ( t "Token-metadata URI points a JSON where field"
-                      %% Fmt.kstr ct "%S" key %% t "has the wrong type:"
-                      %% ct (Ezjsonm.value_to_string other) ) ;
-                    None )
-              | Some (uri, other) ->
-                  warn
-                    (Fmt.str "uri-wrong-json-%s" uri)
-                    ( t "Metadata URI" %% ct uri
-                    %% t "does not point at a JSON object, I got:"
-                    %% ct (Ezjsonm.value_to_string other) ) ;
-                  None in
-            match (piece_of_metadata_map key, in_json) with
-            | None, Some s -> Some s
-            | Some s, None -> Some s
-            | Some s, Some same when String.equal s same -> Some s
-            | Some s, Some ignored ->
-                warn
-                  (Fmt.str "field-double-%s" key)
-                  ( t "Field" %% Fmt.kstr ct "%S" key
-                  %% t "is defined twice differently:"
-                  %% Fmt.kstr ct "%S" ignored ) ;
-                Some s
-            | None, None -> None in
+          let piece_of_metadata ?json_type key =
+            let metadata_map =
+              match unpaired_metadata with Ok o -> o | Error _ -> [] in
+            Contract_metadata.Token.piece_of_metadata ?json_type
+              ~warn:(fun k m -> warn k (Message_html.render ctxt m))
+              ~key ~metadata_map ~metadata_json:extra_contents in
           let symbol = piece_of_metadata "symbol" in
           let name =
             match piece_of_metadata "name" with
@@ -1464,6 +1388,21 @@ let metadata_substandards ?token_metadata_big_map
                   wip_explore_tokens ~f:tokens_exploration ) in
         (metadata, [field "TZIP-012 Implementation Claim" tzip_12_block]))
 
+let author ~namet s =
+  try
+    match String.split (String.strip s) ~on:'<' with
+    | [name; id] -> (
+      match String.lsplit2 id ~on:'>' with
+      | Some (u, "") when String.is_prefix u ~prefix:"http" ->
+          namet name %% parens (url monot u)
+      | Some (u, "")
+      (* we won't get into email address regexps here, sorry *)
+        when String.mem u '@' ->
+          namet name %% parens (link ~target:("mailto:" ^ u) (ct u))
+      | _ -> failwith "" )
+    | _ -> failwith ""
+  with _ -> ct s
+
 let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
     ?open_in_editor_link ctxt =
   let open Tezos_contract_metadata.Metadata_contents in
@@ -1476,21 +1415,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
             Fmt.kstr t " → %s" d) in
     let url_elt u = url ct u in
     let authors_elt l =
-      let author s =
-        try
-          match String.split (String.strip s) ~on:'<' with
-          | [name; id] -> (
-            match String.lsplit2 id ~on:'>' with
-            | Some (u, "") when String.is_prefix u ~prefix:"http" ->
-                t name %% parens (url_elt u)
-            | Some (u, "")
-            (* we won't get into email address regexps here, sorry *)
-              when String.mem u '@' ->
-                t name %% parens (link ~target:("mailto:" ^ u) (ct u))
-            | _ -> failwith "" )
-          | _ -> failwith ""
-        with _ -> ct s in
-      oxfordize_list l ~map:author
+      oxfordize_list l ~map:(author ~namet:t)
         ~sep:(fun () -> t ", ")
         ~last_sep:(fun () -> t ", and ")
       |> list in

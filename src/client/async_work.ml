@@ -63,6 +63,9 @@ let busy {status; _} =
   Reactive.(
     get status |> map ~f:(function Work_in_progress -> true | _ -> false))
 
+let peek_busy {status; _} =
+  Reactive.(peek status |> function Work_in_progress -> true | _ -> false)
+
 let is_empty {status; _} =
   Reactive.(get status |> map ~f:(function Empty -> true | _ -> false))
 

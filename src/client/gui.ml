@@ -796,5 +796,6 @@ let root_document state =
                     ~alt:(Reactive.pure "Loading spinner GIF"))
           | `Page Explorer -> Explorer.page state
           | `Page Editor -> Lazy.force editor
+          | `Page Token_viewer -> Token_viewer.render state
           | `Page Settings -> Lazy.force settings
           | `Page About -> Lazy.force about) )

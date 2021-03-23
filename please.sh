@@ -117,6 +117,36 @@ deploy_website () {
     echo "Done → $dst"
 }
 
+deploy_togithub () {
+    localpath="staging"
+    if [ "$prod" = "true" ] ; then
+        localpath="."
+    else
+        mkdir -p "$localpath"
+    fi
+    dst=$(mktemp -d -p /tmp comevitz-XXX)
+    if [ "$prod" = "true" ] ; then
+        git checkout origin/master
+    fi
+    ./please.sh deploy website "$dst"
+    # First time: git checkout --orphan gh-pages
+    git checkout gh-pages
+    mv "$dst/"* "$localpath"
+    (
+        cd "$localpath"
+        git add index.html main-client.js loading.gif VERSION
+    )
+    msg="(Staging)"
+    if [ "$prod" = "true" ] ; then
+        msg="(Production)"
+    fi
+    git commit -m "Deploy $(cat "$localpath"/VERSION) $msg"
+    say "Current branch in gh-pages, it is not pushed."
+}
+
+
+
+
 ensure_linting () {
     echo "OCamlFormat version: $(ocamlformat --version)"
     dune build @src/fmt --auto-promote
