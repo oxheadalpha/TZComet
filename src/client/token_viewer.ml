@@ -5,6 +5,7 @@ let go_action ctxt ~wip =
   let address = State.token_address ctxt |> Reactive.peek in
   let _logh msg = Async_work.log wip msg in
   let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
+  Async_work.reinit wip ;
   Async_work.wip wip ;
   Async_work.async_catch wip
     ~exn_to_html:(Errors_html.exception_html ctxt)

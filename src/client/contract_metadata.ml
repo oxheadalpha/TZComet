@@ -957,7 +957,9 @@ module Token = struct
               Lwt.catch
                 (fun () ->
                   Uri.fetch ctxt uri ~log:(fun s ->
-                      Fmt.kstr log "Fetching %s" u)
+                      Fmt.kstr log "At %s ‣ %s"
+                        (ellipsize_string u ~max_length:16 ~ellipsis:"…")
+                        s)
                   >>= fun s -> Lwt.return_some (u, Ezjsonm.value_from_string s))
                 (fun exn ->
                   warn "fetch-uri" (`Fetching_uri (u, exn)) ;
@@ -1006,7 +1008,12 @@ module Token = struct
         | Some (title, uri) ->
             Lwt.catch
               (fun () ->
-                Multimedia.prepare_and_guess ~uri ~log ctxt
+                Multimedia.prepare_and_guess ~uri
+                  ~log:(fun s ->
+                    Fmt.kstr log "Preparing/Guessing %s ⏩ %s"
+                      (ellipsize_string uri ~max_length:16 ~ellipsis:"…")
+                      s)
+                  ctxt
                   ~mime_types:
                     ( Content.Tzip_021.uri_mime_types tzip21
                     |> List.filter_map ~f:(fun (u, m) ->
