@@ -762,10 +762,11 @@ module Token = struct
     ; tzip21: Content.Tzip_021.t
     ; main_multimedia: (string * Multimedia.t, exn) Result.t Option.t
     ; metadata: Tezos_contract_metadata.Metadata_contents.t
+    ; special_knowledge: [`Hic_et_nunc of int] list
     ; warnings: (string * warning) list }
 
   let make ?symbol ?name ?decimals ?network ?main_multimedia ~tzip21
-      ?(warnings = []) ~metadata address id =
+      ?(warnings = []) ~metadata ?(special_knowledge = []) address id =
     { address
     ; id
     ; network
@@ -775,6 +776,7 @@ module Token = struct
     ; decimals
     ; main_multimedia
     ; metadata
+    ; special_knowledge
     ; tzip21 }
 
   let piece_of_metadata ?(json_type = `String) ~warn ~key ~metadata_map
@@ -1003,10 +1005,16 @@ module Token = struct
               (fun exn -> Lwt.return_error exn)
             >|= Option.some )
         >>= fun main_multimedia ->
+        let special_knowledge =
+          match address with
+          | "KT1M2JnD1wsg7w2B4UXJXtKQPuDUpU2L7cJH"
+           |"KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton" ->
+              [`Hic_et_nunc id]
+          | _ -> [] in
         Lwt.return
           (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia
              ~metadata:metadata_contents ~network:node.Query_nodes.Node.network
-             address id ~warnings:!warnings)
+             ~special_knowledge address id ~warnings:!warnings)
     | other ->
         Decorate_error.raise
           Message.(

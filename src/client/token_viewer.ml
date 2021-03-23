@@ -215,6 +215,7 @@ let show_token ctxt
       ; decimals
       ; main_multimedia
       ; metadata
+      ; special_knowledge
       ; tzip21 } =
   let open Meta_html in
   let open Contract_metadata.Content.Tzip_021 in
@@ -387,7 +388,15 @@ let show_token ctxt
                   ~error:Exn.pp))
            main_multimedia) *)
     % Bootstrap.p_lead metadescription
-    % div creators % div tags % div contract_info in
+    % div creators % div tags
+    % ( match special_knowledge with
+      | [] -> empty ()
+      | sk ->
+          list
+            (List.map sk ~f:(function `Hic_et_nunc n ->
+                 bt "Special-Link:"
+                 %% url it (Fmt.str "https://www.hicetnunc.xyz/objkt/%d" n))) )
+    % div contract_info in
   div
     ~a:[style "padding: 1em; border: solid 3px #aaa; max-width: 800px"]
     main_content
