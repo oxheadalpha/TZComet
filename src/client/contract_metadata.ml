@@ -862,27 +862,28 @@ module Token = struct
     >>= fun token_metadata_big_map ->
     Query_nodes.metadata_value ctxt ~address ~key:"" ~log:(logs "Getting URI")
     >>= (fun metadata_uri ->
-          let uri =
-            match Uri.validate metadata_uri with
-            | Ok uri, _ -> uri
-            | Error error, _ ->
-                failm
-                  Message.(
-                    t "failed to parse/validate the metadata URI:"
-                    %% Fmt.kstr ct "%a"
-                         Tezos_error_monad.Error_monad.pp_print_error error)
-          in
-          Uri.fetch ctxt uri ~log:(logs "Fetching Metadata")
-          >>= fun json_code ->
           let open Tezos_contract_metadata.Metadata_contents in
-          match Content.of_json json_code with
-          | Ok (_, con) -> Lwt.return con
-          | Error error ->
-              failm
+          let empty () = Lwt.return (make []) in
+          match Uri.validate metadata_uri with
+          | Ok uri, _ -> (
+              Uri.fetch ctxt uri ~log:(logs "Fetching Metadata")
+              >>= fun json_code ->
+              match Content.of_json json_code with
+              | Ok (_, con) -> Lwt.return con
+              | Error error ->
+                  log
+                    Message.(
+                      t "failed to parse/validate the metadata URI:"
+                      %% Fmt.kstr ct "%a"
+                           Tezos_error_monad.Error_monad.pp_print_error error) ;
+                  empty () )
+          | Error error, _ ->
+              log
                 Message.(
                   t "failed to parse/validate the metadata URI:"
                   %% Fmt.kstr ct "%a"
-                       Tezos_error_monad.Error_monad.pp_print_error error))
+                       Tezos_error_monad.Error_monad.pp_print_error error) ;
+              empty ())
     >>= fun metadata_contents ->
     let get_token_metadata_map_with_view () =
       let total_supply_validation, token_metadata_validation =
