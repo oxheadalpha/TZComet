@@ -759,6 +759,7 @@ module Token = struct
     ; symbol: string option
     ; name: string option
     ; decimals: string option
+    ; total_supply: Z.t option
     ; tzip21: Content.Tzip_021.t
     ; main_multimedia: (string * Multimedia.t, exn) Result.t Option.t
     ; metadata: Tezos_contract_metadata.Metadata_contents.t
@@ -766,7 +767,8 @@ module Token = struct
     ; warnings: (string * warning) list }
 
   let make ?symbol ?name ?decimals ?network ?main_multimedia ~tzip21
-      ?(warnings = []) ~metadata ?(special_knowledge = []) address id =
+      ?(warnings = []) ~metadata ?total_supply ?(special_knowledge = []) address
+      id =
     { address
     ; id
     ; network
@@ -776,6 +778,7 @@ module Token = struct
     ; decimals
     ; main_multimedia
     ; metadata
+    ; total_supply
     ; special_knowledge
     ; tzip21 }
 
@@ -885,30 +888,36 @@ module Token = struct
                        Tezos_error_monad.Error_monad.pp_print_error error) ;
               empty ())
     >>= fun metadata_contents ->
+    let total_supply_validation, token_metadata_validation =
+      match Content.classify ?token_metadata_big_map metadata_contents with
+      | Tzip_16 t ->
+          failm
+            Message.(
+              t "This is not a TZIP-012 token at all. See interfaces claimed:"
+              %% list
+                   (oxfordize_list ~map:ct
+                      ~sep:(fun () -> t ", ")
+                      ~last_sep:(fun () -> t ", and ")
+                      metadata_contents.interfaces))
+      | Tzip_12
+          { metadata
+          ; interface_claim
+          ; get_balance
+          ; total_supply
+          ; all_tokens
+          ; is_operator
+          ; token_metadata
+          ; permissions_descriptor } ->
+          (total_supply, token_metadata) in
     let get_token_metadata_map_with_view () =
-      let total_supply_validation, token_metadata_validation =
-        match Content.classify ?token_metadata_big_map metadata_contents with
-        | Tzip_16 t ->
-            failm
-              Message.(
-                t "This is not a TZIP-012 token at all. See interfaces claimed:"
-                %% list
-                     (oxfordize_list ~map:ct
-                        ~sep:(fun () -> t ", ")
-                        ~last_sep:(fun () -> t ", and ")
-                        metadata_contents.interfaces))
-        | Tzip_12
-            { metadata
-            ; interface_claim
-            ; get_balance
-            ; total_supply
-            ; all_tokens
-            ; is_operator
-            ; token_metadata
-            ; permissions_descriptor } ->
-            (total_supply, token_metadata) in
       Content.maybe_call_view ctxt token_metadata_validation
         ~parameter_string:(Int.to_string id) ~address ~log:logs in
+    let get_total_supply_with_view () =
+      Content.maybe_call_view ctxt total_supply_validation
+        ~parameter_string:(Int.to_string id) ~address ~log:logs
+      >>= function
+      | Some (Ok (Tezos_micheline.Micheline.Int (_, z))) -> Lwt.return_some z
+      | _ -> Lwt.return_none in
     let get_token_metadata_map_with_big_map ~log ~node big_map_id =
       Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node ~log
         ~big_map_id ~key:id in
@@ -1006,6 +1015,8 @@ module Token = struct
               (fun exn -> Lwt.return_error exn)
             >|= Option.some )
         >>= fun main_multimedia ->
+        get_total_supply_with_view ()
+        >>= fun total_supply ->
         let special_knowledge =
           match address with
           | "KT1M2JnD1wsg7w2B4UXJXtKQPuDUpU2L7cJH"
@@ -1013,7 +1024,7 @@ module Token = struct
               [`Hic_et_nunc id]
           | _ -> [] in
         Lwt.return
-          (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia
+          (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia ?total_supply
              ~metadata:metadata_contents ~network:node.Query_nodes.Node.network
              ~special_knowledge address id ~warnings:!warnings)
     | other ->
