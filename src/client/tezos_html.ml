@@ -649,16 +649,18 @@ let show_micheline_result = function
   | Ok node -> ct (Michelson.micheline_node_to_string node)
   | Error s -> Bootstrap.color `Danger (t s)
 
-let show_total_supply ctxt ?decimals = function
-  | Ok (Tezos_micheline.Micheline.Int (_, z)) -> (
-    match Option.map ~f:Int.of_string decimals with
-    | Some decimals ->
-        let dec = Float.(Z.to_float z / (10. ** of_int decimals)) in
-        Fmt.kstr t "%s (%a Units)"
-          (Float.to_string_hum ~delimiter:' ' ~decimals ~strip_zero:true dec)
-          Z.pp_print z
-    | None | (exception _) -> Fmt.kstr t "%a Units (no decimals)" Z.pp_print z
-    )
+let show_total_supply (ctxt : _ Context.t) ?decimals z =
+  match Option.map ~f:Int.of_string decimals with
+  | Some decimals ->
+      let dec = Float.(Z.to_float z / (10. ** of_int decimals)) in
+      Fmt.kstr t "%s (%a Units)"
+        (Float.to_string_hum ~delimiter:' ' ~decimals ~strip_zero:true dec)
+        Z.pp_print z
+  | None | (exception _) -> Fmt.kstr t "%a Units (no decimals)" Z.pp_print z
+
+let show_total_supply_result ctxt ?decimals = function
+  | Ok (Tezos_micheline.Micheline.Int (_, z)) ->
+      show_total_supply ctxt ?decimals z
   | other -> ct "Error: " %% show_micheline_result other
 
 let show_extras ctxt (extr : (String.t * String.t, Message.t) Result.t List.t) =
@@ -692,7 +694,7 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
     List.filter_opt
       [ Option.map symbol ~f:(fun s -> t "symbol:" %% ct s)
       ; Option.map total_supply ~f:(fun s ->
-            t "total-supply:" %% show_total_supply ctxt ?decimals s)
+            t "total-supply:" %% show_total_supply_result ctxt ?decimals s)
       ; Option.map decimals ~f:(fun s -> t "decimals:" %% ct s) ]
     |> function
     | [] -> empty ()

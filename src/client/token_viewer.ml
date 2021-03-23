@@ -213,6 +213,7 @@ let show_token ctxt
       ; symbol
       ; name
       ; decimals
+      ; total_supply
       ; main_multimedia
       ; metadata
       ; special_knowledge
@@ -376,6 +377,17 @@ let show_token ctxt
          | Some l, _ -> Some (l %% tail)
          | None, [] -> None
          | None, _ -> Some (it "NOT-NAMED" %% tail)) in
+  let fungible_part =
+    match decimals with
+    | None | Some "0" | (exception _) -> empty ()
+    | Some n ->
+        div
+          ( bt "Fungible Token:"
+          %% Fmt.kstr it "decimals: %s" n
+          % or_empty symbol (fun sym -> it ", symbol:" %% ct sym)
+          % or_empty total_supply (fun z ->
+                it ", total-supply:"
+                %% Tezos_html.show_total_supply ctxt ~decimals:n z) ) in
   let main_content =
     h3 ~a:[style "text-align: center"] metaname
     % multimedia
@@ -396,7 +408,7 @@ let show_token ctxt
             (List.map sk ~f:(function `Hic_et_nunc n ->
                  bt "Special-Link:"
                  %% url it (Fmt.str "https://www.hicetnunc.xyz/objkt/%d" n))) )
-    % div contract_info in
+    % fungible_part % div contract_info in
   div
     ~a:[style "padding: 1em; border: solid 3px #aaa; max-width: 800px"]
     main_content
