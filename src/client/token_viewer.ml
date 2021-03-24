@@ -551,7 +551,20 @@ let render ctxt =
               Reactive.set token_id (Int.to_string (current + 1)) ;
               enter_action ()
             with _ -> ()) ) in
+  let show_error e =
+    Bootstrap.alert ~kind:`Danger
+      ( h3 (t "Failed To Fetch The Token 😿")
+      % div e % hr ()
+      % div
+          ( bt
+              "💡 This could be that the token does not exist, that a public \
+               Tezos node is having trouble responding, or that an IPFS \
+               gateway is limiting requests ⇒"
+          %% Bootstrap.button ~kind:`Primary (t "Try Again ♲")
+               ~action:enter_action ) ) in
   State.if_explorer_should_go ctxt enter_action ;
   h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
   % top_form % second_form
-  % Async_work.render result ~f:(show_token ctxt)
+  % div
+      ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
+      (Async_work.render result ~f:(show_token ctxt) ~show_error)
