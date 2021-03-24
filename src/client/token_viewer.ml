@@ -466,13 +466,7 @@ let render ctxt =
       State.if_explorer_should_go ctxt enter_action ;
       make ~enter_action
         [ row
-            [ cell 2
-                (submit_button (t "Pick A Random Token") (fun () ->
-                     let addr, id = State.Examples.random_token ctxt in
-                     Reactive.set token_address addr ;
-                     Reactive.set token_id (Int.to_string id) ;
-                     enter_action ()))
-            ; cell 4
+            [ cell 4
                 (input
                    ~placeholder:(Reactive.pure "Contract address")
                    token_address_bidi
@@ -483,8 +477,33 @@ let render ctxt =
                 (input ~placeholder:(Reactive.pure "Token ID") token_id_bidi
                    ~help:
                      (make_help ~validity:token_id_valid ~input:token_id
-                        (t "A natural number.")))
-            ; cell 3
+                        (t "A natural number."))) ]
+        ; row
+            [ cell 2
+                (submit_button (t "Random Token") (fun () ->
+                     let addr, id = State.Examples.random_token ctxt in
+                     Reactive.set token_address addr ;
+                     Reactive.set token_id (Int.to_string id) ;
+                     enter_action ()))
+            ; cell 2
+                (submit_button (t "Previous") (fun () ->
+                     try
+                       let current = Int.of_string (Reactive.peek token_id) in
+                       Reactive.set token_id (Int.to_string (current - 1)) ;
+                       enter_action ()
+                     with _ -> ()))
+            ; cell 2
+                (submit_button (t "Next") (fun () ->
+                     try
+                       let current = Int.of_string (Reactive.peek token_id) in
+                       Reactive.set token_id (Int.to_string (current + 1)) ;
+                       enter_action ()
+                     with _ -> ()))
+            ; cell 2
+                (check_box
+                   (State.always_show_multimedia_bidirectional ctxt)
+                   ~label:(t "YOLO Mode"))
+            ; cell 2
                 (submit_button (t "Go!")
                    ~active:
                      Reactive.(
@@ -492,7 +511,5 @@ let render ctxt =
                          (input_valid ctxt ** Async_work.busy result)
                          ~f:(function
                            | false, _ -> false | _, true -> false | _ -> true))
-                   enter_action)
-              (* ; cell 1
-                  (magic (t " – or – ")) *) ] ])
+                   enter_action) ] ])
   % Async_work.render result ~f:(show_token ctxt)

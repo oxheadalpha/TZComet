@@ -249,7 +249,7 @@ module Bootstrap = struct
       let content =
         [ button
             ~a:
-              [ classes ["navbar-toggler"]
+              [ classes ["navbar-toggler"; "bg-light"]
               ; a_user_data "toggle" (Reactive.pure "collapse")
               ; a_user_data "target" (Fmt.kstr Reactive.pure "#%s" toggler_id)
               ; a_aria "controls" (Reactive.pure [toggler_id])
@@ -297,7 +297,9 @@ module Bootstrap = struct
                              [a ~a:[classes ["nav-link"]] [content]]))) ] ]
       in
       nav content
-        ~a:[classes ["navbar"; "navbar-expand-lg"; "navbar-light"; "bg-light"]]
+        ~a:
+          [ classes ["navbar"; "navbar-expand-lg"; "navbar-light"; "bg-light"]
+          ; H5.a_style (Reactive.pure "background-color: #93afdb !important") ]
   end
 
   module Tab_bar = struct
