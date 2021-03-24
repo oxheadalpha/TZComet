@@ -205,6 +205,8 @@ let linkify_text s =
         handle_tok tok ; () in
   go 0 ; !output
 
+let token_ui_max_width = "900px"
+
 let show_token ctxt
     Contract_metadata.Token.
       { address
@@ -411,7 +413,9 @@ let show_token ctxt
                  %% url it (Fmt.str "https://www.hicetnunc.xyz/objkt/%d" n))) )
     % fungible_part % div contract_info in
   div
-    ~a:[style "padding: 1em; border: solid 3px #aaa; max-width: 800px"]
+    ~a:
+      [ Fmt.kstr style "padding: 1em; border: solid 3px #aaa; max-width: %s"
+          token_ui_max_width ]
     main_content
   % Bootstrap.Collapse.(
       fixed_width_reactive_button_with_div_below (make ()) ~kind:`Secondary
@@ -454,6 +458,12 @@ let render ctxt =
           | false, more ->
               content %% Bootstrap.color `Danger (ct more %% t "is wrong.")))
   in
+  let controls_active = Async_work.busy result |> Reactive.map ~f:not in
+  let form_ready_to_go =
+    Reactive.(
+      map
+        (input_valid ctxt ** Async_work.busy result)
+        ~f:(function false, _ -> false | _, true -> false | _ -> true)) in
   let enter_action () =
     if
       is_token_id_valid (Reactive.peek token_id)
@@ -461,55 +471,86 @@ let render ctxt =
       && not (Async_work.peek_busy result)
     then go_action ctxt ~wip:result in
   let _once_in_tab = enter_action () in
+  let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
+    Bootstrap.Form.(
+      make ?enter_action [input ?active ?id ?placeholder ?help ?label bidi])
+  in
+  let make_check_box ?active ?id ?help ?label ?enter_action bidi =
+    Bootstrap.Form.(
+      make ?enter_action [check_box ?active ?id ?help ?label bidi]) in
+  let make_button c ~active action =
+    let f active =
+      Bootstrap.button ~kind:`Primary ~outline:true c ~disabled:(not active)
+        ~action in
+    Reactive.bind active ~f in
+  let item s c = div ~a:[style s] c in
+  let top_form =
+    Browser_window.width ctxt
+    |> Reactive.bind ~f:(fun bro_width ->
+           div
+             ~a:
+               [ Fmt.kstr style
+                   "display: flex; %s; flex-wrap: wrap; justify-content: \
+                    space-between; align-items: flex-start; max-width: %s"
+                   ( match bro_width with
+                   | None | Some `Thin ->
+                       "flex-direction: column; margin-bottom: 1em"
+                   | _ -> "flex-direction: row" )
+                   token_ui_max_width ]
+             ( item ""
+                 (make_button (t "Random Token 🎲") ~active:controls_active
+                    (fun () ->
+                      let addr, id = State.Examples.random_token ctxt in
+                      Reactive.set token_address addr ;
+                      Reactive.set token_id (Int.to_string id) ;
+                      enter_action ()))
+             % item "min-width: 25em"
+                 (make_input
+                    ~placeholder:(Reactive.pure "Contract address")
+                    token_address_bidi
+                    ~help:
+                      (make_help ~validity:address_valid ~input:token_address
+                         (t "A valid KT1 address on any known network.")))
+             % item "max-width: 8em"
+                 (make_input ~placeholder:(Reactive.pure "Token ID")
+                    token_id_bidi
+                    ~help:
+                      (make_help ~validity:token_id_valid ~input:token_id
+                         (t "A natural number.")))
+             % item "min-width: 5em"
+                 (make_button (t "Go 🎬") ~active:form_ready_to_go
+                    enter_action) )) in
+  let second_form =
+    div
+      ~a:
+        [ Fmt.kstr style
+            "display: flex; flex-direction: row; flex-wrap: wrap; \
+             justify-content: space-between; align-items: flex-start; \
+             max-width: %s"
+            token_ui_max_width ]
+      ( make_button (t "<< Previous") ~active:form_ready_to_go (fun () ->
+            try
+              let current = Int.of_string (Reactive.peek token_id) in
+              Reactive.set token_id (Int.to_string (current - 1)) ;
+              enter_action ()
+            with _ -> ())
+      % item "min-width: 10em"
+          (item "text-align: center"
+             (make_check_box
+                (State.always_show_multimedia_bidirectional ctxt)
+                ~help:
+                  ( State.get_always_show_multimedia ctxt
+                  |> Reactive.bind ~f:(function
+                       | true -> t "Will show all multimedia."
+                       | false -> t "Will hide unknown multimedia") )
+                ~label:(t " YOLO Mode")))
+      % make_button (t "Next >>") ~active:form_ready_to_go (fun () ->
+            try
+              let current = Int.of_string (Reactive.peek token_id) in
+              Reactive.set token_id (Int.to_string (current + 1)) ;
+              enter_action ()
+            with _ -> ()) ) in
+  State.if_explorer_should_go ctxt enter_action ;
   h2 (t "Token Viewer")
-  % Bootstrap.Form.(
-      State.if_explorer_should_go ctxt enter_action ;
-      make ~enter_action
-        [ row
-            [ cell 4
-                (input
-                   ~placeholder:(Reactive.pure "Contract address")
-                   token_address_bidi
-                   ~help:
-                     (make_help ~validity:address_valid ~input:token_address
-                        (t "A valid KT1 address on any known network.")))
-            ; cell 2
-                (input ~placeholder:(Reactive.pure "Token ID") token_id_bidi
-                   ~help:
-                     (make_help ~validity:token_id_valid ~input:token_id
-                        (t "A natural number."))) ]
-        ; row
-            [ cell 2
-                (submit_button (t "Random Token") (fun () ->
-                     let addr, id = State.Examples.random_token ctxt in
-                     Reactive.set token_address addr ;
-                     Reactive.set token_id (Int.to_string id) ;
-                     enter_action ()))
-            ; cell 2
-                (submit_button (t "Previous") (fun () ->
-                     try
-                       let current = Int.of_string (Reactive.peek token_id) in
-                       Reactive.set token_id (Int.to_string (current - 1)) ;
-                       enter_action ()
-                     with _ -> ()))
-            ; cell 2
-                (submit_button (t "Next") (fun () ->
-                     try
-                       let current = Int.of_string (Reactive.peek token_id) in
-                       Reactive.set token_id (Int.to_string (current + 1)) ;
-                       enter_action ()
-                     with _ -> ()))
-            ; cell 2
-                (check_box
-                   (State.always_show_multimedia_bidirectional ctxt)
-                   ~label:(t "YOLO Mode"))
-            ; cell 2
-                (submit_button (t "Go!")
-                   ~active:
-                     Reactive.(
-                       map
-                         (input_valid ctxt ** Async_work.busy result)
-                         ~f:(function
-                           | false, _ -> false | _, true -> false | _ -> true))
-                   enter_action) ] ])
+  % top_form % second_form
   % Async_work.render result ~f:(show_token ctxt)

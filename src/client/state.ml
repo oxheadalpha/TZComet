@@ -238,6 +238,9 @@ let check_micheline_indentation_bidirectional ctxt =
 let always_show_multimedia ctxt =
   Reactive.peek (get ctxt).always_show_multimedia
 
+let get_always_show_multimedia ctxt =
+  Reactive.get (get ctxt).always_show_multimedia
+
 let always_show_multimedia_bidirectional ctxt =
   Reactive.Bidirectional.of_var (get ctxt).always_show_multimedia
 
