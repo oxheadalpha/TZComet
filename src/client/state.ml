@@ -447,7 +447,7 @@ module Examples = struct
   let tokens_global =
     (* weight, name, kt1, min-token, max-token *)
     [ (0.05, "Alchememist", "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc", 0, 15)
-    ; (0.85, "HicEtNunc", "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", 300, 11400)
+    ; (0.85, "HicEtNunc", "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", 300, 12167)
     ; (0.1, "Kalamint", "KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse", 1, 254) ]
 
   let random_token (_ : _ Context.t) =
