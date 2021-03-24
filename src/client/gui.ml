@@ -15,23 +15,33 @@ let navigation_menu state =
       ~f:(fun frg -> Fragment.(to_string (change_for_page frg p)))
       fragment in
   let tzcomet =
-    Bootstrap.label `Dark
-      ( tzcomet_link ()
-      %% Reactive.bind fragment_self (fun f ->
-             (* Invisible, but kept in order to keep pulling the fragment. *)
-             span ~a:[style "font-size: 20%"] (link (t " ") ~target:("#" ^ f)))
-      %% Reactive.bind (State.dev_mode state) (function
-           | true -> it "(dev)"
-           | false -> empty ()) ) in
-  Bootstrap.Navigation_bar.(
-    make ~brand:tzcomet
-      (let of_page p =
-         item
-           (bt (Page.to_string p))
-           ~active:(State.current_page_is_not state p)
-           ~action:(State.set_page state (`Changing_to p))
-           ~fragment:(fragment_page p) in
-       List.map ~f:of_page all_in_order))
+    b (tzcomet_link ())
+    %% Reactive.bind fragment_self (fun f ->
+           (* Invisible, but kept in order to keep pulling the fragment. *)
+           span ~a:[style "font-size: 20%"] (link (t " ") ~target:("#" ^ f)))
+    %% Reactive.bind (State.dev_mode state) (function
+         | true -> it "(dev)"
+         | false -> empty ()) in
+  let all_items =
+    let of_page p =
+      Bootstrap.Navigation_bar.item
+        (bt (Page.to_string p))
+        ~active:(State.current_page_is_not state p)
+        ~action:(State.set_page state (`Changing_to p))
+        ~fragment:(fragment_page p) in
+    List.map ~f:of_page all_in_order in
+  Reactive.bind (Browser_window.width state) ~f:(function
+    | Some `Wide ->
+        Bootstrap.Navigation_bar.(
+          let brand = Bootstrap.label `Dark tzcomet in
+          make ~brand all_items)
+    | None | Some `Thin ->
+        div
+          ~a:
+            [ classes ["col-12"; "bg-light"]
+            ; style "text-align:center; font-size: 175%" ]
+          (div tzcomet)
+        % Bootstrap.Navigation_bar.(make ~brand:(empty ()) all_items))
 
 let about_page state =
   let open Meta_html in
