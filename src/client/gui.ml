@@ -14,16 +14,17 @@ let navigation_menu state =
     Reactive.map
       ~f:(fun frg -> Fragment.(to_string (change_for_page frg p)))
       fragment in
+  let tzcomet =
+    Bootstrap.label `Dark
+      ( tzcomet_link ()
+      %% Reactive.bind fragment_self (fun f ->
+             (* Invisible, but kept in order to keep pulling the fragment. *)
+             span ~a:[style "font-size: 20%"] (link (t " ") ~target:("#" ^ f)))
+      %% Reactive.bind (State.dev_mode state) (function
+           | true -> it "(dev)"
+           | false -> empty ()) ) in
   Bootstrap.Navigation_bar.(
-    make
-      ~brand:
-        (Bootstrap.label `Dark
-           ( tzcomet_link ()
-           %% Reactive.bind fragment_self (fun f ->
-                  link (t "ʘ") ~target:("#" ^ f))
-           %% Reactive.bind (State.dev_mode state) (function
-                | true -> it "(dev)"
-                | false -> empty ()) ))
+    make ~brand:tzcomet
       (let of_page p =
          item
            (bt (Page.to_string p))
