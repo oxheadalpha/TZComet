@@ -284,8 +284,9 @@ let show_token ctxt
                   (link ~target:mm.converted_uri
                      (H5.object_
                         ~a:
-                          [ H5.a_mime_type (Lwd.pure "image/svg+xml")
-                          ; H5.a_data (Lwd.pure mm.converted_uri) ]
+                          [ H5.a_mime_type (Reactive.pure "image/svg+xml")
+                          ; H5.a_data (Reactive.pure mm.converted_uri)
+                          ; H5.a_style (Reactive.pure mm_style) ]
                         [ H5.img ~a:[style mm_style]
                             ~alt:
                               (Fmt.kstr Lwd.pure "%s at %s" title
