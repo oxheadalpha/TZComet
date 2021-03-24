@@ -5,7 +5,7 @@
   src="https://user-images.githubusercontent.com/617111/97904884-235dd900-1d0f-11eb-9aae-28e60eb0af15.gif"
 ></a></div>
 
-… currently running at <https://tqtezos.github.io/TZComet/> …
+… currently running at <https://tzcomet.io> …
 
 ## Build
 
@@ -23,8 +23,4 @@
 - The
   [TZIP-16](https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-16/tzip-16.md)
   specification.
-- A work-in-progress merge-request for `tezos/tezos` on which this development
-  is based:
-  [`smondet/tezos!7`](https://gitlab.com/smondet/tezos/-/merge_requests/7).
-
 
