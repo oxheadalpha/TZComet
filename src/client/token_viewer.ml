@@ -540,11 +540,18 @@ let render ctxt =
              (make_check_box
                 (State.always_show_multimedia_bidirectional ctxt)
                 ~help:
-                  ( State.get_always_show_multimedia ctxt
-                  |> Reactive.bind ~f:(function
-                       | true -> t "Will show all multimedia."
-                       | false -> t "Will hide unknown multimedia") )
-                ~label:(t " YOLO Mode")))
+                  (t
+                     "Always show unknown multimedia."
+                     (* State.get_always_show_multimedia ctxt
+                        |> Reactive.bind ~f:(function
+                             | true -> t "Hide unknown multimedia by default."
+                             | false -> t "Always show unknown multimedia.") *))
+                ~label:
+                  ( t " YOLO Mode"
+                  %% Reactive.bind (State.get_always_show_multimedia ctxt)
+                       ~f:(function
+                       | true -> t "👀"
+                       | false -> t "🤦") )))
       % make_button (control "Next ⏭") ~active:form_ready_to_go (fun () ->
             try
               let current = Int.of_string (Reactive.peek token_id) in
