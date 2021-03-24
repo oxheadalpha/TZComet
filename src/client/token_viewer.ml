@@ -497,7 +497,7 @@ let render ctxt =
                        "flex-direction: column; margin-bottom: 1em"
                    | _ -> "flex-direction: row" )
                    token_ui_max_width ]
-             ( item ""
+             ( item "padding-bottom: 4px"
                  (make_button (t "Random Token 🎲") ~active:controls_active
                     (fun () ->
                       let addr, id = State.Examples.random_token ctxt in
@@ -517,24 +517,25 @@ let render ctxt =
                     ~help:
                       (make_help ~validity:token_id_valid ~input:token_id
                          (t "A natural number.")))
-             % item "min-width: 5em"
+             % item ""
                  (make_button (t "Go 🎬") ~active:form_ready_to_go
                     enter_action) )) in
   let second_form =
+    let control s = small (t s) in
     div
       ~a:
         [ Fmt.kstr style
-            "display: flex; flex-direction: row; flex-wrap: wrap; \
+            "display: flex; flex-direction: row; flex-wrap: nowrap; \
              justify-content: space-between; align-items: flex-start; \
              max-width: %s"
             token_ui_max_width ]
-      ( make_button (t "<< Previous") ~active:form_ready_to_go (fun () ->
+      ( make_button (control "⏮ Previous") ~active:form_ready_to_go (fun () ->
             try
               let current = Int.of_string (Reactive.peek token_id) in
               Reactive.set token_id (Int.to_string (current - 1)) ;
               enter_action ()
             with _ -> ())
-      % item "min-width: 10em"
+      % item ""
           (item "text-align: center"
              (make_check_box
                 (State.always_show_multimedia_bidirectional ctxt)
@@ -544,13 +545,13 @@ let render ctxt =
                        | true -> t "Will show all multimedia."
                        | false -> t "Will hide unknown multimedia") )
                 ~label:(t " YOLO Mode")))
-      % make_button (t "Next >>") ~active:form_ready_to_go (fun () ->
+      % make_button (control "Next ⏭") ~active:form_ready_to_go (fun () ->
             try
               let current = Int.of_string (Reactive.peek token_id) in
               Reactive.set token_id (Int.to_string (current + 1)) ;
               enter_action ()
             with _ -> ()) ) in
   State.if_explorer_should_go ctxt enter_action ;
-  h2 (t "Token Viewer")
+  h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
   % top_form % second_form
   % Async_work.render result ~f:(show_token ctxt)
