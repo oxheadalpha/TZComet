@@ -247,7 +247,8 @@ module Bootstrap = struct
       let open H5 in
       let toggler_id = Fresh_id.of_option "dropdown" id in
       let content =
-        [ button
+        [ a ~a:[classes ["navbar-brand"]] [brand]
+        ; button
             ~a:
               [ classes ["navbar-toggler"]
               ; a_user_data "toggle" (Reactive.pure "collapse")
@@ -256,7 +257,6 @@ module Bootstrap = struct
               ; a_aria "expanded" (Reactive.pure ["false"])
               ; a_aria "label" (Reactive.pure [aria_label]) ]
             [span ~a:[classes ["navbar-toggler-icon"]] []]
-        ; a ~a:[classes ["navbar-brand"]] [brand]
         ; div
             ~a:
               [ classes ["collapse"; "navbar-collapse"]
