@@ -507,13 +507,13 @@ let render ctxt =
              % item "min-width: 25em"
                  (make_input
                     ~placeholder:(Reactive.pure "Contract address")
-                    token_address_bidi
+                    ~enter_action token_address_bidi
                     ~help:
                       (make_help ~validity:address_valid ~input:token_address
                          (t "A valid KT1 address on any known network.")))
              % item "max-width: 8em"
                  (make_input ~placeholder:(Reactive.pure "Token ID")
-                    token_id_bidi
+                    ~enter_action token_id_bidi
                     ~help:
                       (make_help ~validity:token_id_valid ~input:token_id
                          (t "A natural number.")))
