@@ -338,6 +338,10 @@ let if_explorer_should_go state f =
   else ()
 
 module Examples = struct
+  let alchememist_blockchain_adventures = "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc"
+  let hicetnunc_version_2 = "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton"
+  let kalamint = "KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse"
+
   type item = string * string
 
   type t =
@@ -376,34 +380,53 @@ module Examples = struct
            let mtb, mtb_dev, mtb_all = aggl ~dev () in
            let mby, mby_dev, mby_all = aggl ~dev () in
            let tzc, tzc_dev, tzc_all = aggl ~dev () in
-           let kt1_one_view = "KT1V8ghqePSqVW5jYC1T9zj2udQ6qZQjBqNf" in
+           let kt1_fa2_smartpy = "KT1RHSiA9vt9A7B9DupLKQw2Re8SH3QdsLmN" in
+           kt1 kt1_fa2_smartpy
+             "An FA2-SmartPy on Edonet with a few tokens fungible or not, also \
+              using TZIP-021." ;
+           kt1 alchememist_blockchain_adventures
+             "An NFT collection by “The Alchememist” on Mainnet." ;
+           kt1 hicetnunc_version_2
+             "The version 2 of Hic Et Nunc's collection on Mainnet." ;
+           kt1_dev kalamint "Kalamint's NFT collection on Mainnet (invalid)." ;
            kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
              "Should not exist any where." ;
-           kt1 "KT1TLvewkn73Hb1YTDyX6pE6oD8qVKGTZax3"
-             "Just a version string as metadata." ;
-           kt1_dev "KT1UYx6muzchTo6CGMcHwDowCQJMNoUPPBLp"
-             "Has a URI that points nowhere." ;
-           kt1_dev "KT1Peb7x8DfBMnHyyzdSDgpSyAvaZXLuTz5g"
-             "Has a URI that is invalid." ;
-           kt1_dev "KT1FsTYsKVfyvAuoh4WHNV5ibWbnh55p1XvR"
-             "Points to invalid metdaata." ;
-           kt1 kt1_one_view "Has one off-chain-view." ;
-           kt1_dev "KT1JyuJoEDVaJ5Pfjp6vZsrvZRymyGs59rgw"
-             "Has a few views that return bytes (JSON, UTF-8, binary …)" ;
-           kt1_dev "KT1T8oqWTAVokcEh2ki56Gyf4QBbsoJE3jjU"
-             "Event more weird off-chain-views." ;
-           kt1 "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc"
-             "An NFT collection by “The Alchememist” on Mainnet." ;
+           (* The ones made by ./please.sh deploy examples all *)
+           let empty_metadata = "KT1C5voNPWxBnPcJhzPt94G5HNxnvv5GVSva" in
+           kt1_dev empty_metadata "The missing metadata one." ;
+           let wrong_uri = "KT1TcR5Y2iJsEgU81ToXiBnW1XZD3FiRCSyD" in
+           kt1_dev wrong_uri "Has a URI that points nowhere." ;
+           let empty_but_valid = "KT18xTduGnadJBKb4ZBV8kwaAjfh4hwkJ8zi" in
+           kt1_dev empty_but_valid "Empty, but valid metadata." ;
+           let just_version = "KT1EtxHeCuoD36Reknbn3QNeXZiWcPs6izVM" in
+           kt1 just_version "Has just a version string." ;
+           let with_basics = "KT1Q9NKbCkgzGv7hx71F6uuCkeNZNqiHwUCV" in
+           kt1_dev with_basics "This contract has few more fields." ;
+           let one_off_chain_view = "KT1NfYJgiooHqvuEuapB9AaEXbCimmAd8kgz" in
+           kt1 one_off_chain_view
+             "This contract has a one off-chain-view which is actually reused \
+              for error-translation." ;
+           let bunch_of_views = "KT1NRi6gDTjrfiGgWyBMXhqzzUFgy2eKz6dK" in
+           kt1_dev bunch_of_views
+             "This contract has a bunch of off-chain-views." ;
+           let invalid_uri = "KT1Xg7RSKMVyr3zh2wsfPx7yutHJWXmCifaf" in
+           kt1_dev invalid_uri "Has a URI that is invalid." ;
+           let invalid_version_field = "KT18osZvnsbAi8jAju7tfFRpYhVqZCrR2tYT" in
+           kt1_dev invalid_version_field
+             "Points to invalid metadata (wrong version field)." ;
+           let views_return_bytes = "KT1KBoox8mvYsZ2HEn3vnBDnJWEc7BtoHZhL" in
+           kt1_dev views_return_bytes
+             "This contract has bytes-returning off-chain-views." ;
            uri https_ok "A valid HTTPS URI." ;
            uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
            uri_dev sha256_https_ko
              "A valid SHA256+HTTPS URI but the hash is not right." ;
            uri
-             (Fmt.str "tezos-storage://%s/contents" kt1_one_view)
+             (Fmt.str "tezos-storage://%s/contents" one_off_chain_view)
              "An on-chain pointer to metadata." ;
            uri_dev
              (Fmt.str "tezos-storage://%s.NetXrtZMmJmZSeb/contents"
-                kt1_one_view)
+                one_off_chain_view)
              "An on-chain pointer to metadata with chain-id." ;
            uri_dev "tezos-storage:/here"
              "An on-chain pointer that requires a KT1 in context." ;
@@ -446,9 +469,9 @@ module Examples = struct
 
   let tokens_global =
     (* weight, name, kt1, min-token, max-token *)
-    [ (0.1, "Alchememist", "KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc", 0, 15)
-    ; (0.7, "HicEtNunc", "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton", 300, 12167)
-    ; (0.2, "Kalamint", "KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse", 1, 254) ]
+    [ (0.1, "Alchememist", alchememist_blockchain_adventures, 0, 15)
+    ; (0.6, "HicEtNunc", hicetnunc_version_2, 300, 12750)
+    ; (0.3, "Kalamint", kalamint, 1, 689) ]
 
   let random_token (_ : _ Context.t) =
     let _, _, k, m, x =
