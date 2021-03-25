@@ -157,7 +157,7 @@ let linkify_text s =
   let output = ref (empty ()) in
   let print c = output := !output % c in
   let is_word_sep = function
-    | ' ' | '\'' | '(' | ')' | '!' | '[' | ']' -> true
+    | ' ' | '\'' | '(' | ')' | '!' | '[' | ']' | ',' | '\n' -> true
     | _ -> false in
   let next_sep s ~pos =
     match String.lfindi ~pos s ~f:(fun _ -> is_word_sep) with
@@ -165,8 +165,11 @@ let linkify_text s =
         Some (new_pos + 1, s.[new_pos], String.sub s ~pos ~len:(new_pos - pos))
     | None -> None in
   let handle_tok = function
-    | uri when String.is_prefix uri ~prefix:"https://" ->
-        print (link ~target:uri (t uri))
+    | uri when String.is_prefix uri ~prefix:"https://" -> (
+      (* A URL that ends with a dot is usually a URL plus a period: *)
+      match String.chop_suffix uri ~suffix:"." with
+      | Some uri -> print (link ~target:uri (t uri) % t ".")
+      | None -> print (link ~target:uri (t uri)) )
     | handle
       when prefix_and_for_all ~prefix:"@" ~for_all:is_twitter_handle handle ->
         let heavy c =
@@ -194,12 +197,15 @@ let linkify_text s =
              ~target:(Fmt.str "https://tzkt.io/%s" tz_address)
              (bt (ellipsize_string ~ellipsis:"…" ~max_length:8 tz_address)))
     | tok -> print (t tok) in
-  let rec go pos =
+  let rec go ?(nl = false) pos =
     match next_sep ~pos s with
+    | Some (npos, '\n', "") ->
+        if nl then print (br ()) ;
+        go npos ~nl:false
     | Some (npos, sep, tok) ->
         handle_tok tok ;
         print (Fmt.kstr t "%c" sep) ;
-        go npos
+        go npos ~nl:Char.(sep = '\n')
     | None ->
         let tok = String.sub s ~pos ~len:(String.length s - pos) in
         handle_tok tok ; () in
