@@ -389,7 +389,7 @@ module Examples = struct
            kt1 hicetnunc_version_2
              "The version 2 of Hic Et Nunc's collection on Mainnet." ;
            kt1_dev kalamint "Kalamint's NFT collection on Mainnet (invalid)." ;
-           kt1_dev "KT1PcrG22mRhK6A8bTSjRhk2wV1o5Vuum2S2"
+           kt1_dev "KT1JZFiBBt6Xzu2XEbXdBPt8Y624tN1Comet"
              "Should not exist any where." ;
            (* The ones made by ./please.sh deploy examples all *)
            let empty_metadata = "KT1C5voNPWxBnPcJhzPt94G5HNxnvv5GVSva" in
