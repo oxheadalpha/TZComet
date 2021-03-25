@@ -249,14 +249,18 @@ module Bootstrap = struct
       let content =
         [ button
             ~a:
-              [ classes ["navbar-toggler"]
+              [ classes ["navbar-toggler"; "bg-light"]
               ; a_user_data "toggle" (Reactive.pure "collapse")
               ; a_user_data "target" (Fmt.kstr Reactive.pure "#%s" toggler_id)
               ; a_aria "controls" (Reactive.pure [toggler_id])
               ; a_aria "expanded" (Reactive.pure ["false"])
               ; a_aria "label" (Reactive.pure [aria_label]) ]
             [span ~a:[classes ["navbar-toggler-icon"]] []]
-        ; a ~a:[classes ["navbar-brand"]] [brand]
+        ; a
+            ~a:
+              [ H5.a_style (Reactive.pure "margin: auto")
+                (* classes ["navbar-brande"] *) ]
+            [brand]
         ; div
             ~a:
               [ classes ["collapse"; "navbar-collapse"]
@@ -293,7 +297,9 @@ module Bootstrap = struct
                              [a ~a:[classes ["nav-link"]] [content]]))) ] ]
       in
       nav content
-        ~a:[classes ["navbar"; "navbar-expand-lg"; "navbar-light"; "bg-light"]]
+        ~a:
+          [ classes ["navbar"; "navbar-expand-lg"; "navbar-light"; "bg-light"]
+          ; H5.a_style (Reactive.pure "background-color: #93afdb !important") ]
   end
 
   module Tab_bar = struct

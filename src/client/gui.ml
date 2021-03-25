@@ -14,23 +14,50 @@ let navigation_menu state =
     Reactive.map
       ~f:(fun frg -> Fragment.(to_string (change_for_page frg p)))
       fragment in
-  Bootstrap.Navigation_bar.(
-    make
-      ~brand:
-        (Bootstrap.label `Dark
-           ( tzcomet_link ()
-           %% Reactive.bind fragment_self (fun f ->
-                  link (t "ʘ") ~target:("#" ^ f))
-           %% Reactive.bind (State.dev_mode state) (function
-                | true -> it "(dev)"
-                | false -> empty ()) ))
-      (let of_page p =
-         item
-           (bt (Page.to_string p))
-           ~active:(State.current_page_is_not state p)
-           ~action:(State.set_page state (`Changing_to p))
-           ~fragment:(fragment_page p) in
-       List.map ~f:of_page all_in_order))
+  let tzcomet =
+    bt "TZComet"
+    % Reactive.bind fragment_self (fun f ->
+          (* Invisible, but kept in order to keep pulling the fragment. *)
+          span ~a:[style "font-size: 20%"] (link (t " ") ~target:("#" ^ f)))
+    %% Reactive.bind (State.dev_mode state) (function
+         | true -> it "(dev)"
+         | false -> empty ()) in
+  let all_items =
+    let of_page p =
+      Bootstrap.Navigation_bar.item
+        (bt (Page.to_string p))
+        ~active:(State.current_page_is_not state p)
+        ~action:(State.set_page state (`Changing_to p))
+        ~fragment:(fragment_page p) in
+    List.map ~f:of_page all_in_order in
+  Reactive.bind (Browser_window.width state) ~f:(function
+    | Some `Wide ->
+        Bootstrap.Navigation_bar.(
+          let brand = Bootstrap.label `Dark tzcomet in
+          make ~brand all_items)
+    | None | Some `Thin ->
+        let nav_thing =
+          Bootstrap.Navigation_bar.(make ~brand:(empty ()) all_items) in
+        let _burger =
+          div
+            ~a:[style "z-index: 2; position: fixed; margin: 10px 0px 0px 10px"]
+            nav_thing in
+        let on_top =
+          div
+            ~a:
+              [ style
+                  "z-index: 2; position: absolute; text-align: center; \
+                   font-size: 200%; pointer-events: none; width: 100%; color: \
+                   #004"
+              ; classes ["mx-auto"] ]
+            tzcomet in
+        on_top % nav_thing
+        (* burger
+           % div
+               ~a:
+                 [ classes ["col-12"; "bg-dark"]
+                 ; style "text-align:center; font-size: 175%; min-height: 70px" ]
+               (div tzcomet) *))
 
 let about_page state =
   let open Meta_html in

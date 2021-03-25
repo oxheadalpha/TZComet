@@ -88,7 +88,12 @@ let async_catch :
               error wip (exn_to_html exn) ;
               return ()))
 
-let render ?(done_empty = Meta_html.empty) work_status ~f =
+let default_show_error e =
+  let open Meta_html in
+  Bootstrap.bordered ~kind:`Danger (div e)
+
+let render ?(done_empty = Meta_html.empty) ?(show_error = default_show_error)
+    work_status ~f =
   let open Meta_html in
   let show_logs ?(wip = false) () =
     let make_logs_map _ x = H5.li [x] in
@@ -120,7 +125,7 @@ let render ?(done_empty = Meta_html.empty) work_status ~f =
           % list
               (List.rev_map l ~f:(function
                 | Ok o -> div (f o)
-                | Error e -> Bootstrap.bordered ~kind:`Danger (div e)))) in
+                | Error e -> show_error e))) in
   Reactive.bind_var work_status.status ~f:(function
     | Empty -> empty ()
     | Work_in_progress -> content ~wip:true %% show_logs ~wip:true ()

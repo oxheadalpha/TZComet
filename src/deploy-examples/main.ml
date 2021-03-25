@@ -30,6 +30,30 @@ module System = struct
 
   let append_to_file ~file s =
     Fmt.kstr cmd "printf '%%s' %s >> %s" (escape s) (escape file)
+
+  let read_lines p =
+    let open Caml in
+    let o = open_in p in
+    let r = ref [] in
+    try
+      while true do
+        r := input_line o :: !r
+      done ;
+      assert false
+    with _ -> close_in o ; List.rev !r
+
+  let cmd_to_string_list cmd =
+    let open Caml in
+    let i =
+      Unix.open_process_in (String.concat " " (List.map Filename.quote cmd))
+    in
+    let rec loop acc = try loop (input_line i :: acc) with _ -> List.rev acc in
+    let res = loop [] in
+    let status = Unix.close_process_in i in
+    match status with
+    | Unix.WEXITED 0 -> res
+    | _ ->
+        Fmt.failwith "Command %a returned non-zero" Fmt.Dump.(list string) cmd
 end
 
 let tezos_client args = Env.tezos_client () :: args
@@ -60,7 +84,8 @@ let originate ?(balance = 0) ?(description = "") ~source ~init ~name ~logfile ()
   System.exec_and_redirect_stdout ~stdout:logfile
     (tezos_client ["show"; "known"; "contract"; name]) ;
   System.append_to_file ~file:logfile (Fmt.str "\n%s\n\n" description) ;
-  ()
+  System.cmd_to_string_list (tezos_client ["show"; "known"; "contract"; name])
+  |> String.concat ~sep:""
 
 let contract () =
   {tz|
@@ -122,15 +147,26 @@ module Micheline_views = struct
           ~annotations code ]
 end
 
-let all ?only ~logfile () =
-  let id = ref 0 in
+let all ?(dry_run = false) ?only ~logfile () =
+  let originated = ref [] in
+  let add name description kt1 =
+    originated := (name, description, kt1) :: !originated in
   let originate ~description ~logfile ~name ~source ~init () =
     match only with
     | Some l when not (List.mem l name ~equal:String.equal) -> ()
-    | None | Some _ -> originate ~description ~logfile ~name ~source ~init ()
-  in
-  let simple description ?(the_nat = 7) bm =
-    let name = Caml.incr id ; Fmt.str "de%d" !id in
+    | None | Some _ ->
+        let kt1 =
+          match dry_run with
+          | false -> (
+            try originate ~description ~logfile ~name ~source ~init ()
+            with e ->
+              dbgf "Origination of %s failed: %a" name Exn.pp e ;
+              Fmt.str "KT1Failedooooo%03d" (List.length !originated) )
+          | true ->
+              dbgf "DRY-RUN: origination of %s" name ;
+              Fmt.str "KT1FakeFakeooo%03d" (List.length !originated) in
+        add name description kt1 in
+  let simple name description ?(the_nat = 7) bm =
     let source = contract () in
     let to_hex s =
       Fmt.str "0x%s"
@@ -143,14 +179,14 @@ let all ?only ~logfile () =
     in
     originate ~description ~logfile ~name ~source ~init () in
   let root uri = ("", uri) in
-  let self_host description json =
-    simple
-      (Fmt.str "Self-hosted JSON.\n\n%s\n\n```json\n%s\n```\n\n" description
-         (Ezjsonm.value_to_string ~minify:false json))
+  let self_host name description json =
+    simple name description
+      (* (Fmt.str "Self-hosted JSON.\n\n%s\n\n```json\n%s\n```\n\n" description
+         (Ezjsonm.value_to_string ~minify:false json)) *)
       [root "tezos-storage:contents"; ("contents", Ezjsonm.value_to_string json)]
   in
-  let self_describe description more_fields =
-    self_host description
+  let self_describe name description more_fields =
+    self_host name description
       Ezjsonm.(
         dict
           ( [ ("description", string description)
@@ -274,19 +310,19 @@ let all ?only ~logfile () =
   let many () =
     originate ~logfile ~description:"Empty contract" ~name:"de0"
       ~source:(contract ()) ~init:"(Pair 2 {})" () ;
-    simple "The *empty* one." [] ;
-    simple "Has a URI that points nowhere." [root "tezos-storage:onekey"] ;
-    self_host "" Ezjsonm.(dict []) ;
-    self_host "Just a version."
+    simple "empty_metadata" "The missing metadata one." [] ;
+    simple "wrong_uri" "Has a URI that points nowhere."
+      [root "tezos-storage:onekey"] ;
+    self_host "empty_but_valid" "Empty, but valid metadata." Ezjsonm.(dict []) ;
+    self_host "just_version" "Has just a version string."
       Ezjsonm.(dict [("version", string "tzcomet-example v0.0.42")]) ;
-    self_describe "This contract has few more fields." basics ;
-    self_describe
-      "This contract has a one off-chain-view, \n\
-       that does something.\n\n\
-       The off-chain-view (multiply-the-nat-in-storage) is actually reused in \
-       the error-translation “object”."
+    self_describe "with_basics" "This contract has few more fields." basics ;
+    self_describe "one_off_chain_view"
+      "This contract has a one off-chain-view which is actually reused for the \
+       error-translation."
       (basics_and_views [multiply_the_nat]) ;
-    self_describe "This contract has a couple of off-chain-views."
+    self_describe "bunch_of_views"
+      "This contract has a bunch of off-chain-views."
       (basics_and_views
          [ empty_view_01
          ; failwith_01
@@ -295,10 +331,13 @@ let all ?only ~logfile () =
          ; identity_01
          ; view_with_too_much_code
          ; call_self_address ]) ;
-    simple "Has a URI that is invalid." [root "tezos-storage:onekey/with/slash"] ;
-    self_host "Point to invalid metadata."
+    simple "invalid_uri" "Has a URI that is invalid."
+      [root "tezos-storage:onekey/with/slash"] ;
+    self_host "invalid_version_field"
+      "Points to invalid metadata (wrong version field)."
       Ezjsonm.(dict [("version", list string ["tzcomet-example v0.0.42"])]) ;
-    self_describe "This contract has bytes-returning off-chain-views."
+    self_describe "views_return_bytes"
+      "This contract has bytes-returning off-chain-views."
       (basics_and_views
          [ unit_to_bytes "empty-bytes" ""
          ; unit_to_bytes "some-json"
@@ -327,14 +366,18 @@ Here is some text.
          ; unit_to_bytes "1000-random-characters"
              (String.init 1000 ~f:(fun _ -> Random.char ())) ]) ;
     () in
-  many () ; ()
+  many () ;
+  List.iter (List.rev !originated) ~f:(fun (n, d, k) ->
+      Fmt.pr "\nlet %s = %S in\nkt1 %s %S;\n" n k n d)
 
 let () =
   let usage () = Fmt.epr "usage: %s <TODO>\n%!" Caml.Sys.argv.(0) in
   let logfile = "/tmp/originations.md" in
+  let dry_run =
+    try String.equal (Caml.Sys.getenv "dryrun") "true" with _ -> false in
   match Array.to_list Caml.Sys.argv |> List.tl_exn with
-  | ["all"] -> all () ~logfile
-  | "only" :: these -> all () ~logfile ~only:these
+  | ["all"] -> all () ~logfile ~dry_run
+  | "only" :: these -> all () ~logfile ~dry_run ~only:these
   | other :: _ ->
       Fmt.epr "Unknown command: %S!\n%!" other ;
       usage () ;

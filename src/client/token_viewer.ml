@@ -157,7 +157,7 @@ let linkify_text s =
   let output = ref (empty ()) in
   let print c = output := !output % c in
   let is_word_sep = function
-    | ' ' | '\'' | '(' | ')' | '!' | '[' | ']' -> true
+    | ' ' | '\'' | '(' | ')' | '!' | '[' | ']' | ',' | '\n' -> true
     | _ -> false in
   let next_sep s ~pos =
     match String.lfindi ~pos s ~f:(fun _ -> is_word_sep) with
@@ -165,8 +165,11 @@ let linkify_text s =
         Some (new_pos + 1, s.[new_pos], String.sub s ~pos ~len:(new_pos - pos))
     | None -> None in
   let handle_tok = function
-    | uri when String.is_prefix uri ~prefix:"https://" ->
-        print (link ~target:uri (t uri))
+    | uri when String.is_prefix uri ~prefix:"https://" -> (
+      (* A URL that ends with a dot is usually a URL plus a period: *)
+      match String.chop_suffix uri ~suffix:"." with
+      | Some uri -> print (link ~target:uri (t uri) % t ".")
+      | None -> print (link ~target:uri (t uri)) )
     | handle
       when prefix_and_for_all ~prefix:"@" ~for_all:is_twitter_handle handle ->
         let heavy c =
@@ -194,16 +197,21 @@ let linkify_text s =
              ~target:(Fmt.str "https://tzkt.io/%s" tz_address)
              (bt (ellipsize_string ~ellipsis:"…" ~max_length:8 tz_address)))
     | tok -> print (t tok) in
-  let rec go pos =
+  let rec go ?(nl = false) pos =
     match next_sep ~pos s with
+    | Some (npos, '\n', "") ->
+        if nl then print (br ()) ;
+        go npos ~nl:false
     | Some (npos, sep, tok) ->
         handle_tok tok ;
         print (Fmt.kstr t "%c" sep) ;
-        go npos
+        go npos ~nl:Char.(sep = '\n')
     | None ->
         let tok = String.sub s ~pos ~len:(String.length s - pos) in
         handle_tok tok ; () in
   go 0 ; !output
+
+let token_ui_max_width = "900px"
 
 let show_token ctxt
     Contract_metadata.Token.
@@ -282,8 +290,9 @@ let show_token ctxt
                   (link ~target:mm.converted_uri
                      (H5.object_
                         ~a:
-                          [ H5.a_mime_type (Lwd.pure "image/svg+xml")
-                          ; H5.a_data (Lwd.pure mm.converted_uri) ]
+                          [ H5.a_mime_type (Reactive.pure "image/svg+xml")
+                          ; H5.a_data (Reactive.pure mm.converted_uri)
+                          ; H5.a_style (Reactive.pure mm_style) ]
                         [ H5.img ~a:[style mm_style]
                             ~alt:
                               (Fmt.kstr Lwd.pure "%s at %s" title
@@ -411,7 +420,9 @@ let show_token ctxt
                  %% url it (Fmt.str "https://www.hicetnunc.xyz/objkt/%d" n))) )
     % fungible_part % div contract_info in
   div
-    ~a:[style "padding: 1em; border: solid 3px #aaa; max-width: 800px"]
+    ~a:
+      [ Fmt.kstr style "padding: 1em; border: solid 3px #aaa; max-width: %s"
+          token_ui_max_width ]
     main_content
   % Bootstrap.Collapse.(
       fixed_width_reactive_button_with_div_below (make ()) ~kind:`Secondary
@@ -454,6 +465,12 @@ let render ctxt =
           | false, more ->
               content %% Bootstrap.color `Danger (ct more %% t "is wrong.")))
   in
+  let controls_active = Async_work.busy result |> Reactive.map ~f:not in
+  let form_ready_to_go =
+    Reactive.(
+      map
+        (input_valid ctxt ** Async_work.busy result)
+        ~f:(function false, _ -> false | _, true -> false | _ -> true)) in
   let enter_action () =
     if
       is_token_id_valid (Reactive.peek token_id)
@@ -461,38 +478,107 @@ let render ctxt =
       && not (Async_work.peek_busy result)
     then go_action ctxt ~wip:result in
   let _once_in_tab = enter_action () in
-  h2 (t "Token Viewer")
-  % Bootstrap.Form.(
-      State.if_explorer_should_go ctxt enter_action ;
-      make ~enter_action
-        [ row
-            [ cell 2
-                (submit_button (t "Pick A Random Token") (fun () ->
-                     let addr, id = State.Examples.random_token ctxt in
-                     Reactive.set token_address addr ;
-                     Reactive.set token_id (Int.to_string id) ;
-                     enter_action ()))
-            ; cell 4
-                (input
-                   ~placeholder:(Reactive.pure "Contract address")
-                   token_address_bidi
-                   ~help:
-                     (make_help ~validity:address_valid ~input:token_address
-                        (t "A valid KT1 address on any known network.")))
-            ; cell 2
-                (input ~placeholder:(Reactive.pure "Token ID") token_id_bidi
-                   ~help:
-                     (make_help ~validity:token_id_valid ~input:token_id
-                        (t "A natural number.")))
-            ; cell 3
-                (submit_button (t "Go!")
-                   ~active:
-                     Reactive.(
-                       map
-                         (input_valid ctxt ** Async_work.busy result)
-                         ~f:(function
-                           | false, _ -> false | _, true -> false | _ -> true))
-                   enter_action)
-              (* ; cell 1
-                  (magic (t " – or – ")) *) ] ])
-  % Async_work.render result ~f:(show_token ctxt)
+  let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
+    Bootstrap.Form.(
+      make ?enter_action [input ?active ?id ?placeholder ?help ?label bidi])
+  in
+  let make_check_box ?active ?id ?help ?label ?enter_action bidi =
+    Bootstrap.Form.(
+      make ?enter_action [check_box ?active ?id ?help ?label bidi]) in
+  let make_button c ~active action =
+    let f active =
+      Bootstrap.button ~kind:`Primary ~outline:true c ~disabled:(not active)
+        ~action in
+    Reactive.bind active ~f in
+  let item s c = div ~a:[style s] c in
+  let top_form =
+    Browser_window.width ctxt
+    |> Reactive.bind ~f:(fun bro_width ->
+           div
+             ~a:
+               [ Fmt.kstr style
+                   "display: flex; %s; flex-wrap: wrap; justify-content: \
+                    space-between; align-items: flex-start; max-width: %s"
+                   ( match bro_width with
+                   | None | Some `Thin ->
+                       "flex-direction: column; margin-bottom: 1em"
+                   | _ -> "flex-direction: row" )
+                   token_ui_max_width ]
+             ( item "padding-bottom: 4px"
+                 (make_button (t "Random Token 🎲") ~active:controls_active
+                    (fun () ->
+                      let addr, id = State.Examples.random_token ctxt in
+                      Reactive.set token_address addr ;
+                      Reactive.set token_id (Int.to_string id) ;
+                      enter_action ()))
+             % item "min-width: 25em"
+                 (make_input
+                    ~placeholder:(Reactive.pure "Contract address")
+                    ~enter_action token_address_bidi
+                    ~help:
+                      (make_help ~validity:address_valid ~input:token_address
+                         (t "A valid KT1 address on any known network.")))
+             % item "max-width: 8em"
+                 (make_input ~placeholder:(Reactive.pure "Token ID")
+                    ~enter_action token_id_bidi
+                    ~help:
+                      (make_help ~validity:token_id_valid ~input:token_id
+                         (t "A natural number.")))
+             % item ""
+                 (make_button (t "Go 🎬") ~active:form_ready_to_go
+                    enter_action) )) in
+  let second_form =
+    let control s = small (t s) in
+    div
+      ~a:
+        [ Fmt.kstr style
+            "display: flex; flex-direction: row; flex-wrap: nowrap; \
+             justify-content: space-between; align-items: flex-start; \
+             max-width: %s"
+            token_ui_max_width ]
+      ( make_button (control "⏮ Previous") ~active:form_ready_to_go (fun () ->
+            try
+              let current = Int.of_string (Reactive.peek token_id) in
+              Reactive.set token_id (Int.to_string (current - 1)) ;
+              enter_action ()
+            with _ -> ())
+      % item ""
+          (item "text-align: center"
+             (make_check_box
+                (State.always_show_multimedia_bidirectional ctxt)
+                ~help:
+                  (t
+                     "Always show unknown multimedia."
+                     (* State.get_always_show_multimedia ctxt
+                        |> Reactive.bind ~f:(function
+                             | true -> t "Hide unknown multimedia by default."
+                             | false -> t "Always show unknown multimedia.") *))
+                ~label:
+                  ( t " YOLO Mode"
+                  %% Reactive.bind (State.get_always_show_multimedia ctxt)
+                       ~f:(function
+                       | true -> t "👀"
+                       | false -> t "🤦") )))
+      % make_button (control "Next ⏭") ~active:form_ready_to_go (fun () ->
+            try
+              let current = Int.of_string (Reactive.peek token_id) in
+              Reactive.set token_id (Int.to_string (current + 1)) ;
+              enter_action ()
+            with _ -> ()) ) in
+  let show_error e =
+    Bootstrap.alert ~kind:`Danger
+      ( h3 (t "Failed To Fetch The Token 😿")
+      % div e % hr ()
+      % div
+          ( bt
+              "💡 This could be that the token does not exist, that a public \
+               Tezos node is having trouble responding, or that an IPFS \
+               gateway is limiting requests ⇒"
+          %% Bootstrap.button ~kind:`Primary (t "Try Again ♲")
+               ~action:enter_action ) ) in
+  State.if_explorer_should_go ctxt enter_action ;
+  h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
+  % top_form % second_form
+  % div
+      ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
+      (Async_work.render result ~f:(show_token ctxt) ~show_error)
