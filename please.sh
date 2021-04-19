@@ -18,7 +18,7 @@ ensure_vendors () {
     # We use the following pointer to the main repo's master branch:
     tezos_branch=smondet-contract-metadata
     tezos_remote=https://gitlab.com/smondet/tezos.git
-    tezos_commit="ebabc1a6c6628e361ac8648c9a474e3ddc2ad183"
+    tezos_commit="8d3aa42b9628e4d3440556c85b4fd0f75298bcd2"
     say "Vendoring tezos @ %10s" "$tezos_branch"
     if [ -f "local-vendor/tezos/README.md" ] ; then
         say "Tezos already cloned"
@@ -81,7 +81,7 @@ ensure_setup () {
     opam pin add -n ocamlformat 0.15.0
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
-         zarith_stubs_js \
+         ppx_inline_test lwt-canceler.0.3 zarith_stubs_js \
          digestif \
          js_of_ocaml-compiler js_of_ocaml-lwt
 }
@@ -90,6 +90,10 @@ ensure_setup () {
 eval $(opam env)
 
 build_all () {
+    eval $(opam env)
+    opam show base
+    opam install base.v0.14.1
+    dune clean
     mkdir -p _build/website/
     dune build --profile release src/client/main.bc.js
     cp _build/default/src/client/main.bc.js _build/website/main-client.js
