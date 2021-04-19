@@ -467,20 +467,46 @@ module Examples = struct
            ; michelson_bytes= mby_all ()
            ; michelson_concretes= tzc_all () })
 
+  type 'weight_type candidate =
+    { weight: 'weight_type
+    ; name: string
+    ; address: string
+    ; tokens: [`Range of int * int] }
+
+  let range_of_tuple (weight, name, address, min_token, max_token) =
+    {weight; name; address; tokens= `Range (min_token, max_token)}
+
   let tokens_global =
-    (* weight, name, kt1, min-token, max-token *)
-    [ (0.1, "Alchememist", alchememist_blockchain_adventures, 0, 15)
-    ; (0.6, "HicEtNunc", hicetnunc_version_2, 300, 12750)
-    ; (0.3, "Kalamint", kalamint, 1, 689) ]
+    let absolute_weights =
+      (* weight, name, kt1, min-token, max-token *)
+      [ range_of_tuple
+          (100, "Alchememist", alchememist_blockchain_adventures, 0, 15)
+      ; range_of_tuple (400, "HicEtNunc", hicetnunc_version_2, 300, 38770)
+      ; range_of_tuple (200, "Kalamint", kalamint, 1, 3921)
+      ; range_of_tuple
+          (100, "OpenMinter-0", "KT1PuASz2FWF7fhdWidFpV5v9zqTVtYxexAS", 0, 4)
+      ; range_of_tuple
+          (100, "OpenMinter-1", "KT1QcxwB4QyPKfmSwjH1VRxa6kquUjeDWeEy", 0, 28)
+      ; range_of_tuple
+          (150, "OpenMinter-2", "KT1JBThDEqyqrEHimhxoUBCSnsKAqFcuHMkP", 0, 179)
+      ; range_of_tuple
+          (100, "OpenMinter-4", "KT1Wb8YcWDZeFSeq8YXjaZduXGZvEodYEBzg", 0, 23)
+      ] in
+    let total =
+      List.fold absolute_weights ~init:0 ~f:(fun prev candidate ->
+          prev + candidate.weight) in
+    List.map absolute_weights ~f:(fun candidate ->
+        {candidate with weight= Float.(of_int candidate.weight / of_int total)})
 
   let random_token (_ : _ Context.t) =
-    let _, _, k, m, x =
-      List.find tokens_global ~f:(fun (wg, _, _, _, _) ->
+    let chosen_one =
+      List.find tokens_global ~f:(fun candidate ->
           let open Float in
-          Random.float 1. < wg)
+          Random.float 1. < candidate.weight)
       |> function Some s -> s | None -> List.random_element_exn tokens_global
     in
-    (k, Random.int_incl m x)
+    ( chosen_one.address
+    , match chosen_one.tokens with `Range (m, x) -> Random.int_incl m x )
 end
 
 module Metadata_metadata = struct

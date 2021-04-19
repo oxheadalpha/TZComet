@@ -250,8 +250,7 @@ module Node_list = struct
   let add ?(dev = false) t n =
     List.Assoc.add ~equal:String.equal t n.Node.name (n, dev)
 
-  let remove ?(dev = false) t n =
-    List.Assoc.remove ~equal:String.equal t n.Node.name
+  let remove_by_name t n = List.Assoc.remove ~equal:String.equal t n
 
   let remove_dev t =
     List.filter t ~f:(function _, (_, true) -> false | _ -> true)
@@ -287,6 +286,10 @@ let get_nodes t ~map =
 let add_node ?dev ctxt nod =
   Reactive.set (nodes ctxt)
     (Node_list.add ?dev (Reactive.peek (nodes ctxt)) nod)
+
+let remove_node ctxt ~name =
+  Reactive.set (nodes ctxt)
+    (Node_list.remove_by_name (Reactive.peek (nodes ctxt)) name)
 
 let default_nodes : Node.t list =
   let smartpy = "https://smartpy.io/nodes" in
@@ -439,10 +442,11 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     | Some p when String.is_prefix p ~prefix:"PsDELPH1" -> (`Delphi, p)
     | Some p when String.is_prefix p ~prefix:"PtEdoTez" -> (`Edo, p)
     | Some p when String.is_prefix p ~prefix:"PtEdo2Zk" -> (`Edo, p)
-    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Edo, p)
+    | Some p when String.is_prefix p ~prefix:"PsFLorena" -> (`Florence, p)
+    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Florence, p)
     | Some p ->
-        logf "Can't recognize protocol: `%s` assuming Delphi-like." p ;
-        (`Delphi, p) in
+        logf "Can't recognize protocol: `%s` assuming Edo-like." p ;
+        (`Edo, p) in
   logf "Protocol is `%s`" protocol_hash ;
   Node.get_storage ctxt node ~address ~log
   >>= fun storage ->
@@ -511,11 +515,11 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       ; ("chain_id", string chain_id) ] in
     let fields =
       match protocol_kind with
-      | `Edo ->
+      | `Edo | `Florence ->
           normal_fields
           @ [ ("balance", string "0")
             ; ("unparsing_mode", string "Optimized_legacy") ]
-      | _ -> normal_fields in
+      | `Carthage | `Delphi -> normal_fields in
     dict fields in
   Node.rpc_post ctxt node
     ~body:(Ezjsonm.value_to_string constructed)

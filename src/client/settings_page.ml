@@ -16,7 +16,8 @@ let nodes_form ctxt =
                 function
                 | `Not_started -> m "ping-loop not started"
                 | `In_progress -> m "ping-loop in progress"
-                | `Sleeping -> m "ping-loop sleeping") ]
+                | `Sleeping -> m "ping-loop sleeping")
+      ; t "" ]
     (let row l = H5.tr (List.map ~f:td l) in
      let node_status =
        let m kind s = Bootstrap.color kind (Bootstrap.monospace (t s)) in
@@ -73,7 +74,10 @@ let nodes_form ctxt =
            ; Tezos_html.network n.network
            ; ct n.prefix
            ; Reactive.bind (status n) ~f:(fun (_, s) -> node_status s)
-           ; Reactive.bind (status n) ~f:(fun (f, _) -> ping_date f) ] in
+           ; Reactive.bind (status n) ~f:(fun (f, _) -> ping_date f)
+           ; Bootstrap.button ~outline:true ~size:`Small ~kind:`Danger
+               (t "Remove 💣") ~action:(fun () ->
+                 Query_nodes.remove_node ctxt ~name:n.name) ] in
      let last_row =
        let name = Reactive.var "" in
        let nameb = Reactive.Bidirectional.of_var name in

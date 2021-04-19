@@ -3,8 +3,7 @@ open! Base
 let base_bootstrap page_title =
   (* From there: https://getbootstrap.com/docs/4.5/getting-started/introduction/ *)
   String.concat ~sep:""
-    [
-      {html|
+    [ {html|
 <!doctype html>
 <html lang="en">
   <head>
@@ -15,9 +14,9 @@ let base_bootstrap page_title =
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
 
-    <title>|html};
-      page_title;
-      {html|</title>
+    <title>|html}
+    ; page_title
+    ; {html|</title>
   </head>
   <body>
     <div id="attach-ui">
@@ -32,8 +31,8 @@ let base_bootstrap page_title =
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
     <script src="main-client.js"></script>
     <script>
-|html};
-      List.map [ "shown"; "show"; "hide"; "hidden" ] ~f:(fun evname ->
+|html}
+    ; List.map ["shown"; "show"; "hide"; "hidden"] ~f:(fun evname ->
           Fmt.str
             {html|
 $(document).on('%s.bs.collapse', function (e) {
@@ -42,8 +41,8 @@ $(document).on('%s.bs.collapse', function (e) {
    document.body.dispatchEvent(ev);
 })|html}
             evname evname evname)
-      |> String.concat ~sep:"\n";
-      (*
+      |> String.concat ~sep:"\n"
+    ; (*
 $(document).on('hidden.bs.collapse', function (e) {
    console.log('##shown ' + e.type + ' TRGT ' + e.target.id);
    var ev = new CustomEvent('collapse-hidden', { detail: e.target.id } );
@@ -54,20 +53,18 @@ $(document).on('hidden.bs.collapse', function (e) {
 </script>
   </body>
 </html>
-|html};
-    ]
+|html} ]
 
 let () =
   let usage () =
-    Fmt.epr "usage: %s index '<page-title>'\n%!" Caml.Sys.argv.(0)
-  in
+    Fmt.epr "usage: %s index '<page-title>'\n%!" Caml.Sys.argv.(0) in
   match Caml.Sys.argv.(1) with
   | "index" -> Fmt.pr "%s\n%!" (base_bootstrap Caml.Sys.argv.(2))
   | other ->
-      Fmt.epr "Unknown command: %S!\n%!" other;
-      usage ();
+      Fmt.epr "Unknown command: %S!\n%!" other ;
+      usage () ;
       Caml.exit 2
   | exception _ ->
-      Fmt.epr "Missing command\n%!";
-      usage ();
+      Fmt.epr "Missing command\n%!" ;
+      usage () ;
       Caml.exit 2
