@@ -250,8 +250,7 @@ module Node_list = struct
   let add ?(dev = false) t n =
     List.Assoc.add ~equal:String.equal t n.Node.name (n, dev)
 
-  let remove ?(dev = false) t n =
-    List.Assoc.remove ~equal:String.equal t n.Node.name
+  let remove_by_name t n = List.Assoc.remove ~equal:String.equal t n
 
   let remove_dev t =
     List.filter t ~f:(function _, (_, true) -> false | _ -> true)
@@ -287,6 +286,10 @@ let get_nodes t ~map =
 let add_node ?dev ctxt nod =
   Reactive.set (nodes ctxt)
     (Node_list.add ?dev (Reactive.peek (nodes ctxt)) nod)
+
+let remove_node ctxt ~name =
+  Reactive.set (nodes ctxt)
+    (Node_list.remove_by_name (Reactive.peek (nodes ctxt)) name)
 
 let default_nodes : Node.t list =
   let smartpy = "https://smartpy.io/nodes" in
