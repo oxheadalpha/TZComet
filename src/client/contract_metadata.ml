@@ -927,13 +927,13 @@ module Token = struct
     >>= fun node ->
     Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
     begin
-      match token_metadata_big_map with
-      | None -> (
+      match (token_metadata_big_map, token_metadata_validation) with
+      | _, Valid _ | None, _ -> (
           get_token_metadata_map_with_view ()
           >>= function
           | Some (Ok s) -> Lwt.return s
           | _ -> failm Message.(Fmt.kstr t "Token-metadata view failed.") )
-      | Some big_map_id ->
+      | Some big_map_id, _ ->
           get_token_metadata_map_with_big_map ~log ~node big_map_id
     end
     >>= function
