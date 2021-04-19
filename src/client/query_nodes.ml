@@ -439,10 +439,11 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     | Some p when String.is_prefix p ~prefix:"PsDELPH1" -> (`Delphi, p)
     | Some p when String.is_prefix p ~prefix:"PtEdoTez" -> (`Edo, p)
     | Some p when String.is_prefix p ~prefix:"PtEdo2Zk" -> (`Edo, p)
-    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Edo, p)
+    | Some p when String.is_prefix p ~prefix:"PsFLorena" -> (`Florence, p)
+    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Florence, p)
     | Some p ->
-        logf "Can't recognize protocol: `%s` assuming Delphi-like." p ;
-        (`Delphi, p) in
+        logf "Can't recognize protocol: `%s` assuming Edo-like." p ;
+        (`Edo, p) in
   logf "Protocol is `%s`" protocol_hash ;
   Node.get_storage ctxt node ~address ~log
   >>= fun storage ->
@@ -511,11 +512,11 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       ; ("chain_id", string chain_id) ] in
     let fields =
       match protocol_kind with
-      | `Edo ->
+      | `Edo | `Florence ->
           normal_fields
           @ [ ("balance", string "0")
             ; ("unparsing_mode", string "Optimized_legacy") ]
-      | _ -> normal_fields in
+      | `Carthage | `Delphi -> normal_fields in
     dict fields in
   Node.rpc_post ctxt node
     ~body:(Ezjsonm.value_to_string constructed)
