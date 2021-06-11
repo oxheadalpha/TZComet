@@ -481,8 +481,8 @@ module Examples = struct
       (* weight, name, kt1, min-token, max-token *)
       [ range_of_tuple
           (100, "Alchememist", alchememist_blockchain_adventures, 0, 15)
-      ; range_of_tuple (400, "HicEtNunc", hicetnunc_version_2, 300, 38770)
-      ; range_of_tuple (200, "Kalamint", kalamint, 1, 3921)
+      ; range_of_tuple (600, "HicEtNunc", hicetnunc_version_2, 300, 127059)
+      ; range_of_tuple (200, "Kalamint", kalamint, 1, 12291)
       ; range_of_tuple
           (100, "OpenMinter-0", "KT1PuASz2FWF7fhdWidFpV5v9zqTVtYxexAS", 0, 4)
       ; range_of_tuple
