@@ -398,7 +398,7 @@ module Examples = struct
            kt1_dev wrong_uri "Has a URI that points nowhere." ;
            let empty_but_valid = "KT18xTduGnadJBKb4ZBV8kwaAjfh4hwkJ8zi" in
            kt1_dev empty_but_valid "Empty, but valid metadata." ;
-           let just_version = "KT1EtxHeCuoD36Reknbn3QNeXZiWcPs6izVM" in
+           let just_version = "KT1DVU9VFb3uoDybnFNZWnbpZVaJfaiSWSzh" in
            kt1 just_version "Has just a version string." ;
            let with_basics = "KT1Q9NKbCkgzGv7hx71F6uuCkeNZNqiHwUCV" in
            kt1_dev with_basics "This contract has few more fields." ;
