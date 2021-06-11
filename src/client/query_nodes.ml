@@ -443,10 +443,11 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     | Some p when String.is_prefix p ~prefix:"PtEdoTez" -> (`Edo, p)
     | Some p when String.is_prefix p ~prefix:"PtEdo2Zk" -> (`Edo, p)
     | Some p when String.is_prefix p ~prefix:"PsFLorena" -> (`Florence, p)
-    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Florence, p)
+    | Some p when String.is_prefix p ~prefix:"PtGRANAD" -> (`Granada, p)
+    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Granada, p)
     | Some p ->
         logf "Can't recognize protocol: `%s` assuming Edo-like." p ;
-        (`Edo, p) in
+        (`Granada, p) in
   logf "Protocol is `%s`" protocol_hash ;
   Node.get_storage ctxt node ~address ~log
   >>= fun storage ->
@@ -515,7 +516,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       ; ("chain_id", string chain_id) ] in
     let fields =
       match protocol_kind with
-      | `Edo | `Florence ->
+      | `Edo | `Florence | `Granada ->
           normal_fields
           @ [ ("balance", string "0")
             ; ("unparsing_mode", string "Optimized_legacy") ]
@@ -528,23 +529,6 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     | _ -> "/chains/main/blocks/head/helpers/scripts/run_code" )
   >>= fun result ->
   logf "RESULT: %s" result ;
-  (*
-      POST /chains/main/blocks/head/helpers/scripts/run_code
-      "properties":
-        { "script":
-            { "$ref": "#/definitions/micheline.michelson_v1.expression" },
-          "storage":
-            { "$ref": "#/definitions/micheline.michelson_v1.expression" },
-          "input":
-            { "$ref": "#/definitions/micheline.michelson_v1.expression" },
-          "amount": { "$ref": "#/definitions/mutez" },
-          "chain_id": { "$ref": "#/definitions/Chain_id" },
-          "source": { "$ref": "#/definitions/contract_id" },
-          "payer": { "$ref": "#/definitions/contract_id" },
-          "gas": { "$ref": "#/definitions/bignum" },
-          "entrypoint": { "$ref": "#/definitions/unistring" } },
-      "required": [ "chain_id", "amount", "input", "storage", "script" ],
-     *)
   let actual_result =
     let open Ezjsonm in
     let d = value_from_string result |> get_dict in
