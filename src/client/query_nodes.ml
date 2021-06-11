@@ -299,8 +299,8 @@ let default_nodes : Node.t list =
         ~network:`Mainnet ~info_url:smartpy
     ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ~network:`Edonet
         ~info_url:smartpy
-    ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io"
-        ~network:`Delphinet ~info_url:smartpy
+    ; Node.create "Granadanet-SmartPy" "https://granadanet.smartpy.io"
+        ~network:`Granadanet ~info_url:smartpy
     ; Node.create "Florencenet-SmartPy" ~network:`Florencenet
         "https://florencenet.smartpy.io/" ~info_url:smartpy
     ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
