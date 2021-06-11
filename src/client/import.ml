@@ -410,6 +410,7 @@ module Blob = struct
     let gif = (`Image, "gif")
     let jpeg = (`Image, "jpeg")
     let png = (`Image, "png")
+    let mp4 = (`Video, "mp4")
 
     let of_mime_exn = function
       | image when String.is_prefix image ~prefix:"image/" ->
@@ -428,7 +429,10 @@ module Blob = struct
        https://en.wikipedia.org/wiki/JPEG *)
     let open Format in
     let prefixes =
-      [("\255\216\255", jpeg); ("\137\080\078\071", png); ("GIF", gif)] in
+      [ ("\255\216\255", jpeg)
+      ; ("\137\080\078\071", png)
+      ; ("GIF", gif)
+      ; ("\x00\x00\x00\x20ftypmp42", mp4) ] in
     List.find_map prefixes ~f:(fun (prefix, fmt) ->
         if String.is_prefix s ~prefix then Some fmt else None)
 end
