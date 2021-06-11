@@ -402,7 +402,7 @@ module Examples = struct
            kt1 just_version "Has just a version string." ;
            let with_basics = "KT1Q9NKbCkgzGv7hx71F6uuCkeNZNqiHwUCV" in
            kt1_dev with_basics "This contract has few more fields." ;
-           let one_off_chain_view = "KT1NfYJgiooHqvuEuapB9AaEXbCimmAd8kgz" in
+           let one_off_chain_view = "KT1BLtMqVuthHTsYKiab4Uftq9F7XyaRa1mw" in
            kt1 one_off_chain_view
              "This contract has a one off-chain-view which is actually reused \
               for error-translation." ;
