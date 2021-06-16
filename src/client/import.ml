@@ -320,10 +320,45 @@ module Ezjsonm = struct
         | [] -> fail_stack "stack is empty"
         | _ :: _ :: _ -> go () in
       try `JSON (go ()) with Escape (r, e) -> `Error (r, e)
+
+    let value_to_dst ?(minify = true) dst json =
+      let encoder = Jsonm.encoder ~minify dst in
+      let encode l = ignore (Jsonm.encode encoder (`Lexeme l)) in
+      let rec go = function
+        | [] -> ()
+        | `Value ((`Bool _ | `Null | `Float _ | `String _) as v) :: more ->
+            encode v ; go more
+        | `Value (`O l) :: more ->
+            encode `Os ;
+            go (`Object l :: more)
+        | `Value (`A l) :: more ->
+            encode `As ;
+            go (`Array l :: more)
+        | `Object [] :: more ->
+            encode `Oe ;
+            go more
+        | `Object ((k, v) :: o) :: more ->
+            encode (`Name k) ;
+            go (`Value v :: `Object o :: more)
+        | `Array [] :: more ->
+            encode `Ae ;
+            go more
+        | `Array (v :: aa) :: more -> go (`Value v :: `Array aa :: more) in
+      go [`Value json] ;
+      ignore (Jsonm.encode encoder `End)
   end
 
+  open Stack_reimplementation
+
+  let value_to_buffer ?minify buf json = value_to_dst ?minify (`Buffer buf) json
+
+  let value_to_string ?minify json =
+    let buf = Buffer.create 1024 in
+    value_to_buffer ?minify buf json ;
+    Buffer.contents buf
+
   let value_from_string s =
-    match Stack_reimplementation.json_of_src (`String s) with
+    match json_of_src (`String s) with
     | `JSON j -> j
     | `Error (((line, col), (eline, ecol)), err) ->
         dbgf "Error l-%d c-%d -- l-%d c-%d" line col eline ecol ;
