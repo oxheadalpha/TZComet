@@ -398,11 +398,11 @@ module Examples = struct
            kt1_dev wrong_uri "Has a URI that points nowhere." ;
            let empty_but_valid = "KT18xTduGnadJBKb4ZBV8kwaAjfh4hwkJ8zi" in
            kt1_dev empty_but_valid "Empty, but valid metadata." ;
-           let just_version = "KT1EtxHeCuoD36Reknbn3QNeXZiWcPs6izVM" in
+           let just_version = "KT1DVU9VFb3uoDybnFNZWnbpZVaJfaiSWSzh" in
            kt1 just_version "Has just a version string." ;
            let with_basics = "KT1Q9NKbCkgzGv7hx71F6uuCkeNZNqiHwUCV" in
            kt1_dev with_basics "This contract has few more fields." ;
-           let one_off_chain_view = "KT1NfYJgiooHqvuEuapB9AaEXbCimmAd8kgz" in
+           let one_off_chain_view = "KT1BLtMqVuthHTsYKiab4Uftq9F7XyaRa1mw" in
            kt1 one_off_chain_view
              "This contract has a one off-chain-view which is actually reused \
               for error-translation." ;
@@ -481,8 +481,8 @@ module Examples = struct
       (* weight, name, kt1, min-token, max-token *)
       [ range_of_tuple
           (100, "Alchememist", alchememist_blockchain_adventures, 0, 15)
-      ; range_of_tuple (400, "HicEtNunc", hicetnunc_version_2, 300, 38770)
-      ; range_of_tuple (200, "Kalamint", kalamint, 1, 3921)
+      ; range_of_tuple (600, "HicEtNunc", hicetnunc_version_2, 300, 127059)
+      ; range_of_tuple (200, "Kalamint", kalamint, 1, 12291)
       ; range_of_tuple
           (100, "OpenMinter-0", "KT1PuASz2FWF7fhdWidFpV5v9zqTVtYxexAS", 0, 4)
       ; range_of_tuple

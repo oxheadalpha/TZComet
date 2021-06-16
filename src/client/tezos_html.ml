@@ -201,7 +201,7 @@ let list_field name field f =
 
 let network (net : Network.t) =
   match net with
-  | `Edonet | `Florencenet | `Delphinet | `Mainnet | `Sandbox ->
+  | `Edonet | `Florencenet | `Granadanet | `Mainnet | `Sandbox ->
       it (Network.to_string net)
 
 let protocol s =
@@ -222,6 +222,8 @@ let protocol s =
         "http://tezos.gitlab.io/protocols/009_florence_BA.html"
   | "PsFLorenaUUuikDWvMDr6fGBRG8kt3e3D3fHoXK1j1BFRxeSH4i" ->
       known "Florence" "http://tezos.gitlab.io/protocols/009_florence.html"
+  | "PtGRANADsDU8R9daYKAgWnQYAJ64omN1o3KMGVCykShA97vQbvV" ->
+      known "Granada" "http://tezos.gitlab.io/protocols/010_granada.html"
   | s -> proto s
 
 let open_in_editor ?(and_explorer = false) ctxt text =

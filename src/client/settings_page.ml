@@ -36,10 +36,16 @@ let nodes_form ctxt =
              let extra_info =
                try
                  let dict = Ezjsonm.(value_from_string metadata |> get_dict) in
-                 let field = List.Assoc.find_exn ~equal:String.equal in
+                 let field l f =
+                   try List.Assoc.find_exn l ~equal:String.equal f
+                   with _ -> Fmt.failwith "Missing field: %S" f in
                  let protocol = field dict "protocol" |> Ezjsonm.get_string in
                  let level =
-                   let l = field dict "level" |> Ezjsonm.get_dict in
+                   let l =
+                     ( try field dict "level"
+                       with _ -> field dict "level_info" (* Granada version *)
+                     )
+                     |> Ezjsonm.get_dict in
                    let level = field l "level" |> Ezjsonm.get_int in
                    level in
                  t "["

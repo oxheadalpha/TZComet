@@ -701,7 +701,10 @@ module Multimedia = struct
       let format = Blob.guess_format content in
       match format with
       | Some format -> Lwt.return format
-      | None -> failf "could not guess the format of the content" in
+      | None ->
+          let (`Hex hx) = Hex.of_string content in
+          failf "could not guess the format of the content: 0x%s"
+            (bytes_summary ~left:24 ~right:0 hx) in
     let convert ~format uri =
       let open Uri in
       match validate uri with

@@ -79,6 +79,7 @@ ensure_setup () {
          local-vendor/tezos/src/lib_contract_metadata/tezos-contract-metadata.opam
     opam pin add -n digestif 0.9.0
     opam pin add -n ocamlformat 0.15.0
+    opam pin add -n tyxml 4.4.0
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          ppx_inline_test lwt-canceler.0.3 zarith_stubs_js \
@@ -91,8 +92,6 @@ eval $(opam env)
 
 build_all () {
     eval $(opam env)
-    opam show base
-    opam install base.v0.14.1
     dune clean
     mkdir -p _build/website/
     dune build --profile release src/client/main.bc.js

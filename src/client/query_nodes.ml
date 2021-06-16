@@ -299,8 +299,8 @@ let default_nodes : Node.t list =
         ~network:`Mainnet ~info_url:smartpy
     ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ~network:`Edonet
         ~info_url:smartpy
-    ; Node.create "Delphinet-SmartPy" "https://delphinet.smartpy.io"
-        ~network:`Delphinet ~info_url:smartpy
+    ; Node.create "Granadanet-SmartPy" "https://granadanet.smartpy.io"
+        ~network:`Granadanet ~info_url:smartpy
     ; Node.create "Florencenet-SmartPy" ~network:`Florencenet
         "https://florencenet.smartpy.io/" ~info_url:smartpy
     ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
@@ -443,10 +443,11 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     | Some p when String.is_prefix p ~prefix:"PtEdoTez" -> (`Edo, p)
     | Some p when String.is_prefix p ~prefix:"PtEdo2Zk" -> (`Edo, p)
     | Some p when String.is_prefix p ~prefix:"PsFLorena" -> (`Florence, p)
-    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Florence, p)
+    | Some p when String.is_prefix p ~prefix:"PtGRANAD" -> (`Granada, p)
+    | Some p when String.is_prefix p ~prefix:"ProtoALpha" -> (`Granada, p)
     | Some p ->
         logf "Can't recognize protocol: `%s` assuming Edo-like." p ;
-        (`Edo, p) in
+        (`Granada, p) in
   logf "Protocol is `%s`" protocol_hash ;
   Node.get_storage ctxt node ~address ~log
   >>= fun storage ->
@@ -506,21 +507,28 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
     view_storage ;
   let constructed =
+    let michjson which mich =
+      try Michelson.micheline_to_ezjsonm mich
+      with e -> Fmt.failwith "micheline_to_ezjsonm '%s' → %a" which Exn.pp e
+    in
     let open Ezjsonm in
     let normal_fields =
-      [ ("script", Michelson.micheline_to_ezjsonm view_contract)
-      ; ("storage", Michelson.micheline_to_ezjsonm view_storage)
-      ; ("input", Michelson.micheline_to_ezjsonm view_input)
+      [ ("script", michjson "script" view_contract)
+      ; ("storage", michjson "storage" view_storage)
+      ; ("input", michjson "input" view_input)
       ; ("amount", string "0")
       ; ("chain_id", string chain_id) ] in
     let fields =
       match protocol_kind with
-      | `Edo | `Florence ->
+      | `Edo | `Florence | `Granada ->
           normal_fields
           @ [ ("balance", string "0")
             ; ("unparsing_mode", string "Optimized_legacy") ]
       | `Carthage | `Delphi -> normal_fields in
     dict fields in
+  logf "Calling `/run_code`: %s"
+    ( try Ezjsonm.value_to_string constructed
+      with e -> Fmt.failwith "JSON too deep for JS backend: %a" Exn.pp e ) ;
   Node.rpc_post ctxt node
     ~body:(Ezjsonm.value_to_string constructed)
     ( match protocol_kind with
@@ -528,23 +536,6 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     | _ -> "/chains/main/blocks/head/helpers/scripts/run_code" )
   >>= fun result ->
   logf "RESULT: %s" result ;
-  (*
-      POST /chains/main/blocks/head/helpers/scripts/run_code
-      "properties":
-        { "script":
-            { "$ref": "#/definitions/micheline.michelson_v1.expression" },
-          "storage":
-            { "$ref": "#/definitions/micheline.michelson_v1.expression" },
-          "input":
-            { "$ref": "#/definitions/micheline.michelson_v1.expression" },
-          "amount": { "$ref": "#/definitions/mutez" },
-          "chain_id": { "$ref": "#/definitions/Chain_id" },
-          "source": { "$ref": "#/definitions/contract_id" },
-          "payer": { "$ref": "#/definitions/contract_id" },
-          "gas": { "$ref": "#/definitions/bignum" },
-          "entrypoint": { "$ref": "#/definitions/unistring" } },
-      "required": [ "chain_id", "amount", "input", "storage", "script" ],
-     *)
   let actual_result =
     let open Ezjsonm in
     let d = value_from_string result |> get_dict in
