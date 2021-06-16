@@ -507,11 +507,15 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
     view_storage ;
   let constructed =
+    let michjson which mich =
+      try Michelson.micheline_to_ezjsonm mich
+      with e -> Fmt.failwith "micheline_to_ezjsonm '%s' → %a" which Exn.pp e
+    in
     let open Ezjsonm in
     let normal_fields =
-      [ ("script", Michelson.micheline_to_ezjsonm view_contract)
-      ; ("storage", Michelson.micheline_to_ezjsonm view_storage)
-      ; ("input", Michelson.micheline_to_ezjsonm view_input)
+      [ ("script", michjson "script" view_contract)
+      ; ("storage", michjson "storage" view_storage)
+      ; ("input", michjson "input" view_input)
       ; ("amount", string "0")
       ; ("chain_id", string chain_id) ] in
     let fields =
@@ -522,6 +526,9 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
             ; ("unparsing_mode", string "Optimized_legacy") ]
       | `Carthage | `Delphi -> normal_fields in
     dict fields in
+  logf "Calling `/run_code`: %s"
+    ( try Ezjsonm.value_to_string constructed
+      with e -> Fmt.failwith "JSON too deep for JS backend: %a" Exn.pp e ) ;
   Node.rpc_post ctxt node
     ~body:(Ezjsonm.value_to_string constructed)
     ( match protocol_kind with
