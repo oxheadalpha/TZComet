@@ -392,29 +392,31 @@ module Examples = struct
            kt1_dev "KT1JZFiBBt6Xzu2XEbXdBPt8Y624tN1Comet"
              "Should not exist any where." ;
            (* The ones made by ./please.sh deploy examples all *)
-           let empty_metadata = "KT1C5voNPWxBnPcJhzPt94G5HNxnvv5GVSva" in
+           let de0 = "KT1Ke8YwVkbDByxPCJLamoKtsLxX5N5FnaAb" in
+           kt1_dev de0 "Empty contract" ;
+           let empty_metadata = "KT1Kxt2cBpEwStqZUvni3rxxfirAd3LSpw1w" in
            kt1_dev empty_metadata "The missing metadata one." ;
-           let wrong_uri = "KT1TcR5Y2iJsEgU81ToXiBnW1XZD3FiRCSyD" in
+           let wrong_uri = "KT19QRii574mCZoWo1Vz4QyTFCYEfE8W7D4F" in
            kt1_dev wrong_uri "Has a URI that points nowhere." ;
-           let empty_but_valid = "KT18xTduGnadJBKb4ZBV8kwaAjfh4hwkJ8zi" in
+           let empty_but_valid = "KT1KFgwaSRQisqPW62RE7hEBAhFJkn7jHKNH" in
            kt1_dev empty_but_valid "Empty, but valid metadata." ;
-           let just_version = "KT1DVU9VFb3uoDybnFNZWnbpZVaJfaiSWSzh" in
+           let just_version = "KT1QjUDwEHoiFrwDGvXfUxttJ11veHKXQ5uB" in
            kt1 just_version "Has just a version string." ;
-           let with_basics = "KT1Q9NKbCkgzGv7hx71F6uuCkeNZNqiHwUCV" in
+           let with_basics = "KT1P8asVfzZuTNbQ2xWGkocZSD8b2UztJrod" in
            kt1_dev with_basics "This contract has few more fields." ;
-           let one_off_chain_view = "KT1BLtMqVuthHTsYKiab4Uftq9F7XyaRa1mw" in
-           kt1 one_off_chain_view
+           let one_off_chain_view = "KT1RNFWk7MBku9cZNCFhGWatx1NUspQPqNSV" in
+           kt1_dev one_off_chain_view
              "This contract has a one off-chain-view which is actually reused \
-              for error-translation." ;
-           let bunch_of_views = "KT1NRi6gDTjrfiGgWyBMXhqzzUFgy2eKz6dK" in
+              for the error-translation." ;
+           let bunch_of_views = "KT1LkimKn8gtXqb6EGUov4VZr3ComLfjDF4H" in
            kt1_dev bunch_of_views
              "This contract has a bunch of off-chain-views." ;
-           let invalid_uri = "KT1Xg7RSKMVyr3zh2wsfPx7yutHJWXmCifaf" in
+           let invalid_uri = "KT1K2fEe6Boub8pQ6SGMNm6CHsiFoKG6GxsD" in
            kt1_dev invalid_uri "Has a URI that is invalid." ;
-           let invalid_version_field = "KT18osZvnsbAi8jAju7tfFRpYhVqZCrR2tYT" in
+           let invalid_version_field = "KT1G3iNVueuFywLwv7kC74HeBrmqbFDW8fbd" in
            kt1_dev invalid_version_field
              "Points to invalid metadata (wrong version field)." ;
-           let views_return_bytes = "KT1KBoox8mvYsZ2HEn3vnBDnJWEc7BtoHZhL" in
+           let views_return_bytes = "KT1NfLZUxMCuCCUDMB1UDoUDfZ74HDTCniec" in
            kt1_dev views_return_bytes
              "This contract has bytes-returning off-chain-views." ;
            uri https_ok "A valid HTTPS URI." ;
