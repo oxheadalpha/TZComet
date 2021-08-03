@@ -75,13 +75,13 @@ ensure_setup () {
         fi
     fi
     eval $(opam env)
-    opam install --deps-only \
-         local-vendor/tezos/src/lib_contract_metadata/tezos-contract-metadata.opam
     opam pin add -n digestif 0.9.0
     opam pin add -n ocamlformat 0.15.0
     opam pin add -n tyxml 4.4.0
     opam pin add -n zarith 1.11 # zarith_stubs_js fails with 1.12
     # see https://github.com/janestreet/zarith_stubs_js/pull/8
+    opam install --deps-only \
+         local-vendor/tezos/src/lib_contract_metadata/tezos-contract-metadata.opam
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          ppx_inline_test lwt-canceler.0.3 zarith_stubs_js \
