@@ -198,13 +198,13 @@ let all ?(dry_run = false) ?only ~logfile () =
       [ ( "license"
         , dict [("name", string "MIT"); ("details", string "The MIT License")]
         )
-      ; ("homepage", string "https://github.com/tqtezos/TZComet")
+      ; ("homepage", string "https://github.com/oxheadalpha/TZComet")
       ; ( "source"
         , dict
             [ ("tools", list string ["TZComet"; "deploy-examples/main.exe"])
             ; ( "location"
               , string
-                  "https://github.com/tqtezos/TZComet/blob/48fed5db6bd367cae0e7a5ef3ec415e6cf76b30b/src/deploy-examples/main.ml#L147"
+                  "https://github.com/oxheadalpha/TZComet/blob/48fed5db6bd367cae0e7a5ef3ec415e6cf76b30b/src/deploy-examples/main.ml#L147"
               ) ] )
       ; ( "errors"
         , list Fn.id
