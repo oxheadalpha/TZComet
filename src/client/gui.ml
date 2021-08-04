@@ -2,7 +2,7 @@ open Import
 
 let tzcomet_link () =
   let open Meta_html in
-  link ~target:"https://github.com/tqtezos/TZComet" (t "TZComet")
+  link ~target:"https://github.com/oxheadalpha/TZComet" (t "TZComet")
 
 let navigation_menu state =
   let open State in
@@ -72,7 +72,8 @@ let about_page state =
              t "version "
              %% link
                   ~target:
-                    (Fmt.str "https://github.com/tqtezos/TZComet/commit/%s" vs)
+                    (Fmt.str "https://github.com/oxheadalpha/TZComet/commit/%s"
+                       vs)
                   (it vs) )
       % Reactive.bind (State.dev_mode state) (function
           | true -> t " (in “dev” mode)."
@@ -80,8 +81,8 @@ let about_page state =
   % p (t "An explorer/editor/validator/visualizer for Tezos contract metadata.")
   % p
       ( t "The source for this webpage is available on Github:"
-      %% link ~target:"https://github.com/tqtezos/TZComet"
-           (ct "tqtezos/TZComet")
+      %% link ~target:"https://github.com/oxheadalpha/TZComet"
+           (ct "oxheadalpha/TZComet")
       % t "." )
   % p
       ( t "The Contract Metadata standard, a.k.a. TZIP-16, is at: "

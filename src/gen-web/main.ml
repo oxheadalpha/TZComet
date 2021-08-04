@@ -22,7 +22,7 @@ let base_bootstrap page_title =
     <div id="attach-ui">
      <h2>Loading TZComet …</h2>
      <img src="loading.gif"/><br/><br/>
-     See also <a href="https://github.com/tqtezos/TZComet">https://github.com/tqtezos/TZComet</a>
+     See also <a href="https://github.com/oxheadalpha/TZComet">https://github.com/oxheadalpha/TZComet</a>
     </div>
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->

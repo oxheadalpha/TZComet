@@ -378,7 +378,7 @@ module Examples = struct
 
   let get state =
     let https_ok =
-      "https://raw.githubusercontent.com/tqtezos/TZComet/8d95f7b/data/metadata_example0.json"
+      "https://raw.githubusercontent.com/oxheadalpha/TZComet/8d95f7b/data/metadata_example0.json"
     in
     let hash_of_https_ok =
       (* `sha256sum data/metadata_example0.json` → Achtung, the URL

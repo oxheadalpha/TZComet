@@ -190,4 +190,3 @@ ensure_linting () {
             "$@" ;;
     esac
 }
-
