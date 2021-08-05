@@ -311,7 +311,7 @@ let default_nodes : Node.t list =
         "https://florence-tezos.giganode.io" ~network:`Florencenet
         ~info_url:giga
     ; Node.create "Flextesabox-node" "http://127.0.0.1:20000" ~network:`Sandbox
-        ~info_url:"https://assets.oxheadalpha.com/docs/setup/2-sandbox/" ]
+        ~info_url:"https://assets.tqtezos.com/docs/setup/2-sandbox/" ]
 
 let dev_nodes =
   List.rev
