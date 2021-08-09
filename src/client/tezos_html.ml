@@ -246,6 +246,7 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
     match uri with
     | Web u -> t "Web URL:" %% url ct u
     | Ipfs {cid; path} ->
+        (* TODO: update this re: more than one ipfs gateway *)
         let gatewayed = Fmt.str "https://gateway.ipfs.io/ipfs/%s%s" cid path in
         field_head "IPFS URI"
         % itemize

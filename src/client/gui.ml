@@ -715,7 +715,8 @@ module Explorer = struct
               (fun () ->
                 Contract_metadata.Uri.fetch ctxt uri
                   ~log:(logs "Fetching Metadata"))
-              (fun e ->
+              (* //TODO: try alternate ipfs gateway on error *)
+                (fun e ->
                 raise
                   (mkexn (uri_failed_to_fetch ctxt ~full_input ~uri ~error:e)))
             >>= fun json_code ->

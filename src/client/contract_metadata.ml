@@ -24,11 +24,17 @@ module Uri = struct
     (uri, List.rev !errors)
 
   module Fetcher = struct
-    type t = {current_contract: string option Reactive.var}
+    type gateway = {current: string; alternate: string}
+    type t = {current_contract: string option Reactive.var; gateway: gateway}
 
-    let create () = {current_contract= Reactive.var None}
+    let create () =
+      let current = "https://gateway.ipfs.io/ipfss/" in
+      let alternate = "https://cloudflare-ipfs.com/ipfs/" in
+      {current_contract= Reactive.var None; gateway= {current; alternate}}
+
     let get (ctxt : < fetcher: t ; .. > Context.t) = ctxt#fetcher
     let current_contract ctxt = (get ctxt).current_contract
+    let gateway ctxt = (get ctxt).gateway
 
     let set_current_contract ctxt s =
       Reactive.set (get ctxt).current_contract (Some s)
@@ -45,7 +51,11 @@ module Uri = struct
     | Hash {target; _} -> needs_context_address target
 
   let to_ipfs_gateway ctxt ~cid ~path =
-    let gateway = "https://gateway.ipfs.io/ipfs/" in
+    let gateway = (Fetcher.gateway ctxt).current in
+    let logf fmt =
+      Fmt.kstr (fun s -> dbgf "Contract_medatadata.to_ips_gateway: %s" s) fmt
+    in
+    logf "The Gateway is: %S" gateway ;
     let gatewayed = Fmt.str "%s%s%s" gateway cid path in
     gatewayed
 
