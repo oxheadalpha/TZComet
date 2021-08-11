@@ -29,7 +29,6 @@ module Uri = struct
 
     let create () =
       let main = "https://gateway.ipfs.io/ipfs/" in
-      (* let alternate = "https://cloudflare-ipfs.com/ipfs/" in *)
       let alternate = "https://dweb.link/ipfs/" in
       {current_contract= Reactive.var None; gateway= {main; alternate}}
 
