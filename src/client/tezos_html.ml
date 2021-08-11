@@ -256,7 +256,6 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
         % itemize
             [ field "CID" (ct cid)
             ; field "Path" (ct path)
-              (* ; t "(Try " %% url ct gatewayed % t ")" ] *)
             ; t "(Try " %% url ct gatewayed % t "  "
             ; t "or " %% url ct gatewayed_alt % t ")" ]
     | Storage {network; address; key} ->

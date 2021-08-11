@@ -713,8 +713,6 @@ module Explorer = struct
           let on_uri ctxt ?token_metadata_big_map uri =
             Lwt.catch
               (fun () ->
-                dbgf "*** uri = %a ***" Tezos_contract_metadata.Metadata_uri.pp
-                  uri ;
                 Contract_metadata.Uri.fetch ctxt uri
                   ~log:(logs "Fetching Metadata"))
               (fun e ->
