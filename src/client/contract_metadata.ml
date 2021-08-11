@@ -79,13 +79,13 @@ module Uri = struct
           logf "HTTP %S (may fail because of origin policy)" http ;
           System.with_timeout ctxt
             ~raise:(fun timeout ->
-              Fmt.failwith "HTTP Call Timeouted: %.3f s" timeout )
+              Fmt.failwith "HTTP Call Timeouted: %.3f s" timeout)
             ~f:
               Js_of_ocaml_lwt.XmlHttpRequest.(
                 fun () ->
                   let headers =
                     Option.map limit_bytes ~f:(fun b ->
-                        [("Range", Fmt.str "bytes=0-%d" b)] ) in
+                        [("Range", Fmt.str "bytes=0-%d" b)]) in
                   perform_raw ~response_type:ArrayBuffer ?headers http
                   >>= fun frame ->
                   dbgf "%s -> code: %d" http frame.code ;
@@ -94,7 +94,7 @@ module Uri = struct
                     ->
                       let res =
                         Js_of_ocaml.Js.Opt.get frame.content (fun () ->
-                            Fmt.failwith "Getting %S gave no content" http )
+                            Fmt.failwith "Getting %S gave no content" http)
                       in
                       let as_string =
                         Js_of_ocaml.Typed_array.String.of_arrayBuffer res in
@@ -113,7 +113,7 @@ module Uri = struct
               dbgf "Trying alternate IPFS gateway..." ;
               let gatewayed_alt =
                 to_ipfs_gateway ctxt ~alt_gateway:true ~cid ~path in
-              resolve (Web gatewayed_alt) )
+              resolve (Web gatewayed_alt))
       | Storage {network= None; address; key} ->
           let addr =
             match address with
@@ -164,7 +164,7 @@ module Content = struct
                 let fix_warn o k =
                   ( match
                       List.exists !warnings ~f:(function
-                          | `Fixed_legacy (a, _) -> String.equal a o )
+                          | `Fixed_legacy (a, _) -> String.equal a o)
                     with
                   | true -> ()
                   | false -> warnings := `Fixed_legacy (o, k) :: !warnings ) ;
@@ -221,14 +221,14 @@ module Content = struct
           (obj2 (req "tag" string) (opt "config-api" string)) in
       conv
         (fun {operator; receiver; sender; custom} ->
-          (operator, receiver, sender, custom) )
+          (operator, receiver, sender, custom))
         (fun (operator, receiver, sender, custom) ->
-          {operator; receiver; sender; custom} )
+          {operator; receiver; sender; custom})
         (obj4
            (req "operator" operator_transfer_policy)
            (req "receiver" owner_transfer_policy)
            (req "sender" owner_transfer_policy)
-           (opt "custom" custom_permission_policy) )
+           (opt "custom" custom_permission_policy))
 
     let of_json jsonm =
       try
@@ -285,7 +285,7 @@ module Content = struct
              [t12.get_balance; t12.total_supply; t12.all_tokens; t12.is_operator]
              ~f:(function
              | Missing | Valid _ -> true
-             | _ -> false )
+             | _ -> false)
         && ( match (t12.token_metadata, t12.token_metadata_big_map) with
            | Missing, None -> ignore_token_metadata_big_map
            | Missing, Some _ -> true
@@ -305,11 +305,11 @@ module Content = struct
       | view when String.equal view.name view_name -> (
           List.find_map view.implementations ~f:(function
             | Rest_api_query _ -> None
-            | Michelson_storage impl -> Some (`Found (view, impl)) )
+            | Michelson_storage impl -> Some (`Found (view, impl)))
           |> function
           | Some v -> Some v | None -> Some (`No_michelson_implementation view)
           )
-      | _ -> None )
+      | _ -> None)
 
   let check_implementation_types ?check_parameter ~check_return impl =
     let open Metadata_contents.View.Implementation.Michelson_storage in
@@ -440,18 +440,18 @@ module Content = struct
       let interface_claim =
         List.find metadata.interfaces ~f:(fun s ->
             String.is_prefix s ~prefix:"TZIP-12"
-            || String.is_prefix s ~prefix:"TZIP-012" )
+            || String.is_prefix s ~prefix:"TZIP-012")
         |> Option.map ~f:(function
              | "TZIP-012" -> `Just_interface
              | "TZIP-12" -> `Invalid "TZIP-12"
              | itf -> (
                match String.chop_prefix itf ~prefix:"TZIP-012-" with
                | None -> `Invalid itf
-               | Some v -> `Version v ) ) in
+               | Some v -> `Version v )) in
       let find_extra name =
         List.find_map metadata.unknown ~f:(function
           | n, json when String.equal name n -> Some json
-          | _ -> None ) in
+          | _ -> None) in
       if Option.is_none interface_claim (* && Option.is_none tokens *) then ()
       else
         let check_nat =
@@ -512,7 +512,7 @@ module Content = struct
             unknown=
               List.filter metadata.unknown ~f:(function
                 | "permissions", _ -> false
-                | _ -> true ) } in
+                | _ -> true) } in
         found
           (Tzip_12
              { metadata
@@ -523,7 +523,7 @@ module Content = struct
              ; is_operator
              ; permissions_descriptor
              ; token_metadata
-             ; token_metadata_big_map } ) in
+             ; token_metadata_big_map }) in
     let exception Found of classified in
     fun ?token_metadata_big_map metadata ->
       try
@@ -577,13 +577,13 @@ module Content = struct
       | Some some ->
           List.filter_map some ~f:(function
             | {uri= Some u; mime_type= Some m; _} -> Some (u, m)
-            | _ -> None )
+            | _ -> None)
 
     let from_extras l =
       let kvs, trash =
         List.partition_map l ~f:(function
           | Ok kv -> First kv
-          | Error _ as e -> Second e ) in
+          | Error _ as e -> Second e) in
       let extr = ref kvs in
       let find_remove l ~key =
         let rec go found acc = function
@@ -610,7 +610,7 @@ module Content = struct
                      t "Key" %% ct key
                      %% t "should be a JSON boolean: "
                      %% ct "true" %% t "or" %% ct "false") ;
-                 None ) in
+                 None) in
       let find_remove_extr_json key ~parse_json ~expected =
         find_remove_extr key
         |> Option.bind ~f:(fun s ->
@@ -623,7 +623,7 @@ module Content = struct
                        %% Fmt.kstr t "is supposed to be %s but got" expected
                        %% ct s
                        %% parens (t "Exception:" %% Fmt.kstr ct "%a" Exn.pp e)) ;
-                   None ) in
+                   None) in
       let find_remove_extr_string_list key =
         find_remove_extr_json key ~parse_json:Ezjsonm.get_strings
           ~expected:"an array of strings" in
@@ -657,12 +657,12 @@ module Content = struct
                               %% ct Ezjsonm.(value_to_string ~minify:true other)
                               %% t ".") ;
                           None
-                      | _ -> None ) in
+                      | _ -> None) in
                   let uri = get_string_field "uri" in
                   let mime_type = get_string_field "mimeType" in
                   let other =
                     List.filter d ~f:(fun (k, _) ->
-                        not (List.mem ["uri"; "mimeType"] ~equal:String.equal k) )
+                        not (List.mem ["uri"; "mimeType"] ~equal:String.equal k))
                   in
                   {uri; mime_type; other} in
                 get_list parse_one j)
@@ -710,7 +710,7 @@ module Multimedia = struct
         (fun s ->
           Decorate_error.raise
             Message.(
-              t "Preparing and guessing format for" %% ct uri % t ":" %% t s) )
+              t "Preparing and guessing format for" %% ct uri % t ":" %% t s))
         fmt in
     let guess_format content =
       let format = Blob.guess_format content in
@@ -742,11 +742,11 @@ module Multimedia = struct
                 let src =
                   Fmt.str "data:%s;base64,%s" content_type
                     (Base64.encode_exn ~pad:true
-                       ~alphabet:Base64.default_alphabet content ) in
-                Lwt.return (format, src) )
+                       ~alphabet:Base64.default_alphabet content) in
+                Lwt.return (format, src))
               (function
                 | Decorate_error.E _ as e -> raise e
-                | other -> failf "failed to fetch the URI: %a" Exn.pp other )
+                | other -> failf "failed to fetch the URI: %a" Exn.pp other)
             (* Decorate_error.raise
                            Message.(t
                         raise (mkexn (Errors_html.exception_html ctxt e)))
@@ -809,7 +809,7 @@ module Token = struct
         match
           ( List.filter_map l ~f:(function
               | k, v when String.equal k key -> Some v
-              | _ -> None )
+              | _ -> None)
           , json_type )
         with
         | [], _ -> None
@@ -876,10 +876,10 @@ module Token = struct
       (fun () ->
         Content.token_metadata_value ctxt ~address ~key:""
           ~log:(logs "Getting %token_metadata big-map")
-        >>= fun token_metadata -> Lwt.return_some token_metadata )
+        >>= fun token_metadata -> Lwt.return_some token_metadata)
       (fun _exn ->
         log Message.(t "Attempt at getting a %token_metadata big-map failed.") ;
-        Lwt.return_none )
+        Lwt.return_none)
     >>= fun token_metadata_big_map ->
     Query_nodes.metadata_value ctxt ~address ~key:"" ~log:(logs "Getting URI")
     >>= (fun metadata_uri ->
@@ -904,7 +904,7 @@ module Token = struct
                   t "failed to parse/validate the metadata URI:"
                   %% Fmt.kstr ct "%a"
                        Tezos_error_monad.Error_monad.pp_print_error error) ;
-              empty () )
+              empty ())
     >>= fun metadata_contents ->
     let total_supply_validation, token_metadata_validation =
       match Content.classify ?token_metadata_big_map metadata_contents with
@@ -916,7 +916,7 @@ module Token = struct
                    (oxfordize_list ~map:ct
                       ~sep:(fun () -> t ", ")
                       ~last_sep:(fun () -> t ", and ")
-                      metadata_contents.interfaces )) ;
+                      metadata_contents.interfaces)) ;
           Content.(Missing, Missing)
       | Tzip_12
           { metadata
@@ -977,12 +977,11 @@ module Token = struct
                   Uri.fetch ctxt uri ~log:(fun s ->
                       Fmt.kstr log "At %s ‣ %s"
                         (ellipsize_string u ~max_length:16 ~ellipsis:"…")
-                        s )
-                  >>= fun s -> Lwt.return_some (u, Ezjsonm.value_from_string s)
-                  )
+                        s)
+                  >>= fun s -> Lwt.return_some (u, Ezjsonm.value_from_string s))
                 (fun exn ->
                   warn "fetch-uri" (`Fetching_uri (u, exn)) ;
-                  Lwt.return_none )
+                  Lwt.return_none)
           | Error error, _ ->
               warn "parsing-uri" (`Parsing_uri (u, error)) ;
               Lwt.return_none ) )
@@ -998,7 +997,7 @@ module Token = struct
               warn "name-is-empty"
                 (`Getting_metadata_field
                   Message.(
-                    t "The" %% ct "name" %% t "field is the empty string.") ) ;
+                    t "The" %% ct "name" %% t "field is the empty string.")) ;
               None
           | o -> o in
         let decimals = piece_of_metadata ~json_type:`Int "decimals" in
@@ -1031,14 +1030,14 @@ module Token = struct
                   ~log:(fun s ->
                     Fmt.kstr log "Preparing/Guessing %s ⏩ %s"
                       (ellipsize_string uri ~max_length:16 ~ellipsis:"…")
-                      s )
+                      s)
                   ctxt
                   ~mime_types:
                     ( Content.Tzip_021.uri_mime_types tzip21
                     |> List.filter_map ~f:(fun (u, m) ->
                            Option.try_with (fun () ->
-                               (u, Blob.Format.of_mime_exn m) ) ) )
-                >>= fun mm -> Lwt.return_ok (title, mm) )
+                               (u, Blob.Format.of_mime_exn m))) )
+                >>= fun mm -> Lwt.return_ok (title, mm))
               (fun exn -> Lwt.return_error exn)
             >|= Option.some )
         >>= fun main_multimedia ->
@@ -1053,7 +1052,7 @@ module Token = struct
         Lwt.return
           (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia ?total_supply
              ~metadata:metadata_contents ~network:node.Query_nodes.Node.network
-             ~special_knowledge address id ~warnings:!warnings )
+             ~special_knowledge address id ~warnings:!warnings)
     | other ->
         Decorate_error.raise
           Message.(

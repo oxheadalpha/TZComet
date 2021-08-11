@@ -18,10 +18,10 @@ let navigation_menu state =
     bt "TZComet"
     % Reactive.bind fragment_self (fun f ->
           (* Invisible, but kept in order to keep pulling the fragment. *)
-          span ~a:[style "font-size: 20%"] (link (t " ") ~target:("#" ^ f)) )
+          span ~a:[style "font-size: 20%"] (link (t " ") ~target:("#" ^ f)))
     %% Reactive.bind (State.dev_mode state) (function
          | true -> it "(dev)"
-         | false -> empty () ) in
+         | false -> empty ()) in
   let all_items =
     let of_page p =
       Bootstrap.Navigation_bar.item
@@ -57,7 +57,7 @@ let navigation_menu state =
                ~a:
                  [ classes ["col-12"; "bg-dark"]
                  ; style "text-align:center; font-size: 175%; min-height: 70px" ]
-               (div tzcomet) *) )
+               (div tzcomet) *))
 
 let about_page state =
   let open Meta_html in
@@ -76,7 +76,7 @@ let about_page state =
                   (it vs) )
       % Reactive.bind (State.dev_mode state) (function
           | true -> t " (in “dev” mode)."
-          | false -> t "." ) )
+          | false -> t ".") )
   % p (t "An explorer/editor/validator/visualizer for Tezos contract metadata.")
   % p
       ( t "The source for this webpage is available on Github:"
@@ -93,7 +93,7 @@ let about_page state =
       | true ->
           h2 (t "Dev-mode Junk:")
           % p (t "This is also a test/experiment in UI writing …")
-          % Meta_html.Example.e1 () )
+          % Meta_html.Example.e1 ())
 
 module Examples_dropdown = struct
   open Meta_html
@@ -109,7 +109,7 @@ module Examples_dropdown = struct
     Reactive.bind (State.Examples.get ctxt) ~f:(fun examples ->
         button (t "Examples 💡 ")
           (List.concat_map l ~f:(fun (h, f) ->
-               header h :: List.map (f examples) ~f:example ) ) )
+               header h :: List.map (f examples) ~f:example)))
 
   let explorable ctxt =
     make ctxt
@@ -152,14 +152,14 @@ module Editor = struct
       is_prefix_strip s ~prefix:"0x"
       || String.for_all s ~f:(function
            | 'A' .. 'F' | 'a' .. 'f' | '0' .. '9' | 'x' | ' ' | '\n' -> true
-           | _ -> false ) in
+           | _ -> false) in
     let looks_like_michelson s =
       match (String.strip s).[0] with
       | '(' | '"' | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' -> true
       | _ -> false in
     let format_of_predicate n v = of_predicate n (Format v) in
     [ of_predicate "it-is-empty" Empty (fun s ->
-          String.is_empty (String.strip s) )
+          String.is_empty (String.strip s))
     ; format_of_predicate "looks-like-a-json-object" `Metadata_json
         looks_like_json
     ; format_of_predicate "looks-like-an-uri" `Uri looks_like_an_uri
@@ -178,7 +178,7 @@ module Editor = struct
       itemize
         (List.map l ~f:(fun (w, s, e) ->
              (match w with `Network -> t "Network" | `Address -> t "Address")
-             %% ct s % t ":" %% t e ) ) in
+             %% ct s % t ":" %% t e)) in
     match Contract_metadata.Uri.validate inpo with
     | Ok u, errs ->
         let header =
@@ -292,7 +292,7 @@ module Editor = struct
             | Ok packed ->
                 code_block
                   (let (`Hex hx) = Hex.of_string packed in
-                   "0x05" ^ hx )
+                   "0x05" ^ hx)
             | Error e ->
                 Bootstrap.color `Danger (bt "Failed:")
                 %% div (Errors_html.exception_html ctxt e) in
@@ -339,7 +339,7 @@ module Editor = struct
                (fun () ->
                  Ezjsonm.value_from_string input_bytes
                  |> Ezjsonm.value_to_string ~minify:true
-                 |> String.length )
+                 |> String.length)
            @ lif_opt binary_from_hex "Binary" String.length
            @ lif_opt packed_mich "PACK-ed" (fun packed -> String.length packed)
          in
@@ -357,7 +357,7 @@ module Editor = struct
              % row
                  [ t label
                  ; Fmt.kstr t "%a B" ppbig bytes
-                 ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 250) ] ) ) in
+                 ; Fmt.kstr t "%a μꜩ" ppbig (bytes * 250) ])) in
     let hashes =
       (* let _item k bytes =
          let hash n v = Fmt.kstr it "%s:" n %% ct v in
@@ -377,7 +377,7 @@ module Editor = struct
         % list
             (List.map hashes ~f:(fun hash ->
                  let n, v = hash bytes in
-                 row (t n) (ct v) ) ) in
+                 row (t n) (ct v))) in
       let hash k b = (k, b) in
       let hex s =
         let (`Hex x) = Hex.of_string s in
@@ -398,10 +398,10 @@ module Editor = struct
       item "Raw Input" input_bytes [ldgr; blake2b; sha256; sha512] ;
       Option.iter binary_from_hex ~f:(fun bin ->
           item "Binary-Michelson-Expression (with watermark)" bin
-            [ldgr; blake2b; sha256; sha512; expr58] ) ;
+            [ldgr; blake2b; sha256; sha512; expr58]) ;
       Option.iter packed_mich ~f:(fun packed ->
           item "Binary-Michelson-Expression (with watermark)" packed
-            [ldgr; blake2b; sha256; sha512; expr58] ) ;
+            [ldgr; blake2b; sha256; sha512; expr58]) ;
       Bootstrap.Table.simple (list (List.rev !items)) in
     Bootstrap.bordered ~kind:`Secondary
       (Bootstrap.container (sizing % div hashes))
@@ -420,7 +420,7 @@ module Editor = struct
       |> Reactive.map ~f:(function
            | input, `Guess -> (`Guess, guess_validate input)
            | input, (#State.Editor_mode.format as fmt) ->
-               (fmt, (input, Format fmt, [])) ) in
+               (fmt, (input, Format fmt, []))) in
     let display_guess =
       Reactive.bind format_result ~f:(function
         | `Guess, (inp, kind, logs) ->
@@ -434,7 +434,7 @@ module Editor = struct
                   normal (t "Using mode" %% ct (State.Editor_mode.to_string m))
               | Failed ->
                   Bootstrap.color `Danger (t "Failed to guess a format.") )
-        | _ -> empty () ) in
+        | _ -> empty ()) in
     let result =
       (* We keep the [make ()]s outside the bind to that they remember their
          state: *)
@@ -450,10 +450,10 @@ module Editor = struct
                     ~style:(Reactive.pure (Fmt.str "width: 8em"))
                     (Reactive.bind (collapsed_state collapse_logs) ~f:(function
                       | true -> t "Show Logs"
-                      | false -> t "Hide Logs" ) )
+                      | false -> t "Hide Logs"))
                 , make_div collapse_logs (fun () ->
                       Bootstrap.terminal_logs
-                        (itemize (List.map logs ~f:(Message_html.render ctxt))) )
+                        (itemize (List.map logs ~f:(Message_html.render ctxt))))
                 ) in
           let binary_info_button, binary_info =
             let open Bootstrap.Collapse in
@@ -461,9 +461,9 @@ module Editor = struct
                 ~style:(Reactive.pure (Fmt.str "width: 12em"))
                 (Reactive.bind (collapsed_state collapse_binary) ~f:(function
                   | true -> t "Show Binary Info"
-                  | false -> t "Hide Binary Info" ) )
+                  | false -> t "Hide Binary Info"))
             , make_div collapse_binary (fun () ->
-                  show_binary_info ctxt kind inp ) ) in
+                  show_binary_info ctxt kind inp) ) in
           let header =
             div
               ( show_logs %% display_guess %% binary_info_button %% logs
@@ -479,7 +479,7 @@ module Editor = struct
                       ~a:
                         [ H5.a_style
                             (Reactive.pure "font-size: 3000%; opacity: 0.1") ]
-                      (t "ꜩ") )
+                      (t "ꜩ"))
           | Format fmt -> (
               header
               %
@@ -495,7 +495,7 @@ module Editor = struct
           | Failed ->
               header
               % h4 (t "Don't know how to validate this")
-              % pre ~a:[classes ["pre-scrollable"]] (ct inp) ) in
+              % pre ~a:[classes ["pre-scrollable"]] (ct inp)) in
     let local_storage_button =
       let label = t "Local-Storage" in
       let button_kind = `Light (* default for dropdowns *) in
@@ -513,7 +513,7 @@ module Editor = struct
           Bootstrap.button ~kind:button_kind ~disabled:true ~action:Fn.ignore
             (abbreviation
                "Local storage is not available for this browser/site combo."
-               label ) in
+               label) in
     let editor_function_messages = Reactive.var [] in
     let editor_message m =
       Reactive.set editor_function_messages
@@ -523,7 +523,7 @@ module Editor = struct
         try
           State.transform_editor_content ctxt ~f:(fun x ->
               let v = Ezjsonm.value_from_string x in
-              Ezjsonm.value_to_string ~minify v )
+              Ezjsonm.value_to_string ~minify v)
         with e ->
           let verb = if minify then "minify" else "re-indent" in
           editor_message
@@ -538,33 +538,32 @@ module Editor = struct
                 ~action:(json_formatter ~minify:false)
               %% Bootstrap.button ~kind:`Info (t "Minify JSON") ~outline:true
                    ~action:(json_formatter ~minify:true)
-          | Format _ -> empty () ) in
+          | Format _ -> empty ()) in
     let editor =
       div
         ( Examples_dropdown.editable ctxt ~action:(fun v ->
-              Reactive.Bidirectional.set content v )
+              Reactive.Bidirectional.set content v)
         % Bootstrap.Dropdown_menu.(
             button
               ( t "Mode:"
               %% ( State.editor_mode ctxt
                  |> Reactive.bind ~f:(fun m ->
-                        ct (State.Editor_mode.to_string m) ) ) )
-              (header (t "Editor Validation Modes")
-               ::
-               List.map State.Editor_mode.all ~f:(fun m ->
-                   item
-                     ~action:(fun () -> State.set_editor_mode ctxt m)
-                     ( ct (State.Editor_mode.to_string m)
-                     %% t "→"
-                     %% State.Editor_mode.explain m ) ) ))
+                        ct (State.Editor_mode.to_string m)) ) )
+              ( header (t "Editor Validation Modes")
+              :: List.map State.Editor_mode.all ~f:(fun m ->
+                     item
+                       ~action:(fun () -> State.set_editor_mode ctxt m)
+                       ( ct (State.Editor_mode.to_string m)
+                       %% t "→"
+                       %% State.Editor_mode.explain m )) ))
         % local_storage_button % editor_function_buttons )
       % Reactive.bind_var editor_function_messages ~f:(function
           | [] -> empty ()
           | more ->
               Bootstrap.alert ~kind:`Danger
                 ( Bootstrap.close_button ~action:(fun () ->
-                      Reactive.set editor_function_messages [] )
-                %% itemize (List.map more ~f:(Message_html.render ctxt)) ) )
+                      Reactive.set editor_function_messages [])
+                %% itemize (List.map more ~f:(Message_html.render ctxt)) ))
       % H5.(
           div
             [ textarea
@@ -583,8 +582,8 @@ module Editor = struct
                                      let v = input##.value |> Js.to_string in
                                      dbgf "TA inputs: %d bytes: %S"
                                        (String.length v) v ;
-                                     Reactive.Bidirectional.set content v ) ) ;
-                             true) ) ] ]) in
+                                     Reactive.Bidirectional.set content v)) ;
+                             true)) ] ]) in
     div
       ~a:[classes ["row"]]
       (Reactive.bind (Browser_window.width ctxt) ~f:(function
@@ -601,21 +600,21 @@ module Editor = struct
                       ( Reactive.get visible
                       |> Reactive.map ~f:(function
                            | `Editor -> false
-                           | `Result -> true ) )
+                           | `Result -> true) )
                     ~action:(fun () -> Reactive.set visible `Editor)
                 ; item (t "Results")
                     ~active:
                       ( Reactive.get visible
                       |> Reactive.map ~f:(function
                            | `Editor -> true
-                           | `Result -> false ) )
+                           | `Result -> false) )
                     ~action:(fun () -> Reactive.set visible `Result) ] in
             div
               ~a:[classes ["col-12"]]
               ( tabs
               %% Reactive.bind_var visible ~f:(function
                    | `Editor -> editor
-                   | `Result -> result ) ) ) )
+                   | `Result -> result) )))
 end
 
 module Explorer = struct
@@ -645,7 +644,7 @@ module Explorer = struct
       | `Error ("", _) -> t "Can be a metadata URI or a contract address."
       | `Error (txt, _) ->
           cct txt %% t "is a not a valid address nor a TZIP-16 URI"
-          |> Bootstrap.color `Danger )
+          |> Bootstrap.color `Danger)
 
   let full_input_quick ctxt =
     let open Meta_html in
@@ -717,11 +716,10 @@ module Explorer = struct
                 dbgf "*** uri = %a ***" Tezos_contract_metadata.Metadata_uri.pp
                   uri ;
                 Contract_metadata.Uri.fetch ctxt uri
-                  ~log:(logs "Fetching Metadata") )
+                  ~log:(logs "Fetching Metadata"))
               (fun e ->
                 raise
-                  (mkexn (uri_failed_to_fetch ctxt ~full_input ~uri ~error:e))
-                )
+                  (mkexn (uri_failed_to_fetch ctxt ~full_input ~uri ~error:e)))
             >>= fun json_code ->
             let open Tezos_contract_metadata.Metadata_contents in
             dbgf "before of-json" ;
@@ -729,13 +727,13 @@ module Explorer = struct
             | Ok (_, _) ->
                 Async_work.ok result
                   (uri_and_metadata_result ctxt ~full_input ~uri
-                     ?token_metadata_big_map ~metadata:json_code ) ;
+                     ?token_metadata_big_map ~metadata:json_code) ;
                 Lwt.return ()
             | Error error ->
                 raise
                   (mkexn
                      (uri_ok_but_metadata_failure ctxt ~uri ~full_input
-                        ~metadata_json:json_code ~error ) ) in
+                        ~metadata_json:json_code ~error)) in
           match full_input with
           | `KT1 address -> (
               Query_nodes.metadata_value ctxt ~address ~key:""
@@ -748,12 +746,12 @@ module Explorer = struct
                   Contract_metadata.Content.token_metadata_value ctxt ~address
                     ~key:""
                     ~log:(logs "Getting Token Metadata")
-                  >>= fun token_metadata -> Lwt.return_some token_metadata )
+                  >>= fun token_metadata -> Lwt.return_some token_metadata)
                 (fun exn ->
                   Async_work.log result
                     ( t "Attempt at getting a %token_metadata big-map failed:"
                     %% Errors_html.exception_html ctxt exn ) ;
-                  Lwt.return_none )
+                  Lwt.return_none)
               >>= fun token_metadata_big_map ->
               match Contract_metadata.Uri.validate metadata_uri with
               | Ok uri, _ -> on_uri ctxt uri ?token_metadata_big_map
@@ -761,7 +759,7 @@ module Explorer = struct
                   raise
                     (mkexn
                        (uri_there_but_wrong ctxt ~uri_string:metadata_uri
-                          ~full_input ~error ) ) )
+                          ~full_input ~error)) )
           | `Uri (_, uri) ->
               if Contract_metadata.Uri.needs_context_address uri then
                 Async_work.log result
@@ -784,9 +782,9 @@ module Explorer = struct
                   (input
                      ~placeholder:
                        (Reactive.pure
-                          "Enter a contract address or a metadata URI" )
+                          "Enter a contract address or a metadata URI")
                      (State.explorer_input_bidirectional ctxt)
-                     ~help:(input_validation_status ctxt) )
+                     ~help:(input_validation_status ctxt))
               ; cell 2
                   (submit_button (t "Go!")
                      ~active:
@@ -796,8 +794,8 @@ module Explorer = struct
                            ~f:(function
                              | `Error _, _ -> false
                              | _, true -> false
-                             | _ -> true ))
-                     enter_action ) ] ])
+                             | _ -> true))
+                     enter_action) ] ])
     % Async_work.render result ~f:Fn.id
 end
 
