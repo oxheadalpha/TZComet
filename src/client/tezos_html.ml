@@ -246,12 +246,18 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
     match uri with
     | Web u -> t "Web URL:" %% url ct u
     | Ipfs {cid; path} ->
-        let gatewayed = Fmt.str "https://gateway.ipfs.io/ipfs/%s%s" cid path in
+        let gatewayed =
+          Contract_metadata.Uri.to_ipfs_gateway ~alt_gateway:false ctxt ~cid
+            ~path in
+        let gatewayed_alt =
+          Contract_metadata.Uri.to_ipfs_gateway ~alt_gateway:true ctxt ~cid
+            ~path in
         field_head "IPFS URI"
         % itemize
             [ field "CID" (ct cid)
             ; field "Path" (ct path)
-            ; t "(Try " %% url ct gatewayed % t ")" ]
+            ; t "(Try " %% url ct gatewayed % t "  "
+            ; t "or " %% url ct gatewayed_alt % t ")" ]
     | Storage {network; address; key} ->
         field_head "In-Contract-Storage"
         % itemize
