@@ -55,12 +55,7 @@ module Uri = struct
     let gateway =
       if alt_gateway then (Fetcher.gateway ctxt).alternate
       else (Fetcher.gateway ctxt).main in
-    let logf fmt =
-      Fmt.kstr (fun s -> dbgf "Contract_medatadata.to_ips_gateway: %s" s) fmt
-    in
-    logf "*** The Gateway is: %S ***" gateway ;
-    let gatewayed = Fmt.str "%s%s%s" gateway cid path in
-    gatewayed
+    Fmt.str "%s%s%s" gateway cid path
 
   let to_web_address ctxt =
     let open Tezos_contract_metadata.Metadata_uri in
