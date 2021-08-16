@@ -213,6 +213,16 @@ let linkify_text s =
 
 let token_ui_max_width = "900px"
 
+let error_try_again try_again_action msg e =
+  let open Meta_html in
+  Bootstrap.alert ~kind:`Danger
+    ( h3 (t "Failed To Fetch The Token 😿")
+    % div e % hr ()
+    % div
+        ( bt msg
+        %% Bootstrap.button ~kind:`Primary (t "Try Again ♲")
+             ~action:try_again_action ) )
+
 let show_token ctxt
     Contract_metadata.Token.
       { address
@@ -248,9 +258,10 @@ let show_token ctxt
     match main_multimedia with
     | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
     | Some (Error exn) ->
-        Bootstrap.alert ~kind:`Danger
-          ( t "Error while getting multimedia content:"
-          %% Errors_html.exception_html ctxt exn )
+        let enter_action () = go_action ctxt ~wip:(Async_work.empty ()) in
+        let multimedia_err_str = "Error while getting multimedia content:" in
+        let html_err = Errors_html.exception_html ctxt exn in
+        error_try_again enter_action multimedia_err_str html_err
     | Some (Ok (title, mm)) ->
         let open Contract_metadata.Multimedia in
         let maybe_censor f =
@@ -565,20 +576,14 @@ let render ctxt =
               Reactive.set token_id (Int.to_string (current + 1)) ;
               enter_action ()
             with _ -> ()) ) in
-  let show_error e =
-    Bootstrap.alert ~kind:`Danger
-      ( h3 (t "Failed To Fetch The Token 😿")
-      % div e % hr ()
-      % div
-          ( bt
-              "💡 This could be that the token does not exist, that a public \
-               Tezos node is having trouble responding, or that an IPFS \
-               gateway is limiting requests ⇒"
-          %% Bootstrap.button ~kind:`Primary (t "Try Again ♲")
-               ~action:enter_action ) ) in
+  let gateway_err_str =
+    "💡 This could be that the token does not exist, that a public Tezos \
+     node is having trouble responding, or that an IPFS gateway is limiting \
+     requests ⇒" in
   State.if_explorer_should_go ctxt enter_action ;
   h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
   % top_form % second_form
   % div
       ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
-      (Async_work.render result ~f:(show_token ctxt) ~show_error)
+      (Async_work.render result ~f:(show_token ctxt)
+         ~show_error:(error_try_again enter_action gateway_err_str))
