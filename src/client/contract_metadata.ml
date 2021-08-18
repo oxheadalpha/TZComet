@@ -24,11 +24,17 @@ module Uri = struct
     (uri, List.rev !errors)
 
   module Fetcher = struct
-    type t = {current_contract: string option Reactive.var}
+    type gateway = {main: string; alternate: string}
+    type t = {current_contract: string option Reactive.var; gateway: gateway}
 
-    let create () = {current_contract= Reactive.var None}
+    let create () =
+      let main = "https://gateway.ipfs.io/ipfs/" in
+      let alternate = "https://dweb.link/ipfs/" in
+      {current_contract= Reactive.var None; gateway= {main; alternate}}
+
     let get (ctxt : < fetcher: t ; .. > Context.t) = ctxt#fetcher
     let current_contract ctxt = (get ctxt).current_contract
+    let gateway ctxt = (get ctxt).gateway
 
     let set_current_contract ctxt s =
       Reactive.set (get ctxt).current_contract (Some s)
@@ -44,10 +50,11 @@ module Uri = struct
     | Web _ | Storage _ | Ipfs _ -> false
     | Hash {target; _} -> needs_context_address target
 
-  let to_ipfs_gateway ctxt ~cid ~path =
-    let gateway = "https://gateway.ipfs.io/ipfs/" in
-    let gatewayed = Fmt.str "%s%s%s" gateway cid path in
-    gatewayed
+  let to_ipfs_gateway ?(alt_gateway = false) ctxt ~cid ~path =
+    let gateway =
+      if alt_gateway then (Fetcher.gateway ctxt).alternate
+      else (Fetcher.gateway ctxt).main in
+    Fmt.str "%s%s%s" gateway cid path
 
   let to_web_address ctxt =
     let open Tezos_contract_metadata.Metadata_uri in
@@ -98,7 +105,14 @@ module Uri = struct
       | Ipfs {cid; path} ->
           logf "IPFS CID %S path %S" cid path ;
           let gatewayed = to_ipfs_gateway ctxt ~cid ~path in
-          resolve (Web gatewayed)
+          (* resolve (Web gatewayed) *)
+          Lwt.catch
+            (fun () -> resolve (Web gatewayed))
+            (fun e ->
+              dbgf "Trying alternate IPFS gateway..." ;
+              let gatewayed_alt =
+                to_ipfs_gateway ctxt ~alt_gateway:true ~cid ~path in
+              resolve (Web gatewayed_alt))
       | Storage {network= None; address; key} ->
           let addr =
             match address with
