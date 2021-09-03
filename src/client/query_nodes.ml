@@ -77,7 +77,7 @@ module Node = struct
                   fail Message.(t "failed with code" %% Fmt.kstr ct "%d" other))
         ~raise:(fun timeout ->
           dbgf "Node-%S GET %s → TIMEOUT" node.name path ;
-          fail Message.(Fmt.kstr t "timeouted (%.03f seconds)" timeout)) in
+          fail Message.(Fmt.kstr t "timeouted (%.03f seconds)" timeout) ) in
     match Rpc_cache.get node.rpc_cache ~rpc:path with
     | _, None -> actually_get ()
     | age, Some _ when Float.(age > 120.) -> actually_get ()
@@ -97,7 +97,7 @@ module Node = struct
           fun () ->
             perform ~contents:(`String body) ~content_type:"application/json"
               (Option.value_exn ~message:"uri-of-string"
-                 (Js_of_ocaml.Url.url_of_string uri))
+                 (Js_of_ocaml.Url.url_of_string uri) )
             >>= fun frame ->
             dbgf "%s %s code: %d" node.prefix path frame.code ;
             match frame.code with
@@ -113,14 +113,14 @@ module Node = struct
                              |> Ezjsonm.value_to_string ~minify:false
                            with _ -> frame.content )))
       ~raise:(fun timeout ->
-        fail Message.(Fmt.kstr t "timeouted (%03.f seconds)." timeout))
+        fail Message.(Fmt.kstr t "timeouted (%03.f seconds)." timeout) )
 
   let ping ctxt node =
     let open Lwt.Infix in
     Lwt.catch
       (fun () ->
         rpc_get ctxt node "/chains/main/blocks/head/metadata"
-        >>= fun metadata -> Lwt.return (Ready metadata))
+        >>= fun metadata -> Lwt.return (Ready metadata) )
       (fun e -> Lwt.return (Non_responsive e))
 
   let get_storage state_handle node ~address ~log =
@@ -131,14 +131,14 @@ module Node = struct
              ~body:
                Ezjsonm.(
                  dict [("unparsing_mode", string "Optimized_legacy")]
-                 |> value_to_string))
+                 |> value_to_string) )
           "/chains/main/blocks/head/context/contracts/%s/storage/normalized"
-          address)
+          address )
       (fun e ->
         log "Node does not handle /normalized" ;
         Fmt.kstr
           (rpc_get state_handle node)
-          "/chains/main/blocks/head/context/contracts/%s/storage" address)
+          "/chains/main/blocks/head/context/contracts/%s/storage" address )
 
   module Contract = struct
     type t =
@@ -204,7 +204,7 @@ module Node = struct
         ~f:(fun () ->
           Fmt.kstr (rpc_get ctxt node)
             "/chains/main/blocks/head/context/big_maps/%s/%s"
-            (Z.to_string big_map_id) hash_string))
+            (Z.to_string big_map_id) hash_string ))
     >>= fun bytes_raw_value ->
     Fmt.kstr log "bytes raw value: %s"
       (ellipsize_string bytes_raw_value ~max_length:30) ;
@@ -234,7 +234,7 @@ module Node = struct
         ~f:(fun () ->
           Fmt.kstr (rpc_get ctxt node)
             "/chains/main/blocks/head/context/big_maps/%s/%s"
-            (Z.to_string big_map_id) hash_string))
+            (Z.to_string big_map_id) hash_string ))
     >>= fun raw_value ->
     Fmt.kstr log "JSON raw value: %s"
       (ellipsize_string raw_value ~max_length:60) ;
@@ -281,7 +281,7 @@ let get_nodes t ~map =
   Reactive.pair ((get t).nodes |> Reactive.get) (System.dev_mode t)
   |> Reactive.map ~f:(function
        | l, true -> Node_list.map ~f:map l
-       | l, false -> Node_list.map ~f:map (Node_list.remove_dev l))
+       | l, false -> Node_list.map ~f:map (Node_list.remove_dev l) )
 
 let add_node ?dev ctxt nod =
   Reactive.set (nodes ctxt)
@@ -353,7 +353,7 @@ module Update_status_loop = struct
              dbgf "got status for %s" nod.name ;
              let now = System.now () in
              Reactive.set nod.status (now, new_status) ;
-             Lwt.return ())
+             Lwt.return () )
          >>= fun () ->
          set_loop_status ctxt `Sleeping ;
          Lwt.pick
@@ -362,7 +362,7 @@ module Update_status_loop = struct
          Reactive.set (get ctxt).loop_interval
            (Float.min (sleep_time *. 1.4) 120.) ;
          loop (count + 1) in
-       loop 0)
+       loop 0 )
 
   let ensure t =
     match Reactive.peek (get t).loop_started with
@@ -385,15 +385,15 @@ let find_node_with_contract ctxt addr =
                 "/chains/main/blocks/head/context/contracts/%s/storage" addr
               >>= fun _ ->
               State.set_current_network ctxt node.Node.network ;
-              return_true)
+              return_true )
             (fun exn ->
               trace := exn :: !trace ;
-              return_false))
+              return_false ) )
         (observe_nodes ctxt)
-      >>= fun node -> Lwt.return node)
+      >>= fun node -> Lwt.return node )
     (fun exn ->
       Decorate_error.raise ~trace:(List.rev !trace)
-        Message.(t "Cannot find a node that knows about address" %% ct addr))
+        Message.(t "Cannot find a node that knows about address" %% ct addr) )
 
 let metadata_value ctxt ~address ~key ~(log : string -> unit) =
   let open Lwt in
@@ -409,13 +409,14 @@ let metadata_value ctxt ~address ~key ~(log : string -> unit) =
 
 let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   let open Lwt in
-  let open Tezos_contract_metadata.Metadata_contents.View.Implementation
-           .Michelson_storage in
+  let open
+    Tezos_contract_metadata.Metadata_contents.View.Implementation
+    .Michelson_storage in
   let logf f =
     Fmt.kstr
       (fun s ->
         log s ;
-        dbgf "call_off_chain_view: %s" s)
+        dbgf "call_off_chain_view: %s" s )
       f in
   logf "Calling %s(%a)" address
     Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline parameter ;
@@ -430,7 +431,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       | `O l ->
           List.find_map l ~f:(function
             | "protocol", `String p -> Some p
-            | _ -> None)
+            | _ -> None )
       | _ | (exception _) -> None in
     match hash with
     | None ->

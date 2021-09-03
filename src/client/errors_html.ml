@@ -14,7 +14,8 @@ let exception_html ?(handlers : handler list = []) ctxt exn =
               Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
                 collapse ~width:"12em" ~kind:`Secondary
                 ~button:(function
-                  | true -> t "Show Error Trace" | false -> t "Hide Error Trace")
+                  | true -> t "Show Error Trace" | false -> t "Hide Error Trace"
+                  )
                 (fun () -> itemize (List.map more ~f:construct)) in
         Message_html.render ctxt message % trace_part
     | Failure s -> t "Failure:" %% t s

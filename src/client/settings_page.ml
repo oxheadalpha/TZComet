@@ -16,7 +16,7 @@ let nodes_form ctxt =
                 function
                 | `Not_started -> m "ping-loop not started"
                 | `In_progress -> m "ping-loop in progress"
-                | `Sleeping -> m "ping-loop sleeping")
+                | `Sleeping -> m "ping-loop sleeping" )
       ; t "" ]
     (let row l = H5.tr (List.map ~f:td l) in
      let node_status =
@@ -30,7 +30,7 @@ let nodes_form ctxt =
              % Bootstrap.Collapse.fixed_width_reactive_button_with_div_below
                  collapse ~width:"12em" ~kind:`Secondary
                  ~button:(function
-                   | true -> t "Show Error" | false -> t "Hide Error")
+                   | true -> t "Show Error" | false -> t "Hide Error" )
                  (fun () -> Errors_html.exception_html ctxt e)
          | Ready metadata ->
              let extra_info =
@@ -59,10 +59,10 @@ let nodes_form ctxt =
                    collapse ~width:"12em" ~kind:`Secondary
                    ~button:(function
                      | true -> t "Failed to parse metadata"
-                     | false -> t "Hide Error")
+                     | false -> t "Hide Error" )
                    (fun () ->
                      pre (code (t metadata))
-                     %% Errors_html.exception_html ctxt e) in
+                     %% Errors_html.exception_html ctxt e ) in
              m `Success "Ready" %% extra_info) in
      let ping_date date =
        if Float.(date < 10.) then (* Construction sign: *) t "🚧"
@@ -83,7 +83,7 @@ let nodes_form ctxt =
            ; Reactive.bind (status n) ~f:(fun (f, _) -> ping_date f)
            ; Bootstrap.button ~outline:true ~size:`Small ~kind:`Danger
                (t "Remove 💣") ~action:(fun () ->
-                 Query_nodes.remove_node ctxt ~name:n.name) ] in
+                 Query_nodes.remove_node ctxt ~name:n.name ) ] in
      let last_row =
        let name = Reactive.var "" in
        let nameb = Reactive.Bidirectional.of_var name in
@@ -103,27 +103,27 @@ let nodes_form ctxt =
              let items =
                List.map Network.all ~f:(fun net ->
                    item (Tezos_html.network net) ~action:(fun () ->
-                       Reactive.set network net)) in
+                       Reactive.set network net ) ) in
              button
                ( Reactive.get network
                |> Reactive.bind ~f:(fun net ->
-                      t "Network:" %% Tezos_html.network net) )
+                      t "Network:" %% Tezos_html.network net ) )
                items)
-         ; Bootstrap.button (t "⇐ Add/replace node (by name)")
-             ~kind:`Secondary ~action:(fun () ->
+         ; Bootstrap.button (t "⇐ Add/replace node (by name)") ~kind:`Secondary
+             ~action:(fun () ->
                Query_nodes.add_node ctxt
                  (Query_nodes.Node.create (Reactive.peek name)
-                    ~network:(Reactive.peek network) (Reactive.peek prefix)) ;
+                    ~network:(Reactive.peek network) (Reactive.peek prefix) ) ;
                Reactive.Bidirectional.set nameb "" ;
                Reactive.Bidirectional.set prefixb "" ;
-               ())
+               () )
          ; Bootstrap.button (t "⇑ Ping'em'all") ~kind:`Secondary
              ~action:(fun () ->
                Query_nodes.Update_status_loop.ensure ctxt ;
-               Query_nodes.Update_status_loop.wake_up ctxt) ] in
+               Query_nodes.Update_status_loop.wake_up ctxt ) ] in
      Reactive.bind (Query_nodes.get_nodes ctxt ~map:row_of_node)
        ~f:(fun nodes -> list nodes)
-     % last_row)
+     % last_row )
 
 let render ctxt =
   let open Meta_html in
@@ -144,7 +144,8 @@ let render ctxt =
                  (Bootstrap.color `Danger
                     ( t "Timeout cannot be set to"
                     %% ct x
-                    % t ", it should a valid floating-point number." )))) in
+                    % t ", it should a valid floating-point number." ) ) ) )
+  in
   h2 (t "Settings")
   % Bootstrap.Form.(
       make
@@ -154,7 +155,7 @@ let render ctxt =
             ~help:
               (t
                  "Shows things that regular users should not see and \
-                  artificially slows down the application.")
+                  artificially slows down the application." )
         ; check_box
             (State.check_micheline_indentation_bidirectional ctxt)
             ~label:(t "Check Micheline Indentation")
@@ -182,7 +183,7 @@ let render ctxt =
                     t
                       "How long to wait for nodes and gateways to give/accept \
                        data."
-                | Some msg -> msg))
+                | Some msg -> msg ) )
             ~label:(t "HTTP-Call Timeout") timeout ])
   % h3 (t "Tezos Nodes")
   % nodes_form ctxt

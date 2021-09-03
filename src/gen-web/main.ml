@@ -40,7 +40,7 @@ $(document).on('%s.bs.collapse', function (e) {
    var ev = new CustomEvent('collapse-%s', { detail: e.target.id });
    document.body.dispatchEvent(ev);
 })|html}
-            evname evname evname)
+            evname evname evname )
       |> String.concat ~sep:"\n"
     ; (*
 $(document).on('hidden.bs.collapse', function (e) {

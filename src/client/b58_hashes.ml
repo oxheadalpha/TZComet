@@ -40,7 +40,7 @@ let check_b58_hash ~prefix ~size s =
         match o () with
         | Some s -> s
         | None -> Fmt.failwith "%s" message
-        | exception e -> Fmt.failwith "%s (%a)" message Exn.pp e)
+        | exception e -> Fmt.failwith "%s (%a)" message Exn.pp e )
       k in
   String.mapi s ~f:(fun idx c ->
       let bitcoin =
@@ -49,7 +49,7 @@ let check_b58_hash ~prefix ~size s =
       else
         Fmt.failwith
           "Invalid character '%c' at position %d in supposedly base-58 %S" c idx
-          s)
+          s )
   |> ignore ;
   let b58 =
     optry
@@ -87,19 +87,19 @@ let b58_script_id_hash_of_michelson_int s =
 let crypto_test () =
   dbgf "TRYING BLAKE2B: %s"
     (let dgst = Digestif.digest_string (Digestif.blake2b 32) "" in
-     Digestif.to_hex (Digestif.blake2b 32) dgst) ;
+     Digestif.to_hex (Digestif.blake2b 32) dgst ) ;
   dbgf "TRYING base58: %a %S"
     Fmt.(Dump.option Base58.pp)
     (Base58.of_string
        (module B58_crypto)
-       "expru5X1yxJG6ezR2uHMotwMLNmSzQyh5t1vUnhjx4cS6Pv9qE1Sdo")
+       "expru5X1yxJG6ezR2uHMotwMLNmSzQyh5t1vUnhjx4cS6Pv9qE1Sdo" )
     ( Base58.of_string_exn
         (module B58_crypto)
         "expru5X1yxJG6ezR2uHMotwMLNmSzQyh5t1vUnhjx4cS6Pv9qE1Sdo"
     |> Base58.to_bytes (module B58_crypto)
     |> Option.value_map ~default:"EEEERRRROR" ~f:(fun x ->
            let (`Hex h) = Hex.of_string x in
-           h) ) ;
+           h ) ) ;
   let michelson_string_expr_hash s =
     dbgf "mseh: %S" s ;
     let bytes = Michelson_bytes.encode_michelson_string s in
