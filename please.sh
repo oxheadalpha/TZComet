@@ -76,7 +76,7 @@ ensure_setup () {
     fi
     eval $(opam env)
     opam pin add -n digestif 0.9.0
-    opam pin add -n ocamlformat 0.15.0
+    opam pin add -n ocamlformat 0.19.0
     opam pin add -n tyxml 4.4.0
     opam pin add -n zarith 1.11 # zarith_stubs_js fails with 1.12
     # see https://github.com/janestreet/zarith_stubs_js/pull/8
