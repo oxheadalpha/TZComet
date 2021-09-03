@@ -54,7 +54,7 @@ ensure_vendors () {
     if [ -f "local-vendor/lwd/lwd.opam" ] ; then
         say "Already cloned"
     else
-        git clone --depth 10 https://github.com/let-def/lwd.git \
+        git clone --depth 30 https://github.com/let-def/lwd.git \
             local-vendor/lwd
     fi
     (
