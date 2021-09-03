@@ -85,7 +85,7 @@ ensure_setup () {
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          ppx_inline_test lwt-canceler.0.3 zarith_stubs_js \
-         digestif \
+         digestif tyxml \
          js_of_ocaml-compiler js_of_ocaml-lwt
 }
 
