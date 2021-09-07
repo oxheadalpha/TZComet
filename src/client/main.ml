@@ -28,17 +28,11 @@ let lwd_onload _ =
         let window = Browser_window.create () in
         object
           method system = sys
-
           method gui = gui
-
           method nodes = nodes
-
           method fetcher = fetcher
-
           method storage = storage
-
           method window = window
-
           method version_string = version_string
         end in
       Query_nodes.add_default_nodes state ;
@@ -50,7 +44,7 @@ let lwd_onload _ =
                (Js.wrap_callback (fun _ ->
                     while Lwd.is_damaged root do
                       ignore (Lwd.quick_sample root)
-                    done)))) ;
+                    done ) ) ) ) ;
       List.iter ~f:(Dom.appendChild base_div)
         (Lwd_seq.to_list (Lwd.quick_sample root) : _ node list :> raw_node list) ;
       Lwt.return_unit) ;

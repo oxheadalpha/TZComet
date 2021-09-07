@@ -50,11 +50,11 @@ ensure_vendors () {
         echo 'val raw_encode : ?alphabet:Alphabet.t -> string -> string' >> src/base58.mli
     )
     say "Vendoring Lwd++"
-    lwd_commit="cba75b9b71afd15b1f80c507921b96f44495f3f4"
+    lwd_commit="3bfeca4d37560f8778610c51d60d2d1aedfa519d"
     if [ -f "local-vendor/lwd/lwd.opam" ] ; then
         say "Already cloned"
     else
-        git clone --depth 10 https://github.com/let-def/lwd.git \
+        git clone --depth 30 https://github.com/let-def/lwd.git \
             local-vendor/lwd
     fi
     (
@@ -76,8 +76,8 @@ ensure_setup () {
     fi
     eval $(opam env)
     opam pin add -n digestif 0.9.0
-    opam pin add -n ocamlformat 0.15.0
-    opam pin add -n tyxml 4.4.0
+    opam pin add -n ocamlformat 0.19.0
+    opam pin add -n tyxml 4.5.0
     opam pin add -n zarith 1.11 # zarith_stubs_js fails with 1.12
     # see https://github.com/janestreet/zarith_stubs_js/pull/8
     opam install --deps-only \
@@ -85,7 +85,7 @@ ensure_setup () {
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          ppx_inline_test lwt-canceler.0.3 zarith_stubs_js \
-         digestif \
+         digestif tyxml \
          js_of_ocaml-compiler js_of_ocaml-lwt
 }
 

@@ -29,7 +29,7 @@ let parse_micheline ~check_indentation ~check_primitives m =
     | Prim (_, s, args, _) ->
         ( match
             List.find Michelson_bytes.primitives ~f:(fun (p, _) ->
-                String.equal p s)
+                String.equal p s )
           with
         | Some _ -> ()
         | None -> Fmt.failwith "Unknown primitive: %S" s ) ;
@@ -97,7 +97,7 @@ module Partial_type = struct
     let open Tezos_micheline.Micheline in
     let describe annot =
       List.find view_annots ~f:(fun (k, v) ->
-          List.mem annot k ~equal:String.equal) in
+          List.mem annot k ~equal:String.equal ) in
     let rec go tp =
       let raw = strip_locations tp in
       let leaf ?annot kind =
@@ -157,7 +157,7 @@ module Partial_type = struct
           |> map ~f:(function
                | "" -> false
                | s -> (
-                 match Z.of_string s with _ -> true | exception _ -> false )))
+                 match Z.of_string s with _ -> true | exception _ -> false ) ))
     | Leaf {kind= Bytes; v; _} ->
         Reactive.(
           get v
@@ -169,7 +169,7 @@ module Partial_type = struct
                  | Some s -> (
                    match Hex.to_string (`Hex s) with
                    | _ -> true
-                   | exception _ -> false ) )))
+                   | exception _ -> false ) ) ))
     | Leaf lf -> Reactive.(get lf.v |> map ~f:validate_micheline)
     | Pair {left; right} ->
         Reactive.(
@@ -208,7 +208,7 @@ module Partial_type = struct
                   bind (validate_structure leaf_structure) ~f:(function
                     | true -> Bootstrap.color `Success (t "OK")
                     | false ->
-                        Bootstrap.color `Danger (validity_error leaf.kind)))
+                        Bootstrap.color `Danger (validity_error leaf.kind) ))
               ~placeholder:(Reactive.pure "Some decent Michelson right here")
               (Reactive.Bidirectional.of_var leaf.v) ] in
     go mf.structure
@@ -269,14 +269,15 @@ module Partial_type = struct
       | Prim (_, "Elt", [String (_, s); Bytes (_, b)], _) :: more ->
           List.fold more
             ~init:[(s, Bytes.to_string b)]
-            ~f:(fun prev -> function
-              | Prim (_, "Elt", [String (_, s); Bytes (_, b)], _) ->
-                  (s, Bytes.to_string b) :: prev
-              | other ->
-                  nope
-                    Message.(
-                      t "Michelson-map element has wrong structure:"
-                      %% ct (micheline_node_to_string other)))
+            ~f:
+              (fun prev -> function
+                | Prim (_, "Elt", [String (_, s); Bytes (_, b)], _) ->
+                    (s, Bytes.to_string b) :: prev
+                | other ->
+                    nope
+                      Message.(
+                        t "Michelson-map element has wrong structure:"
+                        %% ct (micheline_node_to_string other)) )
       | other ->
           nope
             Message.(
@@ -290,7 +291,7 @@ module Partial_type = struct
 
   let desc ?(default = empty ()) description =
     Option.value_map description ~default ~f:(fun (k, v) ->
-        t ":" %% it v %% parens (ct k))
+        t ":" %% it v %% parens (ct k) )
 
   let show_bytes_result ~tzip16_uri ?description content =
     let show_content name f =
@@ -298,7 +299,7 @@ module Partial_type = struct
       Bootstrap.Collapse.fixed_width_reactive_button_with_div_below collapse
         ~width:"12em" ~kind:`Secondary
         ~button:(function
-          | true -> t "Show" %% t name | false -> t "Hide" %% t name)
+          | true -> t "Show" %% t name | false -> t "Hide" %% t name )
         f in
     let utf8_line_threshold = 78 in
     let show_summary = function
@@ -313,7 +314,7 @@ module Partial_type = struct
       match bytes_guesses content with
       | `Just_hex hex ->
           show_content "Hex Dump" (fun () ->
-              pre (ct (Hex.hexdump_s (`Hex hex))))
+              pre (ct (Hex.hexdump_s (`Hex hex))) )
       | `Number f ->
           t "→ The number"
           %% it (Float.to_string_hum ~delimiter:' ' ~strip_zero:true f)
@@ -324,11 +325,10 @@ module Partial_type = struct
           t "→"
           %% Bootstrap.color `Success (t "It is valid JSON!")
           %% show_content "Indented JSON" (fun () ->
-                 pre (ct (Ezjsonm.value_to_string ~minify:false v)))
+                 pre (ct (Ezjsonm.value_to_string ~minify:false v)) )
       | `Valid_utf_8 (maxperline, [one]) when maxperline <= utf8_line_threshold
         ->
-          t "→" %% t one
-          %% parens (Bootstrap.color `Success (t "Valid UTF-8"))
+          t "→" %% t one %% parens (Bootstrap.color `Success (t "Valid UTF-8"))
       | `Valid_utf_8 (maxperline, lines) ->
           t "→"
           %% Bootstrap.color `Success
@@ -339,7 +339,7 @@ module Partial_type = struct
                     Fmt.kstr t
                       "It is valid UTF-8 text, %d line%s %d characters!" lnnb
                       (if lnnb <> 1 then "s, each ≤" else ",")
-                      maxperline)
+                      maxperline )
           %%
           if maxperline = 0 then empty ()
           else
@@ -347,7 +347,7 @@ module Partial_type = struct
                 div
                   (let sep () = H5.br () in
                    List.fold lines ~init:(empty ()) ~f:(fun p l ->
-                       p % sep () % t l)))
+                       p % sep () % t l ) ) )
       | `Dont_know -> parens (t "Can't identify") ) ]
 
   let render ~tzip16_uri mf =
@@ -372,8 +372,8 @@ module Partial_type = struct
                 % itemize
                     (List.map map ~f:(fun (k, v) ->
                          Fmt.kstr ct "%S" k %% t "→"
-                         % list (show_bytes_result ~tzip16_uri (`Raw_string v))))
-              ]
+                         % list (show_bytes_result ~tzip16_uri (`Raw_string v)) )
+                    ) ]
             with _ -> default content description )
           | Error el -> default content description )
       | Leaf leaf -> default (Reactive.peek leaf.v) leaf.description

@@ -127,7 +127,7 @@ module Micheline_views = struct
       [ ( "michelsonStorageView"
         , dict
             ( Option.value_map parameter ~default:[] ~f:(fun p ->
-                  [("parameter", p)])
+                  [("parameter", p)] )
             @ [("returnType", return_type); ("code", `A code)]
             @ ( match annotations with
               | [] -> []
@@ -135,7 +135,8 @@ module Micheline_views = struct
                   [ ( "annotations"
                     , list
                         (fun (k, v) ->
-                          dict [("name", string k); ("description", string v)])
+                          dict [("name", string k); ("description", string v)]
+                          )
                         more ) ] )
             @ match version with None -> [] | Some s -> [("version", string s)]
             ) ) ]
@@ -171,11 +172,11 @@ let all ?(dry_run = false) ?only ~logfile () =
     let to_hex s =
       Fmt.str "0x%s"
         (let (`Hex x) = Hex.of_string s in
-         x) in
+         x ) in
     let init =
       Fmt.str "(Pair %d {%s})" the_nat
         (String.concat ~sep:" ; "
-           (List.map bm ~f:(fun (k, v) -> Fmt.str "Elt %S %s" k (to_hex v))))
+           (List.map bm ~f:(fun (k, v) -> Fmt.str "Elt %S %s" k (to_hex v))) )
     in
     originate ~description ~logfile ~name ~source ~init () in
   let root uri = ("", uri) in
@@ -234,8 +235,7 @@ let all ?(dry_run = false) ?only ~logfile () =
     view
       ~description:
         "This view has a bunch of implementations …\n\n\
-         They are all meaningless."
-      "an-empty-useless-view"
+         They are all meaningless." "an-empty-useless-view"
       [ storage_view_implementation ~return_type:nat
           ( prims ["DUP"; "DUP"; "DUP"; "DUP"; "DUP"; "DUP"; "PAIR"]
           @ [prim "DIP" (prims (List.init 50 ~f:(Fn.const "PAIR")))] )
@@ -330,7 +330,7 @@ let all ?(dry_run = false) ?only ~logfile () =
          ; call_balance
          ; identity_01
          ; view_with_too_much_code
-         ; call_self_address ]) ;
+         ; call_self_address ] ) ;
     simple "invalid_uri" "Has a URI that is invalid."
       [root "tezos-storage:onekey/with/slash"] ;
     self_host "invalid_version_field"
@@ -348,7 +348,7 @@ let all ?(dry_run = false) ?only ~logfile () =
                     ; ( "more"
                       , dict
                           [ ("lorem", int 42)
-                          ; ("ipsum", strings [""; "one"; "2"]) ] ) ]))
+                          ; ("ipsum", strings [""; "one"; "2"]) ] ) ] ))
          ; unit_to_bytes "some-text"
              {text|
 Here is some text.
@@ -364,11 +364,11 @@ Here is some text.
          ; unit_to_bytes "200-random-characters"
              (String.init 200 ~f:(fun _ -> Random.char ()))
          ; unit_to_bytes "1000-random-characters"
-             (String.init 1000 ~f:(fun _ -> Random.char ())) ]) ;
+             (String.init 1000 ~f:(fun _ -> Random.char ())) ] ) ;
     () in
   many () ;
   List.iter (List.rev !originated) ~f:(fun (n, d, k) ->
-      Fmt.pr "\nlet %s = %S in\nkt1 %s %S;\n" n k n d)
+      Fmt.pr "\nlet %s = %S in\nkt1 %s %S;\n" n k n d )
 
 let () =
   let usage () = Fmt.epr "usage: %s <TODO>\n%!" Caml.Sys.argv.(0) in

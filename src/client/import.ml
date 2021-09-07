@@ -77,13 +77,13 @@ module Reactive = struct
                 >>= fun none ->
                 f x
                 >>= function
-                | Some x -> Lwt.fail (Found x) | None -> Lwt.return none))
+                | Some x -> Lwt.fail (Found x) | None -> Lwt.return none ) )
           (function Found x -> Lwt.return_some x | e -> Lwt.fail e)
 
       let find x ~f =
         find_map x ~f:(fun x ->
             f x
-            >>= function true -> Lwt.return_some x | false -> Lwt.return_none)
+            >>= function true -> Lwt.return_some x | false -> Lwt.return_none )
     end
   end
 
@@ -125,7 +125,7 @@ module Decorate_error = struct
   let () =
     Caml.Printexc.register_printer (function
       | E {message; _} -> Some (Fmt.str "Decorated-Error %a" Message.pp message)
-      | _ -> None)
+      | _ -> None )
 end
 
 module System = struct
@@ -186,7 +186,7 @@ module Browser_window = struct
           let current = Reactive.peek width in
           let new_one = find_out () in
           if Poly.(current <> new_one) then Reactive.set width new_one ;
-          Js._true) ;
+          Js._true ) ;
     {width}
 
   let get (c : < window: t ; .. > Context.t) = c#window
@@ -216,7 +216,7 @@ end = struct
       (fun () -> dbgf "Local_storage: nope" ; None)
       (fun x ->
         dbgf "Local_storage: YES length: %d" x##.length ;
-        Some x)
+        Some x )
 
   let get (c : < storage: t ; .. > Context.t) = c#storage
   let available c = get c |> Option.is_some
@@ -225,12 +225,12 @@ end = struct
     get ctxt
     |> Option.bind ~f:(fun sto ->
            Js.Opt.to_option (sto##getItem (Js.string path))
-           |> Option.map ~f:Js.to_string)
+           |> Option.map ~f:Js.to_string )
 
   let write_file ctxt path ~content =
     get ctxt
     |> Option.iter ~f:(fun sto ->
-           sto##setItem (Js.string path) (Js.string content))
+           sto##setItem (Js.string path) (Js.string content) )
 
   let remove_file ctxt path =
     get ctxt |> Option.iter ~f:(fun sto -> sto##removeItem (Js.string path))
@@ -269,14 +269,14 @@ module Ezjsonm = struct
                 (list (pair ~sep:(any ":") string pp_value))
                 l
           | `In_array l -> pf ppf "(in-array %a)" (list pp_value) l
-          | #Ezjsonm.value as v -> pp_value ppf v) in
+          | #Ezjsonm.value as v -> pp_value ppf v ) in
       let stack = ref [] in
       let fail_stack fmt =
         Fmt.kstr
           (fun m ->
             let (a, b), (c, d) = Jsonm.decoded_range d in
             Fmt.failwith "%s [%d,%d - %d,%d stack: %a]" m a b c d pp_stack
-              !stack)
+              !stack )
           fmt in
       let rec go () =
         let stack_value (v : [< Ezjsonm.value]) =
@@ -469,5 +469,5 @@ module Blob = struct
       ; ("GIF", gif)
       ; ("\x00\x00\x00\x20ftypmp42", mp4) ] in
     List.find_map prefixes ~f:(fun (prefix, fmt) ->
-        if String.is_prefix s ~prefix then Some fmt else None)
+        if String.is_prefix s ~prefix then Some fmt else None )
 end

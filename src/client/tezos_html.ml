@@ -12,7 +12,7 @@ module Block_explorer = struct
 
   let big_map_url network id =
     Option.map (Network.better_call_dev_path network) ~f:(fun pref ->
-        Fmt.str "https://better-call.dev/%s/big_map/%a/keys" pref Z.pp_print id)
+        Fmt.str "https://better-call.dev/%s/big_map/%a/keys" pref Z.pp_print id )
 
   let vendor_show_name = function Smartpy -> "SmartPy" | Bcd -> "BCD"
 
@@ -25,7 +25,7 @@ module Block_explorer = struct
          (parens
             ( match big_map_url network id with
             | None -> text
-            | Some target -> link ~target text ))
+            | Some target -> link ~target text ) )
 
   let kt1_display kt1 =
     let open Meta_html in
@@ -37,7 +37,7 @@ module Block_explorer = struct
                (oxfordize_list ~map:Fn.id ~sep ~last_sep:sep
                   (List.map all_vendors ~f:(fun v ->
                        let target = kt1_url v kt1 in
-                       link ~target (t (vendor_show_name v)))))))
+                       link ~target (t (vendor_show_name v)) ) ) ) ) )
 end
 
 let tzip_021_url =
@@ -58,7 +58,7 @@ let uri_parsing_error err =
               ["tezos-storage"; "http"; "https"; "sha256"; "ipfs"]
               ~map:(fun sch -> Fmt.kstr ct "%s:" sch)
               ~sep:(fun () -> t ", ")
-              ~last_sep:(fun () -> t ", or "))
+              ~last_sep:(fun () -> t ", or ") )
       % t "." in
     match err.error_kind with
     | Wrong_scheme None -> t "Missing URI scheme. " % scheme_advice
@@ -143,7 +143,7 @@ let simple_exns_handler : Errors_html.handler =
   | Data_encoding.Binary.Read_error e ->
       some
         (Fmt.kstr t "Binary parsing error: %a."
-           Data_encoding.Binary.pp_read_error e)
+           Data_encoding.Binary.pp_read_error e )
   | _ -> None
 
 let single_error ctxt =
@@ -159,8 +159,7 @@ let single_error ctxt =
   | other ->
       pre
         (code
-           (Fmt.kstr t "%a" Tezos_error_monad.Error_monad.pp_print_error
-              [other]))
+           (Fmt.kstr t "%a" Tezos_error_monad.Error_monad.pp_print_error [other]) )
 
 let error_trace ctxt =
   let open Meta_html in
@@ -172,7 +171,7 @@ let error_trace ctxt =
       % div
           ( t "Trace:"
           %% List.fold tl ~init:(empty ()) ~f:(fun p e ->
-                 p %% single_error ctxt e) )
+                 p %% single_error ctxt e ) )
 
 open Meta_html
 
@@ -233,7 +232,7 @@ let open_in_editor ?(and_explorer = false) ctxt text =
        %
        if and_explorer then
          t "," %% State.link_to_explorer ctxt (t "Explore") ~search:text
-       else empty () ))
+       else empty () ) )
 
 let tzip16_uri_short ctxt s =
   Bootstrap.color `Info (Bootstrap.monospace (t s))
@@ -264,10 +263,10 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
             [ field "Network"
                 (Option.value_map network
                    ~default:(t "“Current network”.")
-                   ~f:ct)
+                   ~f:ct )
             ; field "Address"
                 (Option.value_map address ~default:(t "“Same contract”.")
-                   ~f:Block_explorer.kt1_display)
+                   ~f:Block_explorer.kt1_display )
             ; field "Key in the big-map" (Fmt.kstr ct "%S" key) ]
     | Hash {kind= `Sha256; value; target} ->
         field_head "Hash checked URI"
@@ -278,7 +277,7 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
   ( if open_in_editor_link then
     div
       (open_in_editor ctxt
-         (Tezos_contract_metadata.Metadata_uri.to_string_uri uri))
+         (Tezos_contract_metadata.Metadata_uri.to_string_uri uri) )
   else empty () )
   % div (go uri)
 
@@ -312,13 +311,13 @@ let view_result ctxt ~result ~storage ~address ~view ~parameter =
   % Bootstrap.muted div
       (let items l =
          List.fold l ~init:(empty ()) ~f:(fun p (k, v) ->
-             p % div (t k % t ":" %% Bootstrap.monospace (t v))) in
+             p % div (t k % t ":" %% Bootstrap.monospace (t v)) ) in
        items
          [ ( "Returned Michelson"
            , Fmt.str "%s : %s" (mich_node result) (mich view.return_type) )
          ; ("Called contract", address)
          ; ("Parameter used", mich_node parameter)
-         ; ("Current storage", mich_node storage) ])
+         ; ("Current storage", mich_node storage) ] )
 
 let michelson_view ctxt ~view =
   let open Tezos_contract_metadata.Metadata_contents in
@@ -339,14 +338,14 @@ let michelson_view ctxt ~view =
                      ( match parameter with
                      | None -> ""
                      | Some p -> mich p ^ " × " )
-                     (mich return_type))
+                     (mich return_type) )
               @ normal_field "Code"
                   (let concrete = mich code in
                    let lines =
                      1
                      + String.count concrete ~f:(function
                          | '\n' -> true
-                         | _ -> false) in
+                         | _ -> false ) in
                    if lines <= 1 then ct concrete
                    else
                      let collapse = Bootstrap.Collapse.make () in
@@ -355,12 +354,12 @@ let michelson_view ctxt ~view =
                        ~width:"12em" ~kind:`Secondary
                        ~button:(function
                          | true -> t "Show Michelson"
-                         | false -> t "Hide Michelson")
-                       (fun () -> pre (ct concrete)))
+                         | false -> t "Hide Michelson" )
+                       (fun () -> pre (ct concrete)) )
               @ list_field "Annotations" human_annotations (fun anns ->
                     itemize
                       (List.map anns ~f:(fun (k, v) ->
-                           ct k % t " → " % paragraphs v))) )
+                           ct k % t " → " % paragraphs v ) ) ) )
       | true ->
           let address =
             Reactive.var
@@ -370,14 +369,13 @@ let michelson_view ctxt ~view =
             Option.map parameter
               ~f:
                 (Michelson.Partial_type.of_type
-                   ~annotations:view.human_annotations) in
+                   ~annotations:view.human_annotations ) in
           let wip = Async_work.empty () in
           let go_action () =
             Async_work.wip wip ;
             let log s =
               Async_work.log wip
-                (it "Calling view" %% t "→" %% Bootstrap.monospace (t s))
-            in
+                (it "Calling view" %% t "→" %% Bootstrap.monospace (t s)) in
             Async_work.async_catch wip
               ~exn_to_html:(Errors_html.exception_html ctxt)
               Lwt.Infix.(
@@ -398,7 +396,7 @@ let michelson_view ctxt ~view =
                   | Ok (result, storage) ->
                       Async_work.ok wip
                         (view_result ctxt ~result ~storage
-                           ~address:(Reactive.peek address) ~view ~parameter) ;
+                           ~address:(Reactive.peek address) ~view ~parameter ) ;
                       Lwt.return ()
                   | Error s ->
                       Async_work.error wip (t "Error:" %% ct s) ;
@@ -434,15 +432,14 @@ let michelson_view ctxt ~view =
                        [ input
                            ~label:(t "The contract to hit the view with:")
                            ~placeholder:
-                             (Reactive.pure
-                                "This requires a contract address …")
+                             (Reactive.pure "This requires a contract address …")
                            ~help:
                              Reactive.(
                                bind
                                  ( get address
                                  ** get
                                       (Contract_metadata.Uri.Fetcher
-                                       .current_contract ctxt) )
+                                       .current_contract ctxt ) )
                                  ~f:(function
                                    | "", _ ->
                                        Bootstrap.color `Danger
@@ -453,7 +450,7 @@ let michelson_view ctxt ~view =
                                          t
                                            "This is the “main-address” \
                                             currently in context."
-                                       else addr_help a1))
+                                       else addr_help a1 ))
                            (Reactive.Bidirectional.of_var address) ] in
                      let param_input =
                        match parameter_input with
@@ -462,7 +459,7 @@ let michelson_view ctxt ~view =
                      in
                      make ~enter_action:go_action
                        ( addr_input @ param_input
-                       @ [submit_button ~active (t "Go!") go_action] )) ))
+                       @ [submit_button ~active (t "Go!") go_action] ) ) ) )
 
 let michelson_instruction s =
   link (t s) ~target:(Fmt.str "https://michelson.nomadic-labs.com/#instr-%s" s)
@@ -481,10 +478,10 @@ let metadata_validation_error ctxt =
           (oxfordize_list
              (List.filter
                 ~f:String.(( <> ) instruction)
-                Validation.Data.forbidden_michelson_instructions)
+                Validation.Data.forbidden_michelson_instructions )
              ~sep:(fun () -> t ", ")
              ~last_sep:(fun () -> t ", and ")
-             ~map:michelson_instruction)
+             ~map:michelson_instruction )
       % t ")."
   | Michelson_version_not_a_protocol_hash {view; value} ->
       the_off_chain_view view
@@ -544,9 +541,10 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                     Lwt.catch
                       (fun () ->
                         Contract_metadata.Uri.fetch ctxt uri16 ~log:(fun s ->
-                            Async_work.log result (it "Fetching Image:" %% t s)))
+                            Async_work.log result (it "Fetching Image:" %% t s) )
+                        )
                       (fun e ->
-                        raise (mkexn (Errors_html.exception_html ctxt e)))
+                        raise (mkexn (Errors_html.exception_html ctxt e)) )
                     >>= fun content ->
                     let format = Blob.guess_format content in
                     let content_type =
@@ -559,7 +557,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                     let src =
                       Fmt.str "data:%s;base64,%s" content_type
                         (Base64.encode_exn ~pad:true
-                           ~alphabet:Base64.default_alphabet content) in
+                           ~alphabet:Base64.default_alphabet content ) in
                     Async_work.ok result
                       ( div
                           ( match format with
@@ -574,9 +572,9 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                               ~a:[H5.a_style (Lwd.pure "max-height: 500px")]
                               ~src:(Lwd.pure src)
                               ~alt:(Fmt.kstr Lwd.pure "Image: %s" title)
-                              ()) ) ;
+                              () ) ) ;
                     Lwt.return ()
-                | Error error, _ -> raise (mkexn (error_trace ctxt error))))
+                | Error error, _ -> raise (mkexn (error_trace ctxt error))) )
     in
     let show_button ~web ~mime () =
       button (Fmt.kstr t "Show Content") ~action:(fun () ->
@@ -587,7 +585,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                 link ~target:web
                   (H5.img ~a:[style "max-width: 100%"]
                      ~alt:(Fmt.kstr Lwd.pure "%s at %s" title web)
-                     ~src:(Lwd.pure web) ())
+                     ~src:(Lwd.pure web) () )
             | vid when String.is_prefix vid ~prefix:"video/" ->
                 H5.video
                   ~a:[H5.a_controls (); style "max-width: 100%"]
@@ -597,11 +595,11 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                   (bt "Unknown MIME-Type:" %% ct mime)
                 %% bt "You may try the fetch-and-guess method:"
                 %% fetch_and_show () in
-          Async_work.ok result content) in
+          Async_work.ok result content ) in
     Reactive.bind_var show ~f:(function
       | true ->
           button (Fmt.kstr t "Hide Content") ~action:(fun () ->
-              Reactive.set show false)
+              Reactive.set show false )
       | false -> (
         match (web_address, known_mime_type) with
         | Some web, Some mime -> show_button ~web ~mime ()
@@ -612,17 +610,17 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
               %% parens
                    (t
                       "Come on! You're running all of this in your browser, \
-                       what did you expect‽") )
-        | _, _ -> fetch_and_show () )) in
+                       what did you expect‽" ) )
+        | _, _ -> fetch_and_show () ) ) in
   let content =
     Reactive.bind_var show ~f:(function
       | true -> Async_work.render result ~f:Fn.id
-      | false -> empty ()) in
+      | false -> empty () ) in
   div
     ( div
         ( t "URI:"
         %% (let c = ct uri in
-            match web_address with Some target -> link ~target c | None -> c)
+            match web_address with Some target -> link ~target c | None -> c )
         %% ( match known_mime_type with
            | None -> empty ()
            | Some m -> parens (t "known MIME-Type:" %% ct m) )
@@ -645,7 +643,7 @@ module Printer_dsl = struct
             | [one] -> [`Page (toint one)]
             | [one; ""] -> [`Open_right_range (toint one)]
             | [one; two] -> [`Range (toint one, toint two)]
-            | _ -> Fmt.failwith "Cannot parse component: %S." item ))
+            | _ -> Fmt.failwith "Cannot parse component: %S." item ) )
     with
     | [] -> Ok (`Printer_spec [`Open_right_range 0])
     | more -> Ok (`Printer_spec more)
@@ -688,11 +686,11 @@ let show_extras ctxt (extr : (String.t * String.t, Message.t) Result.t List.t) =
           (list
              (oxfordize_list ~map:t lines
                 ~sep:(fun () -> H5.br ())
-                ~last_sep:(fun () -> H5.br ()))) in
+                ~last_sep:(fun () -> H5.br ()) ) ) in
   itemize
     (List.map extr ~f:(function
       | Ok (k, v) -> Fmt.kstr ct "%S" k %% t "→" %% show_bytes v
-      | Error m -> Message_html.render ctxt m))
+      | Error m -> Message_html.render ctxt m ) )
 
 let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
     ?low_level_contents ?tzip_021 ctxt ~id ~warnings =
@@ -702,7 +700,7 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
     List.filter_opt
       [ Option.map symbol ~f:(fun s -> t "symbol:" %% ct s)
       ; Option.map total_supply ~f:(fun s ->
-            t "total-supply:" %% show_total_supply_result ctxt ?decimals s)
+            t "total-supply:" %% show_total_supply_result ctxt ?decimals s )
       ; Option.map decimals ~f:(fun s -> t "decimals:" %% ct s) ]
     |> function
     | [] -> empty ()
@@ -711,14 +709,14 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
         %% list
              (oxfordize_list more ~map:Fn.id
                 ~sep:(fun () -> t " | ")
-                ~last_sep:(fun () -> t " | "))
+                ~last_sep:(fun () -> t " | ") )
         %% t "]" in
   Bootstrap.bordered ~kind:`Info ~a:[style "padding: 5px"]
     ( Bootstrap.div_lead
         ( Fmt.kstr bt "Token %d" id
         %% or_empty name (function
              | "" -> Bootstrap.color `Danger (t "<empty-name>")
-             | n -> Bootstrap.color `Primary (Fmt.kstr it "“%s”" n))
+             | n -> Bootstrap.color `Primary (Fmt.kstr it "“%s”" n) )
         %% basics )
     %% ( match List.rev_map ~f:snd warnings with
        | [] -> empty ()
@@ -727,7 +725,7 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
            div
              (Bootstrap.alert ~kind:`Warning
                 ( Fmt.kstr bt "TZIP-012 Warning%s:" (if one then "" else "s")
-                %% if one then List.hd_exn more else itemize more )) )
+                %% if one then List.hd_exn more else itemize more ) ) )
     %% or_empty tzip_021 (fun tzip21 ->
            let open Tzip_021 in
            if is_empty tzip21 then div (t "No TZIP-021 was found by TZComet.")
@@ -772,13 +770,13 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                   | _, _ -> empty () in
                 intro
                 % or_empty tzip21.description (fun desc ->
-                      itembox (bt "Description:" %% blockquote (it desc)))
+                      itembox (bt "Description:" %% blockquote (it desc)) )
                 % symbol_stuff
                 % or_empty tzip21.creators (function
                     | [] -> itembox (bt "Creators list is explicitly empty.")
                     | [one] -> itembox (bt "Creator:" %% it one)
                     | sl ->
-                        itembox (bt "Creators:" %% itemize (List.map sl ~f:it)))
+                        itembox (bt "Creators:" %% itemize (List.map sl ~f:it)) )
                 % or_empty tzip21.tags (fun sl ->
                       itembox
                         ( bt "Tags:"
@@ -786,7 +784,7 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                              (oxfordize_list sl
                                 ~map:(fun t -> ct t)
                                 ~sep:(fun () -> t ", ")
-                                ~last_sep:(fun () -> t ", and ")) ))
+                                ~last_sep:(fun () -> t ", and ") ) ) )
                 %% list
                      (List.map images ~f:(function
                        | _, None -> empty ()
@@ -794,7 +792,8 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                            itembox
                              ( Fmt.kstr bt "%s:" title
                              %% multimedia_from_tzip16_uri ctxt ~title
-                                  ~mime_types:(uri_mime_types tzip21) ~uri )))
+                                  ~mime_types:(uri_mime_types tzip21) ~uri ) )
+                       )
                 %% or_empty tzip21.formats (fun l ->
                        itembox
                          ( bt "Formats"
@@ -802,14 +801,14 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                               (List.map l ~f:(fun fmt ->
                                    or_empty fmt.uri (fun u -> t "URI:" %% ct u)
                                    %% or_empty fmt.mime_type (fun u ->
-                                          t "MIME-Type:" %% ct u)
+                                          t "MIME-Type:" %% ct u )
                                    %%
                                    match fmt.other with
                                    | [] -> empty ()
                                    | more ->
                                        t "+"
-                                       %% ct Ezjsonm.(value_to_string (`O more))))
-                         ))
+                                       %% ct Ezjsonm.(value_to_string (`O more)) )
+                              ) ) )
                 %%
                 match tzip21.warnings with
                 | [] -> empty ()
@@ -818,7 +817,8 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                       (Bootstrap.alert ~kind:`Warning
                          ( bt "TZIP-021 Warnings:"
                          %% itemize
-                              (List.map warns ~f:(Message_html.render ctxt)) ))))
+                              (List.map warns ~f:(Message_html.render ctxt)) ) )
+               ) )
     %% or_empty
          (Option.bind extras ~f:(function [] -> None | s -> Some s))
          (fun e -> div (bt "Extra-info (not parsed):" %% show_extras ctxt e))
@@ -830,7 +830,7 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                (* ~style:(Reactive.pure (Fmt.str "width: 8em")) *)
                (Reactive.bind (collapsed_state collapse) ~f:(function
                  | true -> t "Show Low-Level Values"
-                 | false -> t "Hide Low-Level Values")) in
+                 | false -> t "Hide Low-Level Values" ) ) in
            let dv =
              make_div collapse (fun () ->
                  div
@@ -841,9 +841,9 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                          %% pre
                               (code
                                  (t
-                                    (Ezjsonm.value_to_string ~minify:false json)))
-                       ] )) in
-           btn %% dv)
+                                    (Ezjsonm.value_to_string ~minify:false json) ) )
+                       ] ) ) in
+           btn %% dv )
        (* %% itemize
             (List.filter_map tok ~f:(function
               | _, None -> None
@@ -885,13 +885,13 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                                ( t "Wrong Micheline structure for result:"
                                %% ct
                                     (Michelson.micheline_node_to_string
-                                       tokens_mich) )))
+                                       tokens_mich ) ) ) )
                 | _ ->
                     raise
                       (mkexn
                          ( t "Wrong Micheline structure for result:"
                          %% ct (Michelson.micheline_node_to_string tokens_mich)
-                         )) in
+                         ) ) in
               Fmt.kstr log "Got list of tokens %a" Fmt.(Dump.list int) tokens ;
               Lwt.return (fun f -> Lwt_list.map_s f tokens)
           | `Printer_spec (spec : _ list) ->
@@ -909,7 +909,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                             f n
                             >>= fun () ->
                             already_seen := Set.add !already_seen n ;
-                            go next)
+                            go next )
                           (fun exn -> Int.incr failures ; go next) in
                     function
                     | [] -> Lwt.return_unit
@@ -923,143 +923,149 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                           if l >= r then more else `Range (l + 1, r) :: more
                         in
                         run_f l next in
-                  go spec >>= fun () -> Lwt.return_nil) in
+                  go spec >>= fun () -> Lwt.return_nil ) in
         let explore_token id =
           log_prompt := Fmt.str "Exploring token %d" id ;
           Contract_metadata.Content.maybe_call_view ctxt token_metadata_view
             ~parameter_string:(Int.to_string id) ~address ~log
           >>= fun metadata_map_opt ->
           begin
-            match (metadata_map_opt, token_metadata_big_map) with
-            | Some s, _ ->
-                log "Using the token_metadata off-chain-view." ;
-                Lwt.return s
-            | None, Some big_map_id ->
-                log "Using the %token_metadata big-map." ;
-                Query_nodes.find_node_with_contract ctxt address
-                >>= fun node ->
-                Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
-                Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node
-                  ~log ~big_map_id ~key:id
-                >>= fun mich ->
-                Fmt.kstr log "Got value from big-map" ;
-                Lwt.return (Ok mich)
-            | None, None -> Decorate_error.raise Message.(t "Not available")
-          end
-          >>= fun metadata_map ->
-          Contract_metadata.Content.maybe_call_view ctxt total_supply_view
-            ~parameter_string:(Int.to_string id) ~address ~log
-          >>= fun total_supply ->
-          let unpaired_metadata =
-            try
-              let nope = Decorate_error.raise in
-              let ok =
-                match metadata_map with
-                | Error s -> nope Message.(t "Error getting view:" %% ct s)
-                | Ok (Prim (_, "Pair", [_; full_map], _)) ->
-                    Michelson.Partial_type.micheline_string_bytes_map_exn
-                      full_map
-                | Ok other ->
-                    nope
-                      Message.(
-                        t "Metadata result has wrong structure:"
-                        %% ct (Michelson.micheline_node_to_string other)) in
-              Ok ok
-            with
-            | Decorate_error.E {message} -> Error message
-            | e -> Error Message.(t "Exception:" %% ct (Exn.to_string e)) in
-          let piece_of_metadata_map k =
-            match unpaired_metadata with
-            | Ok s -> List.Assoc.find s k ~equal:String.equal
-            | Error _ -> None in
-          let uri = piece_of_metadata_map "" in
-          let warnings = ref [] in
-          let warn k e =
-            if List.exists !warnings ~f:(fun (key, _) -> String.equal key k)
-            then ()
-            else warnings := (k, e) :: !warnings in
-          begin
-            match uri with
-            | None -> Lwt.return_none
-            | Some u -> (
-              match Contract_metadata.Uri.validate u with
-              | Ok uri, _ ->
-                  Lwt.catch
-                    (fun () ->
-                      Contract_metadata.Uri.fetch ctxt uri ~log:(fun s ->
-                          Fmt.kstr log "Fetching %s" u)
-                      >>= fun s ->
-                      Lwt.return_some (u, Ezjsonm.value_from_string s))
-                    (fun exn ->
-                      warn "fetch-uri"
-                        ( bt "Fetching URI" %% ct u %% t "failed:"
-                        %% Errors_html.exception_html ctxt exn ) ;
-                      Lwt.return_none)
-              | Error error, _ ->
-                  warn "parsing-uri"
-                    ( bt "Parsing URI" %% ct u %% t "failed:"
-                    %% error_trace ctxt error ) ;
-                  Lwt.return_none )
-          end
-          >>= fun extra_contents ->
-          let piece_of_metadata ?json_type key =
-            let metadata_map =
-              match unpaired_metadata with Ok o -> o | Error _ -> [] in
-            Contract_metadata.Token.piece_of_metadata ?json_type
-              ~warn:(fun k m -> warn k (Message_html.render ctxt m))
-              ~key ~metadata_map ~metadata_json:extra_contents in
-          let symbol = piece_of_metadata "symbol" in
-          let name =
-            match piece_of_metadata "name" with
-            | Some "" ->
-                warn "name-is-empty"
-                  (t "The" %% ct "name" %% t "field is the empty string.") ;
-                None
-            | o -> o in
-          let decimals = piece_of_metadata ~json_type:`Int "decimals" in
-          let extras =
-            let make_ok_list l ~f =
-              List.filter_map l ~f:(fun (k, v) ->
-                  if
-                    not
-                      (List.mem
-                         ["symbol"; "name"; "decimals"; ""]
-                         k ~equal:String.equal)
-                  then Some (Ok (k, f v))
-                  else None) in
-            let from_map =
-              match unpaired_metadata with
-              | Error m -> [Error m]
-              | Ok l -> make_ok_list l ~f:Fn.id in
-            let from_json =
-              match extra_contents with
-              | None -> []
-              | Some (_, `O l) ->
-                  let f = function
-                    | `String s -> s
-                    | `Float f -> Float.to_string f
-                    | `Bool b -> Bool.to_string b
-                    | other -> Ezjsonm.value_to_string other in
-                  make_ok_list l ~f
-              | Some (u, other) ->
-                  [ (* Error already reported above:
-                       Message.(
-                         t "URI" %% ct u %% t "does not point at a JSON object.") *) ]
+            begin
+              match (metadata_map_opt, token_metadata_big_map) with
+              | Some s, _ ->
+                  log "Using the token_metadata off-chain-view." ;
+                  Lwt.return s
+              | None, Some big_map_id ->
+                  log "Using the %token_metadata big-map." ;
+                  Query_nodes.find_node_with_contract ctxt address
+                  >>= fun node ->
+                  Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
+                  Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node
+                    ~log ~big_map_id ~key:id
+                  >>= fun mich ->
+                  Fmt.kstr log "Got value from big-map" ;
+                  Lwt.return (Ok mich)
+              | None, None -> Decorate_error.raise Message.(t "Not available")
+            end
+            >>= fun metadata_map ->
+            Contract_metadata.Content.maybe_call_view ctxt total_supply_view
+              ~parameter_string:(Int.to_string id) ~address ~log
+            >>= fun total_supply ->
+            let unpaired_metadata =
+              try
+                let nope = Decorate_error.raise in
+                let ok =
+                  match metadata_map with
+                  | Error s -> nope Message.(t "Error getting view:" %% ct s)
+                  | Ok (Prim (_, "Pair", [_; full_map], _)) ->
+                      Michelson.Partial_type.micheline_string_bytes_map_exn
+                        full_map
+                  | Ok other ->
+                      nope
+                        Message.(
+                          t "Metadata result has wrong structure:"
+                          %% ct (Michelson.micheline_node_to_string other))
+                in
+                Ok ok
+              with
+              | Decorate_error.E {message} -> Error message
+              | e -> Error Message.(t "Exception:" %% ct (Exn.to_string e))
             in
-            match from_map @ from_json with [] -> None | l -> Some l in
-          let tzip_021, extras =
-            match (is_tzip21, extras) with
-            | false, e -> (None, e)
-            | true, None -> (None, None)
-            | true, Some l ->
-                let tzip21, e =
-                  Contract_metadata.Content.Tzip_021.from_extras l in
-                (Some tzip21, Some e) in
-          Async_work.wip_add_ok wip_explore_tokens
-            (show_one_token ctxt ~id ?decimals ?total_supply ?symbol ?name
-               ?low_level_contents:extra_contents ?tzip_021 ?extras
-               ~warnings:!warnings) ;
-          Lwt.return () in
+            let piece_of_metadata_map k =
+              match unpaired_metadata with
+              | Ok s -> List.Assoc.find s k ~equal:String.equal
+              | Error _ -> None in
+            let uri = piece_of_metadata_map "" in
+            let warnings = ref [] in
+            let warn k e =
+              if List.exists !warnings ~f:(fun (key, _) -> String.equal key k)
+              then ()
+              else warnings := (k, e) :: !warnings in
+            begin
+              begin
+                match uri with
+                | None -> Lwt.return_none
+                | Some u -> (
+                  match Contract_metadata.Uri.validate u with
+                  | Ok uri, _ ->
+                      Lwt.catch
+                        (fun () ->
+                          Contract_metadata.Uri.fetch ctxt uri ~log:(fun s ->
+                              Fmt.kstr log "Fetching %s" u )
+                          >>= fun s ->
+                          Lwt.return_some (u, Ezjsonm.value_from_string s) )
+                        (fun exn ->
+                          warn "fetch-uri"
+                            ( bt "Fetching URI" %% ct u %% t "failed:"
+                            %% Errors_html.exception_html ctxt exn ) ;
+                          Lwt.return_none )
+                  | Error error, _ ->
+                      warn "parsing-uri"
+                        ( bt "Parsing URI" %% ct u %% t "failed:"
+                        %% error_trace ctxt error ) ;
+                      Lwt.return_none )
+              end
+              >>= fun extra_contents ->
+              let piece_of_metadata ?json_type key =
+                let metadata_map =
+                  match unpaired_metadata with Ok o -> o | Error _ -> [] in
+                Contract_metadata.Token.piece_of_metadata ?json_type
+                  ~warn:(fun k m -> warn k (Message_html.render ctxt m))
+                  ~key ~metadata_map ~metadata_json:extra_contents in
+              let symbol = piece_of_metadata "symbol" in
+              let name =
+                match piece_of_metadata "name" with
+                | Some "" ->
+                    warn "name-is-empty"
+                      (t "The" %% ct "name" %% t "field is the empty string.") ;
+                    None
+                | o -> o in
+              let decimals = piece_of_metadata ~json_type:`Int "decimals" in
+              let extras =
+                let make_ok_list l ~f =
+                  List.filter_map l ~f:(fun (k, v) ->
+                      if
+                        not
+                          (List.mem
+                             ["symbol"; "name"; "decimals"; ""]
+                             k ~equal:String.equal )
+                      then Some (Ok (k, f v))
+                      else None ) in
+                let from_map =
+                  match unpaired_metadata with
+                  | Error m -> [Error m]
+                  | Ok l -> make_ok_list l ~f:Fn.id in
+                let from_json =
+                  match extra_contents with
+                  | None -> []
+                  | Some (_, `O l) ->
+                      let f = function
+                        | `String s -> s
+                        | `Float f -> Float.to_string f
+                        | `Bool b -> Bool.to_string b
+                        | other -> Ezjsonm.value_to_string other in
+                      make_ok_list l ~f
+                  | Some (u, other) ->
+                      [ (* Error already reported above:
+                           Message.(
+                             t "URI" %% ct u %% t "does not point at a JSON object.") *) ]
+                in
+                match from_map @ from_json with [] -> None | l -> Some l in
+              let tzip_021, extras =
+                match (is_tzip21, extras) with
+                | false, e -> (None, e)
+                | true, None -> (None, None)
+                | true, Some l ->
+                    let tzip21, e =
+                      Contract_metadata.Content.Tzip_021.from_extras l in
+                    (Some tzip21, Some e) in
+              Async_work.wip_add_ok wip_explore_tokens
+                (show_one_token ctxt ~id ?decimals ?total_supply ?symbol ?name
+                   ?low_level_contents:extra_contents ?tzip_021 ?extras
+                   ~warnings:!warnings ) ;
+              Lwt.return ()
+            end
+          end in
         make_map_tokens ()
         >>= fun map_tokens ->
         map_tokens explore_token
@@ -1123,7 +1129,7 @@ let metadata_substandards ?token_metadata_big_map
                              ( t "is wrong:"
                              %% ct
                                   (Michelson.micheline_canonical_to_string
-                                     pt.original) )
+                                     pt.original ) )
                        | `Unchecked_Parameter, None ->
                            errorify (t "is expectedly not defined.")
                        | `Unchecked_Parameter, Some _ ->
@@ -1141,7 +1147,7 @@ let metadata_substandards ?token_metadata_big_map
                              ( t "is wrong:"
                              %% ct
                                   (Michelson.micheline_canonical_to_string
-                                     pt.original) ) ) ]
+                                     pt.original ) ) ) ]
             | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
           let show_permissions_descriptor pd =
             match pd with
@@ -1175,7 +1181,7 @@ let metadata_substandards ?token_metadata_big_map
                     t "This means that token-metadata must be available in the"
                     %% ct "%token_metadata" %% t "big-map:"
                     %% Block_explorer.big_map_display ctxt id
-                    % t ".") in
+                    % t "." ) in
           let global_validity =
             Contract_metadata.Content.is_valid
               ~ignore_token_metadata_big_map:(not add_explore_tokens_button)
@@ -1198,7 +1204,7 @@ let metadata_substandards ?token_metadata_big_map
                 (* ~style:(Reactive.pure (Fmt.str "width: 8em")) *)
                 (Reactive.bind (collapsed_state collapse) ~f:(function
                   | true -> t "Expand Validity Info"
-                  | false -> t "Collapse Validity Info")) in
+                  | false -> t "Collapse Validity Info" ) ) in
             let dv = make_div collapse (fun () -> validity_details ()) in
             (btn, dv) in
           let wip_explore_tokens = Async_work.empty () in
@@ -1217,11 +1223,10 @@ let metadata_substandards ?token_metadata_big_map
                   Reactive.bind_var form_status ~f:(function
                     | `Hidden ->
                         mk_button (t "Explore Tokens") ~action:(fun () ->
-                            Reactive.set form_status `Form)
+                            Reactive.set form_status `Form )
                     | `Form ->
-                        mk_button (t "Cancel Exploration ↓")
-                          ~action:(fun () -> Reactive.set form_status `Hidden))
-                in
+                        mk_button (t "Cancel Exploration ↓") ~action:(fun () ->
+                            Reactive.set form_status `Hidden ) ) in
                 let exploration =
                   Reactive.bind_var form_status ~f:(function
                     | `Hidden -> empty ()
@@ -1249,7 +1254,7 @@ let metadata_substandards ?token_metadata_big_map
                           Reactive.(get iter_input ** get use_all_tokens)
                           |> Reactive.map
                                ~f:(fun (iter_input, use_all_tokens) ->
-                                 compute_method ~iter_input ~use_all_tokens)
+                                 compute_method ~iter_input ~use_all_tokens )
                         in
                         let submit_action () =
                           Reactive.set form_status `Hidden ;
@@ -1290,7 +1295,7 @@ let metadata_substandards ?token_metadata_big_map
                                           ( t "Use the" %% ct "all_tokens"
                                           %% t "off-chain-view." )
                                         (Reactive.Bidirectional.of_var
-                                           use_all_tokens)
+                                           use_all_tokens )
                                   | _ ->
                                       magic
                                         (i
@@ -1298,7 +1303,7 @@ let metadata_substandards ?token_metadata_big_map
                                            %% t
                                                 "off-chain-view is not \
                                                  available to list the tokens."
-                                           )) )
+                                           ) ) )
                                 ; (let active =
                                      Reactive.(get use_all_tokens |> map ~f:not)
                                    in
@@ -1306,13 +1311,12 @@ let metadata_substandards ?token_metadata_big_map
                                      ~placeholder:
                                        (Reactive.map active ~f:(function
                                          | true -> ""
-                                         | false -> "Disabled"))
+                                         | false -> "Disabled" ) )
                                      ~help:
                                        ( t "How to iterate over Token-Ids."
                                        %% t
-                                            "It should look like the \
-                                             “pages” thing of a printer \
-                                             job, like"
+                                            "It should look like the “pages” \
+                                             thing of a printer job, like"
                                        %% ct "1-4,5,6-"
                                        %% t ", leave the field empty for"
                                        %% ct "0-"
@@ -1327,8 +1331,9 @@ let metadata_substandards ?token_metadata_big_map
                                               | Ok _ -> empty ()
                                               | Error err ->
                                                   Bootstrap.color `Danger
-                                                    (t "WRONG !")) )
-                                     (Reactive.Bidirectional.of_var iter_input))
+                                                    (t "WRONG !") ) )
+                                     (Reactive.Bidirectional.of_var iter_input)
+                                  )
                                 ; magic
                                     ( method_document
                                     |> Reactive.bind ~f:(function
@@ -1351,21 +1356,21 @@ let metadata_substandards ?token_metadata_big_map
                                                        | `Range (l, r) ->
                                                            Fmt.kstr it
                                                              "pages [%d, %d]" l
-                                                             r)
+                                                             r )
                                                      ~sep:(fun () -> t ", ")
                                                      ~last_sep:(fun () ->
-                                                       t ", and "))
+                                                       t ", and " ) )
                                              % t "."
                                          | Error err ->
                                              Bootstrap.alert ~kind:`Danger
-                                               (Message_html.render ctxt err))
+                                               (Message_html.render ctxt err) )
                                     )
                                 ; submit_button
                                     ~active:
                                       (Reactive.map method_document ~f:(function
                                         | Ok _ -> true
-                                        | Error _ -> false))
-                                    (t "Explore!") submit_action ]) )) in
+                                        | Error _ -> false ) )
+                                    (t "Explore!") submit_action ]) ) ) in
                 (top_button, exploration) in
           let validity_qualifier =
             if add_explore_tokens_button then
@@ -1392,7 +1397,7 @@ let metadata_substandards ?token_metadata_big_map
               % exploration_expedition_state
               % Async_work.render
                   ~done_empty:(fun () ->
-                    Bootstrap.alert ~kind:`Warning (bt "Found no tokens 😞"))
+                    Bootstrap.alert ~kind:`Warning (bt "Found no tokens 😞") )
                   wip_explore_tokens ~f:tokens_exploration ) in
         (metadata, [field "TZIP-012 Implementation Claim" tzip_12_block]))
 
@@ -1420,7 +1425,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
       let open License in
       it l.name
       % Option.value_map ~default:(empty ()) l.details ~f:(fun d ->
-            Fmt.kstr t " → %s" d) in
+            Fmt.kstr t " → %s" d ) in
     let url_elt u = url ct u in
     let authors_elt l =
       oxfordize_list l ~map:(author ~namet:t)
@@ -1441,7 +1446,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                   ~target:
                     (Fmt.str
                        "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-%d/tzip-%d.md"
-                       tzip_nb tzip_nb)
+                       tzip_nb tzip_nb )
                 (* Fmt.kstr txt "{%a --- %d}" Re.Group.pp g (Re.Group.nb_groups g)] *)
               with e ->
                 dbgf "Error in interface html: %a" Exn.pp e ;
@@ -1472,7 +1477,8 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                      @ normal_field "Path" (ct raq.path)
                      @ normal_field "Method"
                          (Fmt.kstr ct "%s"
-                            (Cohttp.Code.string_of_method raq.meth)) )))) in
+                            (Cohttp.Code.string_of_method raq.meth) ) ) ) ) )
+      in
       let maybe_collapse content =
         if collapsing then
           let open Bootstrap.Collapse in
@@ -1482,7 +1488,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
               ~style:(Reactive.pure (Fmt.str "width: 8em"))
               (Reactive.bind (collapsed_state collapse) ~f:(function
                 | true -> t "Expand"
-                | false -> t "Collapse")) in
+                | false -> t "Collapse" ) ) in
           let dv = make_div collapse (fun () -> content) in
           btn %% dv
         else content in
@@ -1500,7 +1506,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                    let name =
                      Fmt.str "Implementation%s"
                        (if List.length l = 1 then "" else "s") in
-                   list_field name v.implementations implementations )) ) in
+                   list_field name v.implementations implementations ) ) ) in
     let views_elt (views : View.t list) =
       let collapsing = List.length views >= 3 in
       itemize (List.map views ~f:(fun v -> view ~collapsing v)) in
@@ -1534,7 +1540,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                     match more with
                     | [] -> empty ()
                     | _ -> t " " % parens (ct (String.concat ~sep:" " more)) )
-                else None)
+                else None )
             |> Option.value ~default:(bt s) in
       itemize
         ( field "Tools"
@@ -1554,7 +1560,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
               ( t "[lang="
               % list
                   (let sep () = t "|" in
-                   oxfordize_list more ~map:ct ~sep ~last_sep:sep)
+                   oxfordize_list more ~map:ct ~sep ~last_sep:sep )
               % t "]" ) in
       let expand (Michelson_blob.Micheline m as mm) =
         let open Tezos_micheline.Micheline in
@@ -1579,15 +1585,15 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
         (List.map errors ~f:(function
           | Static {error; expansion; languages} ->
               field "Static-translation"
-                ( ct (mich error)
-                %% t "→" %% expand expansion %% langs languages )
+                (ct (mich error) %% t "→" %% expand expansion %% langs languages)
           | Dynamic {view_name; languages} ->
-              field "Dynamic-view" (view_link view_name %% langs languages)))
+              field "Dynamic-view" (view_link view_name %% langs languages) ) )
     in
     let unknown_extras kv =
       itemize
         (List.map kv ~f:(fun (k, v) ->
-             ct k %% pre (ct (Ezjsonm.value_to_string ~minify:false v)))) in
+             ct k %% pre (ct (Ezjsonm.value_to_string ~minify:false v)) ) )
+    in
     let ( { name
           ; description
           ; version
@@ -1636,7 +1642,7 @@ let show_metadata_full_validation ?token_metadata_big_map ctxt
               true
             with e ->
               dbgf "Protocol hash problem: %a" Exn.pp e ;
-              false) in
+              false ) in
       let header =
         if show_validation_big_answer then
           match (errs, warns, legacy_warnings) with
