@@ -22,7 +22,7 @@ let go_action ctxt ~wip =
         logm
           Message.(
             t "Fetching metadata for" %% Fmt.kstr ct "%s/%s" address token_id) ;
-        Contract_metadata.Token.fetch ctxt ~address ~id ~log:logm
+        Contract_metadata.Token.token_fetch ctxt ~address ~id ~log:logm
         >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) ;
   ()
 
@@ -213,6 +213,97 @@ let linkify_text s =
 
 let token_ui_max_width = "900px"
 
+let error_try_again :
+       (unit -> 'a)
+    -> string
+    -> [< Html_types.div_content_fun] Meta_html.H5.elt
+    -> [> Html_types.div] Meta_html.H5.elt =
+ fun try_again_action msg e ->
+  let open Meta_html in
+  dbgf "**** error_try_again ****" ;
+  Bootstrap.alert ~kind:`Danger
+    ( h3 (t "Failed To Fetch The Token 😿")
+    % div e % hr ()
+    % div
+        ( bt msg
+        %% Bootstrap.button ~kind:`Primary (t "Try Again ♲")
+             ~action:try_again_action ) )
+
+let show_multimedia :
+       _ Context.t
+    -> Contract_metadata.Token.t
+    -> [> Html_types.div] Meta_html.H5.elt =
+ fun ctxt {main_multimedia} ->
+  let open Contract_metadata.Multimedia in
+  let open Meta_html in
+  match main_multimedia with
+  | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
+  | Some (Error exn) ->
+      Bootstrap.alert ~kind:`Danger
+        ( t "Error while getting multimedia content:"
+        %% Errors_html.exception_html ctxt exn )
+  | Some (Ok (title, mm)) ->
+      let open Contract_metadata.Multimedia in
+      let maybe_censor f =
+        if mm.sfw || State.always_show_multimedia ctxt then f ()
+        else
+          Bootstrap.Collapse.(
+            fixed_width_reactive_button_with_div_below (make ())
+              ~kind:`Secondary ~width:"100%")
+            ~button:(function
+              | true ->
+                  Fmt.kstr t "Show %s (potentially NSFW)"
+                    ( match mm.format with
+                    | `Image, "svg+xml" -> "Vector Graphics"
+                    | `Image, _ -> "Image"
+                    | `Video, _ -> "Video" )
+              | false -> t "Hide Multimedia")
+            f in
+      let wrap_mm c =
+        div c
+          ~a:
+            [ style
+                (* Can seem to limit the height and keeping the
+                   images “inside”: *)
+                "max-width: 100%; /*max-height: 60vh;*/ padding: 2px; margin: \
+                 auto; width: 100%; height: 100%" ] in
+      let mm_style =
+        let loadingable =
+          "background: transparent url(./loading.gif) no-repeat scroll center \
+           center;" in
+        "height: 100%; width: 100%; max-height: 50vh; object-fit: contain; "
+        ^ loadingable
+        (* "max-width: 100%; max-height: 100%" *) in
+      maybe_censor (fun () ->
+          match mm.format with
+          | `Image, "svg+xml" ->
+              wrap_mm
+                (link ~target:mm.converted_uri
+                   (H5.object_
+                      ~a:
+                        [ H5.a_mime_type (Reactive.pure "image/svg+xml")
+                        ; H5.a_data (Reactive.pure mm.converted_uri)
+                        ; H5.a_style (Reactive.pure mm_style) ]
+                      [ H5.img ~a:[style mm_style]
+                          ~alt:
+                            (Fmt.kstr Lwd.pure "%s at %s" title
+                               mm.converted_uri)
+                          ~src:(Lwd.pure mm.converted_uri)
+                          () ]))
+          | `Image, _ ->
+              wrap_mm
+                (link ~target:mm.converted_uri
+                   (H5.img ~a:[style mm_style]
+                      ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
+                      ~src:(Lwd.pure mm.converted_uri)
+                      ()))
+          | `Video, _ ->
+              wrap_mm
+                (H5.video
+                   ~a:[H5.a_controls (); style mm_style]
+                   ~src:(Lwd.pure mm.converted_uri)
+                   []))
+
 let show_token ctxt
     Contract_metadata.Token.
       { address
@@ -244,77 +335,6 @@ let show_token ctxt
     | None, _, _ -> Fmt.kstr ct "%s/%d" address id in
   let or_empty o f = match o with None -> empty () | Some o -> f o in
   let metadescription = or_empty tzip21.description linkify_text in
-  let multimedia =
-    match main_multimedia with
-    | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
-    | Some (Error exn) ->
-        Bootstrap.alert ~kind:`Danger
-          ( t "Error while getting multimedia content:"
-          %% Errors_html.exception_html ctxt exn )
-    | Some (Ok (title, mm)) ->
-        let open Contract_metadata.Multimedia in
-        let maybe_censor f =
-          if mm.sfw || State.always_show_multimedia ctxt then f ()
-          else
-            Bootstrap.Collapse.(
-              fixed_width_reactive_button_with_div_below (make ())
-                ~kind:`Secondary ~width:"100%")
-              ~button:(function
-                | true ->
-                    Fmt.kstr t "Show %s (potentially NSFW)"
-                      ( match mm.format with
-                      | `Image, "svg+xml" -> "Vector Graphics"
-                      | `Image, _ -> "Image"
-                      | `Video, _ -> "Video" )
-                | false -> t "Hide Multimedia")
-              f in
-        let wrap_mm c =
-          div c
-            ~a:
-              [ style
-                  (* Can seem to limit the height and keeping the
-                     images “inside”: *)
-                  "max-width: 100%; /*max-height: 60vh;*/ padding: 2px; \
-                   margin: auto; width: 100%; height: 100%" ] in
-        let mm_style =
-          let loadingable =
-            "background: transparent url(./loading.gif) no-repeat scroll \
-             center center;" in
-          "height: 100%; width: 100%; max-height: 50vh; object-fit: contain; "
-          ^ loadingable
-          (* "max-width: 100%; max-height: 100%" *) in
-        maybe_censor (fun () ->
-            match mm.format with
-            | `Image, "svg+xml" ->
-                wrap_mm
-                  (link ~target:mm.converted_uri
-                     (H5.object_
-                        ~a:
-                          [ H5.a_mime_type (Reactive.pure "image/svg+xml")
-                          ; H5.a_data (Reactive.pure mm.converted_uri)
-                          ; H5.a_style (Reactive.pure mm_style) ]
-                        [ H5.img ~a:[style mm_style]
-                            ~alt:
-                              (Fmt.kstr Lwd.pure "%s at %s" title
-                                 mm.converted_uri)
-                            ~src:(Lwd.pure mm.converted_uri)
-                            () ]))
-            | `Image, _ ->
-                wrap_mm
-                  (link ~target:mm.converted_uri
-                     (H5.img ~a:[style mm_style]
-                        ~alt:
-                          (Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
-                        ~src:(Lwd.pure mm.converted_uri)
-                        ()))
-            | `Video, _ ->
-                wrap_mm
-                  (H5.video
-                     ~a:[H5.a_controls (); style mm_style]
-                     ~src:(Lwd.pure mm.converted_uri)
-                     []))
-    (* Tezos_html.multimedia_from_tzip16_uri ctxt ~title
-       ~mime_types:(uri_mime_types tzip21) ~uri) *) in
   let creators =
     let each s = i (linkify_text s) in
     or_empty tzip21.creators (function
@@ -399,16 +419,18 @@ let show_token ctxt
                 it ", total-supply:"
                 %% Tezos_html.show_total_supply ctxt ~decimals:n z) ) in
   let main_content =
+    (* * *)
+    let err_str = "main_content TBD" in
+    let result = Async_work.empty () in
+    let () = go_action ctxt ~wip:result in
     h3 ~a:[style "text-align: center"] metaname
-    % multimedia
-    (* % p
-        (Fmt.kstr t "mm: %a"
-           Fmt.(
-             option
-               (result
-                  ~ok:(pair string Contract_metadata.Multimedia.pp)
-                  ~error:Exn.pp))
-           main_multimedia) *)
+    % div
+        ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
+        (Async_work.render result ~f:(show_multimedia ctxt)
+           ~show_error:
+             (error_try_again
+                (fun () -> go_action ctxt ~wip:(Async_work.empty ()))
+                err_str))
     % Bootstrap.p_lead metadescription
     % div creators % div tags
     % ( match special_knowledge with
@@ -565,20 +587,14 @@ let render ctxt =
               Reactive.set token_id (Int.to_string (current + 1)) ;
               enter_action ()
             with _ -> ()) ) in
-  let show_error e =
-    Bootstrap.alert ~kind:`Danger
-      ( h3 (t "Failed To Fetch The Token 😿")
-      % div e % hr ()
-      % div
-          ( bt
-              "💡 This could be that the token does not exist, that a public \
-               Tezos node is having trouble responding, or that an IPFS \
-               gateway is limiting requests ⇒"
-          %% Bootstrap.button ~kind:`Primary (t "Try Again ♲")
-               ~action:enter_action ) ) in
+  let gateway_err_str =
+    "💡 This could be that the token does not exist, that a public Tezos \
+     node is having trouble responding, or that an IPFS gateway is limiting \
+     requests ⇒" in
   State.if_explorer_should_go ctxt enter_action ;
   h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
   % top_form % second_form
   % div
       ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
-      (Async_work.render result ~f:(show_token ctxt) ~show_error)
+      (Async_work.render result ~f:(show_token ctxt)
+         ~show_error:(error_try_again enter_action gateway_err_str))

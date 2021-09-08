@@ -860,7 +860,7 @@ module Token = struct
         Some s
     | None, None -> None
 
-  let fetch (ctxt : _ Context.t) ~address ~id ~log : t Lwt.t =
+  let token_fetch (ctxt : _ Context.t) ~address ~id ~log : t Lwt.t =
     let open Lwt.Infix in
     let logs prefix msg = log Message.(t prefix %% t "👉" %% t msg) in
     let warnings = ref [] in
@@ -939,10 +939,10 @@ module Token = struct
     let get_token_metadata_map_with_big_map ~log ~node big_map_id =
       Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node ~log
         ~big_map_id ~key:id in
-    let log = logs "Fetching token-metadata" in
+    let meta_log = logs "Fetching token-metadata" in
     Query_nodes.find_node_with_contract ctxt address
     >>= fun node ->
-    Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
+    Fmt.kstr meta_log "Using %s" node.Query_nodes.Node.name ;
     begin
       match (token_metadata_big_map, token_metadata_validation) with
       | _, Valid _ | None, _ -> (
@@ -951,7 +951,7 @@ module Token = struct
           | Some (Ok s) -> Lwt.return s
           | _ -> failm Message.(Fmt.kstr t "Token-metadata view failed.") )
       | Some big_map_id, _ ->
-          get_token_metadata_map_with_big_map ~log ~node big_map_id
+          get_token_metadata_map_with_big_map ~log:meta_log ~node big_map_id
     end
     >>= function
     | Prim (_, "Pair", [_; full_map], _) ->
@@ -974,7 +974,7 @@ module Token = struct
               Lwt.catch
                 (fun () ->
                   Uri.fetch ctxt uri ~log:(fun s ->
-                      Fmt.kstr log "At %s ‣ %s"
+                      Fmt.kstr meta_log "At %s ‣ %s"
                         (ellipsize_string u ~max_length:16 ~ellipsis:"…")
                         s)
                   >>= fun s -> Lwt.return_some (u, Ezjsonm.value_from_string s))
@@ -1014,6 +1014,8 @@ module Token = struct
                   | other -> Ezjsonm.value_to_string other in
                 List.map l ~f:(fun (k, v) -> Ok (k, f v))
             | Some (_, _) -> [] ) in
+        (* previous start of fetch_main_multimedia *)
+        (* * *)
         let multimedia_choice =
           match (tzip21.artifact, tzip21.display, tzip21.thumbnail) with
           | Some a, _, _ -> Some ("Artifact", a)
@@ -1027,7 +1029,7 @@ module Token = struct
               (fun () ->
                 Multimedia.prepare_and_guess ~uri
                   ~log:(fun s ->
-                    Fmt.kstr log "Preparing/Guessing %s ⏩ %s"
+                    Fmt.kstr meta_log "Preparing/Guessing %s ⏩ %s"
                       (ellipsize_string uri ~max_length:16 ~ellipsis:"…")
                       s)
                   ctxt
