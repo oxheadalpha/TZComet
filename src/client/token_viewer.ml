@@ -419,10 +419,8 @@ let show_token ctxt
                 it ", total-supply:"
                 %% Tezos_html.show_total_supply ctxt ~decimals:n z) ) in
   let main_content =
-    (* * *)
-    let err_str = "main_content TBD" in
+    let err_str = "*** Error getting multimedia content ***" in
     let result = Async_work.empty () in
-    let () = go_action ctxt ~wip:result in
     h3 ~a:[style "text-align: center"] metaname
     % div
         ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]

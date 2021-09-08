@@ -1014,8 +1014,6 @@ module Token = struct
                   | other -> Ezjsonm.value_to_string other in
                 List.map l ~f:(fun (k, v) -> Ok (k, f v))
             | Some (_, _) -> [] ) in
-        (* previous start of fetch_main_multimedia *)
-        (* * *)
         let multimedia_choice =
           match (tzip21.artifact, tzip21.display, tzip21.thumbnail) with
           | Some a, _, _ -> Some ("Artifact", a)
