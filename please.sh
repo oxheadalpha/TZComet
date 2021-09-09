@@ -66,6 +66,7 @@ ensure_vendors () {
     )
 }
 
+ocamlformat_version=0.19.0
 ensure_setup () {
     if [ "$global_switch" = "true" ] ; then
         say "Assuming Global Opam Switch is set"
@@ -76,7 +77,7 @@ ensure_setup () {
     fi
     eval $(opam env)
     opam pin add -n digestif 0.9.0
-    opam pin add -n ocamlformat 0.19.0
+    opam pin add -n ocamlformat "$ocamlformat_version"
     opam pin add -n tyxml 4.5.0
     opam pin add -n zarith 1.11 # zarith_stubs_js fails with 1.12
     # see https://github.com/janestreet/zarith_stubs_js/pull/8
@@ -150,10 +151,30 @@ deploy_togithub () {
 }
 
 
+ensure_ocamlformats () {
+    command="${1:-cp}"
+    tmp=$(mktemp /tmp/XXXXX.ocamlformat)
+    cat > "$tmp" <<EOF
+version=$ocamlformat_version
+profile=compact
+break-collection-expressions=fit-or-vertical
+exp-grouping=preserve
+parse-docstrings
+EOF
+    for dotof in $(git ls-files | grep .ocamlformat) ; do
+        $command "$tmp" "$dotof" || {
+            echo "File '$dotof' should be:" >&2
+            cat "$tmp" | sed 's/^/  ||/' >&2
+            echo "You may have to run './please.sh ensure ocamlformats'" >&2
+            return 4
+        }
+    done
+}
 
 
 ensure_linting () {
     echo "OCamlFormat version: $(ocamlformat --version)"
+    ensure_ocamlformats "diff --brief"
     dune build @src/fmt --auto-promote
 }
 
