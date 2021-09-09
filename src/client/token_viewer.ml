@@ -233,16 +233,25 @@ let show_multimedia :
        _ Context.t
     -> Contract_metadata.Token.t
     -> [> Html_types.div] Meta_html.H5.elt =
- fun ctxt {main_multimedia} ->
+ fun ctxt {main_multimedia; address; id} ->
+  dbgf "*** entered show_multimedia ***" ;
   let open Contract_metadata.Multimedia in
   let open Meta_html in
   match main_multimedia with
-  | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
+  | None ->
+      dbgf "*** match main_multimedia - None ***" ;
+      Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
   | Some (Error exn) ->
-      Bootstrap.alert ~kind:`Danger
-        ( t "Error while getting multimedia content:"
-        %% Errors_html.exception_html ctxt exn )
+      dbgf "*** match main_multimedia - Error ***" ;
+      let failm msg =
+        Decorate_error.raise
+          Message.(Fmt.kstr t "Fetching %s/%d:" address id %% msg) in
+      failm Message.(Fmt.kstr t "*** Error with the multimedia ***")
+      (* Bootstrap.alert ~kind:`Danger *)
+      (*   ( t "Error while getting multimedia content:" *)
+      (*   %% Errors_html.exception_html ctxt exn ) *)
   | Some (Ok (title, mm)) ->
+      dbgf "*** match main_multimedia - Some ***" ;
       let open Contract_metadata.Multimedia in
       let maybe_censor f =
         if mm.sfw || State.always_show_multimedia ctxt then f ()
@@ -320,6 +329,7 @@ let show_token ctxt
       ; tzip21 } =
   let open Meta_html in
   let open Contract_metadata.Content.Tzip_021 in
+  dbgf "*** Entered show_token ***" ;
   let warning = function
     | `Fetching_uri (uri, e) ->
         t "Fetching URI" %% ct uri %% Errors_html.exception_html ctxt e
@@ -418,17 +428,30 @@ let show_token ctxt
           % or_empty total_supply (fun z ->
                 it ", total-supply:"
                 %% Tezos_html.show_total_supply ctxt ~decimals:n z) ) in
+  let wrapped_token_fetch wip =
+    let _logh msg = Async_work.log wip msg in
+    let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
+    Async_work.wip wip ;
+    Async_work.async_catch wip
+      ~exn_to_html:(Errors_html.exception_html ctxt)
+      Lwt.Infix.(
+        fun ~mkexn () ->
+          logm
+            Message.(t "*** About to call token_fetch from within show_token") ;
+          dbgf "*** calling token_fetch from wrapped_token_fetch... ***" ;
+          Contract_metadata.Token.token_fetch ctxt ~address ~id ~log:logm
+          >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) in
   let main_content =
     let err_str = "*** Error getting multimedia content ***" in
-    let result = Async_work.empty () in
+    let tok_wip = Async_work.empty () in
+    let _ = wrapped_token_fetch tok_wip in
+    dbgf "*** calling Async_work.render from show_token... ***" ;
     h3 ~a:[style "text-align: center"] metaname
     % div
         ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
-        (Async_work.render result ~f:(show_multimedia ctxt)
+        (Async_work.render tok_wip ~f:(show_multimedia ctxt)
            ~show_error:
-             (error_try_again
-                (fun () -> go_action ctxt ~wip:(Async_work.empty ()))
-                err_str))
+             (error_try_again (fun () -> go_action ctxt ~wip:tok_wip) err_str))
     % Bootstrap.p_lead metadescription
     % div creators % div tags
     % ( match special_knowledge with
@@ -589,6 +612,7 @@ let render ctxt =
     "💡 This could be that the token does not exist, that a public Tezos \
      node is having trouble responding, or that an IPFS gateway is limiting \
      requests ⇒" in
+  dbgf "*** calling Async_work.render from Token_viewer.render... ***" ;
   State.if_explorer_should_go ctxt enter_action ;
   h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
   % top_form % second_form

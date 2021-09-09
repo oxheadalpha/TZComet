@@ -115,8 +115,11 @@ let render ?(done_empty = Meta_html.empty) ?(show_error = default_show_error)
       (fun () -> show_logs ~wip:false ()) in
   let content ~wip =
     Reactive.bind_var work_status.content ~f:(function
-      | [] -> if wip then empty () else done_empty ()
+      | [] ->
+          dbgf "*** Async_work.render inner function match - EMPTY list ***" ;
+          if wip then empty () else done_empty ()
       | l ->
+          dbgf "*** Async_work.render inner function match - NON-empty list ***" ;
           ( if wip then
             div
               ( it "Work in progress …"
@@ -124,9 +127,20 @@ let render ?(done_empty = Meta_html.empty) ?(show_error = default_show_error)
           else empty () )
           % list
               (List.rev_map l ~f:(function
-                | Ok o -> div (f o)
-                | Error e -> show_error e))) in
+                | Ok o ->
+                    dbgf "*** render Ok ***" ;
+                    div (f o)
+                | Error e ->
+                    dbgf "*** render Error ***" ;
+                    show_error e))) in
   Reactive.bind_var work_status.status ~f:(function
-    | Empty -> empty ()
-    | Work_in_progress -> content ~wip:true %% show_logs ~wip:true ()
-    | Done -> content ~wip:false %% collapsing_logs ())
+    | Empty ->
+        dbgf "*** Async_work.render initial function match - Empty ***" ;
+        empty ()
+    | Work_in_progress ->
+        dbgf
+          "*** Async_work.render initial function match - Work_in_progress ***" ;
+        content ~wip:true %% show_logs ~wip:true ()
+    | Done ->
+        dbgf "*** Async_work.render initial function match - Done ***" ;
+        content ~wip:false %% collapsing_logs ())
