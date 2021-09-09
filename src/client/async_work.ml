@@ -86,7 +86,7 @@ let async_catch :
           | Work_failed l -> error wip l ; return ()
           | exn ->
               error wip (exn_to_html exn) ;
-              return ()))
+              return ()) )
 
 let default_show_error e =
   let open Meta_html in
@@ -106,7 +106,7 @@ let render ?(done_empty = Meta_html.empty) ?(show_error = default_show_error)
          (H5.ul
             ( if wip then
               [logs; H5.li [Bootstrap.spinner ~kind:`Info (t "Working …")]]
-            else [logs] ))) in
+            else [logs] ) ) ) in
   let collapsing_logs () =
     let collapse = Bootstrap.Collapse.make () in
     Bootstrap.Collapse.fixed_width_reactive_button_with_div_below collapse
@@ -132,7 +132,7 @@ let render ?(done_empty = Meta_html.empty) ?(show_error = default_show_error)
                     div (f o)
                 | Error e ->
                     dbgf "*** render Error ***" ;
-                    show_error e))) in
+                    show_error e ) ) ) in
   Reactive.bind_var work_status.status ~f:(function
     | Empty ->
         dbgf "*** Async_work.render initial function match - Empty ***" ;
@@ -143,4 +143,4 @@ let render ?(done_empty = Meta_html.empty) ?(show_error = default_show_error)
         content ~wip:true %% show_logs ~wip:true ()
     | Done ->
         dbgf "*** Async_work.render initial function match - Done ***" ;
-        content ~wip:false %% collapsing_logs ())
+        content ~wip:false %% collapsing_logs () )

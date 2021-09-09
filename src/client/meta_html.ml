@@ -85,8 +85,8 @@ let input_bidirectional ?(a = []) bidi =
                    Js.Opt.iter ev##.target (fun input ->
                        Js.Opt.iter (Dom_html.CoerceTo.input input) (fun input ->
                            let v = input##.value |> Js.to_string in
-                           Reactive.Bidirectional.set bidi v)) ;
-                   true)) ] )
+                           Reactive.Bidirectional.set bidi v ) ) ;
+                   true) ) ] )
     ()
 
 module Bootstrap = struct
@@ -201,11 +201,11 @@ module Bootstrap = struct
               button
                 ~a:
                   [ a_class (Reactive.pure ["dropdown-item"])
-                  ; a_onclick
-                      (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false)) ]
+                  ; a_onclick (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false))
+                  ]
                 [content]
           | `Menu_header content ->
-              h6 ~a:[a_class (Reactive.pure ["dropdown-header"])] [content])
+              h6 ~a:[a_class (Reactive.pure ["dropdown-header"])] [content] )
       in
       H5.(
         let open Tyxml_lwd.Lwdom in
@@ -219,7 +219,7 @@ module Bootstrap = struct
                     (Reactive.pure
                        [ "btn"
                        ; Fmt.str "btn-%s" (Label_kind.to_string kind)
-                       ; "dropdown-toggle" ])
+                       ; "dropdown-toggle" ] )
                   (* ; a_type (Reactive.pure `Button) *)
                 ; a_id (Reactive.pure id)
                 ; a_user_data "toggle" (Reactive.pure "dropdown")
@@ -294,7 +294,7 @@ module Bootstrap = struct
                        | false ->
                            li
                              ~a:[classes ["nav-item"]]
-                             [a ~a:[classes ["nav-link"]] [content]]))) ] ]
+                             [a ~a:[classes ["nav-link"]] [content]] ) ) ) ] ]
       in
       nav content
         ~a:
@@ -323,11 +323,11 @@ module Bootstrap = struct
                            [ classes ["nav-link"]
                            ; H5.a_onclick
                                (Tyxml_lwd.Lwdom.attr (fun ev ->
-                                    action () ; true)) ]
+                                    action () ; true ) ) ]
                          label ]
                | false ->
                    (* in bootstrap active means currently already activated *)
-                   li [a ~a:[classes ["active"; "nav-link"]] label])))
+                   li [a ~a:[classes ["active"; "nav-link"]] label] ) ) )
   end
 
   module Form = struct
@@ -365,7 +365,7 @@ module Bootstrap = struct
                         ( match kind with
                         | `Text -> []
                         | `Checkbox -> ["form-check-label"] ) ]
-                  [lbl]) in
+                  [lbl] ) in
           let full_input =
             let a_base =
               [ classes
@@ -380,14 +380,14 @@ module Bootstrap = struct
                        match ev##.keyCode with
                        | 13 when not (Js_of_ocaml.Js.to_bool ev##.shiftKey) ->
                            enter_action () ; false
-                       | _ -> true))
+                       | _ -> true ) )
               ; a_input_type (Reactive.pure kind) ]
               @ Option.value_map placeholder ~default:[] ~f:(fun plc ->
-                    [a_placeholder plc])
+                    [a_placeholder plc] )
               @ more_a in
             Reactive.bind active ~f:(function
               | true -> input ~a:a_base ()
-              | false -> input ~a:(a_disabled () :: a_base) ()) in
+              | false -> input ~a:(a_disabled () :: a_base) () ) in
           let full_help =
             small
               ~a:
@@ -413,7 +413,7 @@ module Bootstrap = struct
             div
               ~a:[classes ["form-row"]]
               (List.map l ~f:(fun (cols, item) ->
-                   to_div ~enter_action ~cols item))
+                   to_div ~enter_action ~cols item ) )
         | Input {input= {label= lbl; id; help; active}; placeholder; content} ->
             generic_input ?id ?help ~kind:`Text lbl ~active ?placeholder
               [ a_value (Reactive.Bidirectional.get content)
@@ -427,8 +427,8 @@ module Bootstrap = struct
                                  let v = input##.value |> Js.to_string in
                                  dbgf "TA inputs: %d bytes: %S"
                                    (String.length v) v ;
-                                 Reactive.Bidirectional.set content v)) ;
-                         true)) ]
+                                 Reactive.Bidirectional.set content v ) ) ;
+                         true) ) ]
         | Check_box {input= {label= lbl; id; help; active}; checked} ->
             Reactive.Bidirectional.get checked
             |> Reactive.bind ~f:(fun init_checked ->
@@ -447,8 +447,8 @@ module Bootstrap = struct
                                           let v =
                                             input##.checked |> Js.to_bool in
                                           dbgf "checkbox → %b" v ;
-                                          Reactive.Bidirectional.set checked v)) ;
-                                  true)) ] ))
+                                          Reactive.Bidirectional.set checked v ) ) ;
+                                  true) ) ] ) )
         | Button {label= lbl; active; action} ->
             let btn = ["btn"; "btn-primary"] in
             let cls =
@@ -466,7 +466,7 @@ module Bootstrap = struct
                         (Tyxml_lwd.Lwdom.attr (fun _ -> action () ; false))
                       :: base
                   | false -> a_disabled () :: base in
-                button ~a [lbl] |> cls)
+                button ~a [lbl] |> cls )
         | Any the_div ->
             let cls =
               let base = ["form-group"] in
@@ -542,10 +542,10 @@ module Bootstrap = struct
                            (Js.to_string ev##.detail) ;
                          List.iter !ids_and_states ~f:(fun (the_id, state) ->
                              if String.equal (Js.to_string ev##.detail) the_id
-                             then Reactive.set state resulting_status) ;
-                         Js._true))
+                             then Reactive.set state resulting_status ) ;
+                         Js._true ) )
                     Js._true in
-                ()) ;
+                () ) ;
             done_once := true
 
       let register id state = ids_and_states := (id, state) :: !ids_and_states
@@ -566,7 +566,7 @@ module Bootstrap = struct
             let the_id = Fresh_id.of_option "collapse" id in
             Global_jquery_communication.ensure_handlers () ;
             Global_jquery_communication.register the_id state ;
-            the_id)
+            the_id )
           ~release:(fun _ id -> Global_jquery_communication.unregister id) in
       let the_id = Reactive.get_prim the_id_prim in
       {id= the_id; state}
@@ -577,7 +577,7 @@ module Bootstrap = struct
       full_state t
       |> Reactive.map ~f:(function
            | `Hiding | `Hidden -> true
-           | `Showing | `Shown -> false)
+           | `Showing | `Shown -> false )
 
     let make_button ?(kind = `Primary) ?style ?more_classes t content =
       let more_a =
@@ -595,7 +595,7 @@ module Bootstrap = struct
               ; a_aria "expanded"
                   (Reactive.map (collapsed_state t) ~f:(function
                     | true -> ["false"]
-                    | false -> ["true"]))
+                    | false -> ["true"] ) )
               ; a_aria "controls" (Reactive.map ~f:(fun x -> [x]) t.id) ] )
         [content]
 
@@ -603,7 +603,7 @@ module Bootstrap = struct
       Reactive.bind (collapsed_state t) ~f:(function
         | true -> div ~a:[classes ["collapse"]; H5.a_id t.id] (empty ())
         | false ->
-            div ~a:[classes ["collapse"; "show"]; H5.a_id t.id] (content ()))
+            div ~a:[classes ["collapse"; "show"]; H5.a_id t.id] (content ()) )
 
     let fixed_width_reactive_button_with_div_below ?kind t ~width ~button
         content =
@@ -618,7 +618,7 @@ module Bootstrap = struct
       let open H5 in
       let thead =
         Option.map header_row ~f:(fun hl ->
-            thead [tr (List.map hl ~f:(fun x -> th [x]))]) in
+            thead [tr (List.map hl ~f:(fun x -> th [x]))] ) in
       tablex
         ~a:[classes ["table"; "table-bordered"; "table-hover"]]
         ?thead
@@ -637,26 +637,26 @@ module Example = struct
         % p
             (Bootstrap.button ~kind:`Primary
                ~action:(fun () ->
-                 Reactive.set button_calls (Reactive.peek button_calls + 1))
+                 Reactive.set button_calls (Reactive.peek button_calls + 1) )
                (Reactive.bind_var button_calls ~f:(fun count ->
                     H5.span
                       [ Fmt.kstr
                           (if Stdlib.( mod ) count 2 = 0 then it else bt)
-                          "Click %d" count ])))
+                          "Click %d" count ] ) ) )
         % p
             (Bootstrap.label `Danger
                (Reactive.bind_var button_calls ~f:(fun count ->
                     Fmt.kstr t "Button above clicked %d time%s." count
-                      (if count = 1 then "" else "s"))))
+                      (if count = 1 then "" else "s") ) ) )
         % p (t "A dropdown menu:")
         % Bootstrap.Dropdown_menu.(
             button
               (t "This is a" %% ct "Dropdown" %% t "menu")
               [ item (t "The First") ~action:(fun () ->
-                    dbgf "Hello from the first")
+                    dbgf "Hello from the first" )
               ; header (t "This is a dropdown" %% it "header")
               ; item (t "The Second") ~action:(fun () ->
-                    dbgf "Hellow from the second") ])
+                    dbgf "Hellow from the second" ) ])
         % p (t "A Nav-bar …")
         % Bootstrap.Navigation_bar.(
             make
@@ -681,14 +681,14 @@ module Example = struct
               ; submit_button (t "Submit This!") (fun () ->
                     Reactive.set submissions
                       ( (Reactive.peek hello, Reactive.peek checkboxed)
-                      :: Reactive.peek submissions )) ])
+                      :: Reactive.peek submissions ) ) ])
         % p
             ( t "Form results:"
             %% Reactive.bind_var hello ~f:(fun v -> t "Hello:" %% ct v)
             % t ", checkbox is "
             %% Reactive.bind_var checkboxed ~f:(function
                  | false -> bt "not"
-                 | true -> empty ())
+                 | true -> empty () )
             %% t "checked." )
         % itemize
             [ t "Some item"
@@ -699,7 +699,8 @@ module Example = struct
                      itemize ~numbered:true
                        (List.rev_map subs ~f:(fun (h, c) ->
                             t "Submission:" %% ct h % t ","
-                            %% if c then it "checked" else it "unchecked"))) ]
+                            %% if c then it "checked" else it "unchecked" ) ) )
+            ]
         %
         let content = Reactive.var "content" in
         H5.div
@@ -719,7 +720,7 @@ module Example = struct
                                         let v = input##.value |> Js.to_string in
                                         dbgf "TA inputs: %d bytes: %S"
                                           (String.length v) v ;
-                                        Reactive.set content v)) ;
-                                false)) ]
+                                        Reactive.set content v ) ) ;
+                                false) ) ]
                    ()) ) ] )
 end

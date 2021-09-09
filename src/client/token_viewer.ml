@@ -17,7 +17,7 @@ let go_action ctxt ~wip =
             raise
               (mkexn
                  Meta_html.(
-                   t "Hmmm, the token-id is not a nat anymore:" %% ct token_id))
+                   t "Hmmm, the token-id is not a nat anymore:" %% ct token_id) )
         in
         logm
           Message.(
@@ -183,19 +183,19 @@ let linkify_text s =
                link
                  ~target:(Fmt.str "https://twitter.com/%s" handle)
                  (H5.img ~a:img_a ~src:(Lwd.pure twitter_icon)
-                    ~alt:(Lwd.pure "Twitter") ())
+                    ~alt:(Lwd.pure "Twitter") () )
                % t " "
                % link
                    ~target:(Fmt.str "https://instagram.com/%s" handle)
                    (H5.img ~a:img_a ~src:(Lwd.pure instagram_icon)
-                      ~alt:(Lwd.pure "Instagram") ())) )
+                      ~alt:(Lwd.pure "Instagram") () ) ) )
     | tz_address
       when prefix_and_for_all ~prefix:"tz" ~for_all:is_twitter_handle tz_address
       ->
         print
           (link
              ~target:(Fmt.str "https://tzkt.io/%s" tz_address)
-             (bt (ellipsize_string ~ellipsis:"…" ~max_length:8 tz_address)))
+             (bt (ellipsize_string ~ellipsis:"…" ~max_length:8 tz_address)) )
     | tok -> print (t tok) in
   let rec go ?(nl = false) pos =
     match next_sep ~pos s with
@@ -266,7 +266,7 @@ let show_multimedia :
                     | `Image, "svg+xml" -> "Vector Graphics"
                     | `Image, _ -> "Image"
                     | `Video, _ -> "Video" )
-              | false -> t "Hide Multimedia")
+              | false -> t "Hide Multimedia" )
             f in
       let wrap_mm c =
         div c
@@ -295,23 +295,22 @@ let show_multimedia :
                         ; H5.a_style (Reactive.pure mm_style) ]
                       [ H5.img ~a:[style mm_style]
                           ~alt:
-                            (Fmt.kstr Lwd.pure "%s at %s" title
-                               mm.converted_uri)
+                            (Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
                           ~src:(Lwd.pure mm.converted_uri)
-                          () ]))
+                          () ] ) )
           | `Image, _ ->
               wrap_mm
                 (link ~target:mm.converted_uri
                    (H5.img ~a:[style mm_style]
                       ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
                       ~src:(Lwd.pure mm.converted_uri)
-                      ()))
+                      () ) )
           | `Video, _ ->
               wrap_mm
                 (H5.video
                    ~a:[H5.a_controls (); style mm_style]
                    ~src:(Lwd.pure mm.converted_uri)
-                   []))
+                   [] ) )
 
 let show_token ctxt
     Contract_metadata.Token.
@@ -350,7 +349,7 @@ let show_token ctxt
     or_empty tzip21.creators (function
       | [] -> bt "Creators list is explicitly empty."
       | [one] -> bt "Creator:" %% each one
-      | sl -> bt "Creators:" %% itemize (List.map sl ~f:each)) in
+      | sl -> bt "Creators:" %% itemize (List.map sl ~f:each) ) in
   let tags =
     or_empty tzip21.tags (fun sl ->
         bt "Tags:"
@@ -358,7 +357,7 @@ let show_token ctxt
              (oxfordize_list sl
                 ~map:(fun t -> ct t)
                 ~sep:(fun () -> t ", ")
-                ~last_sep:(fun () -> t ", "))) in
+                ~last_sep:(fun () -> t ", ") ) ) in
   let contract_info =
     let open Tezos_contract_metadata.Metadata_contents in
     let sep () = t ", " in
@@ -371,7 +370,7 @@ let show_token ctxt
          %% t "is on"
          %% it
               (Option.value_map ~f:Network.to_string
-                 ~default:"an unknown network" network)
+                 ~default:"an unknown network" network )
          %% parens
               ( t "Open in"
               %% State.link_to_explorer ctxt (t "Explorer") ~search:address
@@ -382,7 +381,7 @@ let show_token ctxt
                        ~map:(fun vend ->
                          link
                            (t (vendor_show_name vend))
-                           ~target:(kt1_url vend address))) ) )
+                           ~target:(kt1_url vend address) )) ) )
     %% itemo
          (let open Option in
          let target =
@@ -394,7 +393,7 @@ let show_token ctxt
            Option.map name_part ~f:(fun apart ->
                match target with
                | Some target -> link (bt apart) ~target
-               | None -> bt apart) in
+               | None -> bt apart ) in
          let version_part =
            match metadata.version with
            | None -> empty ()
@@ -408,7 +407,7 @@ let show_token ctxt
                     (oxfordize_list al
                        ~map:(Tezos_html.author ~namet:bt)
                        ~sep:(fun () -> t ", ")
-                       ~last_sep:(fun () -> t ", and ")) in
+                       ~last_sep:(fun () -> t ", and ") ) in
          let description_part =
            or_empty metadata.description (fun s -> t ":" %% i (linkify_text s))
          in
@@ -427,7 +426,7 @@ let show_token ctxt
           % or_empty symbol (fun sym -> it ", symbol:" %% ct sym)
           % or_empty total_supply (fun z ->
                 it ", total-supply:"
-                %% Tezos_html.show_total_supply ctxt ~decimals:n z) ) in
+                %% Tezos_html.show_total_supply ctxt ~decimals:n z ) ) in
   let wrapped_token_fetch wip =
     let _logh msg = Async_work.log wip msg in
     let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
@@ -451,7 +450,7 @@ let show_token ctxt
         ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
         (Async_work.render tok_wip ~f:(show_multimedia ctxt)
            ~show_error:
-             (error_try_again (fun () -> go_action ctxt ~wip:tok_wip) err_str))
+             (error_try_again (fun () -> go_action ctxt ~wip:tok_wip) err_str) )
     % Bootstrap.p_lead metadescription
     % div creators % div tags
     % ( match special_knowledge with
@@ -460,7 +459,8 @@ let show_token ctxt
           list
             (List.map sk ~f:(function `Hic_et_nunc n ->
                  bt "Special-Link:"
-                 %% url it (Fmt.str "https://www.hicetnunc.xyz/objkt/%d" n))) )
+                 %% url it (Fmt.str "https://www.hicetnunc.xyz/objkt/%d" n) ) )
+      )
     % fungible_part % div contract_info in
   div
     ~a:
@@ -471,10 +471,10 @@ let show_token ctxt
       fixed_width_reactive_button_with_div_below (make ()) ~kind:`Secondary
         ~width:(* Same as async_work *) "12em")
       ~button:(function
-        | true -> t "Show token details" | false -> t "Hide details")
+        | true -> t "Show token details" | false -> t "Hide details" )
       (fun () ->
         Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
-          ~id ~warnings)
+          ~id ~warnings )
 
 let render ctxt =
   let open Meta_html in
@@ -506,7 +506,7 @@ let render ctxt =
           | true, more -> content %% t "👍"
           | false, "" -> content
           | false, more ->
-              content %% Bootstrap.color `Danger (ct more %% t "is wrong.")))
+              content %% Bootstrap.color `Danger (ct more %% t "is wrong.") ))
   in
   let controls_active = Async_work.busy result |> Reactive.map ~f:not in
   let form_ready_to_go =
@@ -553,23 +553,23 @@ let render ctxt =
                       let addr, id = State.Examples.random_token ctxt in
                       Reactive.set token_address addr ;
                       Reactive.set token_id (Int.to_string id) ;
-                      enter_action ()))
+                      enter_action () ) )
              % item "min-width: 25em"
                  (make_input
                     ~placeholder:(Reactive.pure "Contract address")
                     ~enter_action token_address_bidi
                     ~help:
                       (make_help ~validity:address_valid ~input:token_address
-                         (t "A valid KT1 address on any known network.")))
+                         (t "A valid KT1 address on any known network.") ) )
              % item "max-width: 8em"
                  (make_input ~placeholder:(Reactive.pure "Token ID")
                     ~enter_action token_id_bidi
                     ~help:
                       (make_help ~validity:token_id_valid ~input:token_id
-                         (t "A natural number.")))
+                         (t "A natural number.") ) )
              % item ""
-                 (make_button (t "Go 🎬") ~active:form_ready_to_go
-                    enter_action) )) in
+                 (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action)
+             ) ) in
   let second_form =
     let control s = small (t s) in
     div
@@ -584,7 +584,7 @@ let render ctxt =
               let current = Int.of_string (Reactive.peek token_id) in
               Reactive.set token_id (Int.to_string (current - 1)) ;
               enter_action ()
-            with _ -> ())
+            with _ -> () )
       % item ""
           (item "text-align: center"
              (make_check_box
@@ -595,22 +595,22 @@ let render ctxt =
                      (* State.get_always_show_multimedia ctxt
                         |> Reactive.bind ~f:(function
                              | true -> t "Hide unknown multimedia by default."
-                             | false -> t "Always show unknown multimedia.") *))
+                             | false -> t "Always show unknown multimedia.") *) )
                 ~label:
                   ( t " YOLO Mode"
                   %% Reactive.bind (State.get_always_show_multimedia ctxt)
                        ~f:(function
                        | true -> t "👀"
-                       | false -> t "🤦") )))
+                       | false -> t "🤦" ) ) ) )
       % make_button (control "Next ⏭") ~active:form_ready_to_go (fun () ->
             try
               let current = Int.of_string (Reactive.peek token_id) in
               Reactive.set token_id (Int.to_string (current + 1)) ;
               enter_action ()
-            with _ -> ()) ) in
+            with _ -> () ) ) in
   let gateway_err_str =
-    "💡 This could be that the token does not exist, that a public Tezos \
-     node is having trouble responding, or that an IPFS gateway is limiting \
+    "💡 This could be that the token does not exist, that a public Tezos node \
+     is having trouble responding, or that an IPFS gateway is limiting \
      requests ⇒" in
   dbgf "*** calling Async_work.render from Token_viewer.render... ***" ;
   State.if_explorer_should_go ctxt enter_action ;
@@ -619,4 +619,4 @@ let render ctxt =
   % div
       ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
       (Async_work.render result ~f:(show_token ctxt)
-         ~show_error:(error_try_again enter_action gateway_err_str))
+         ~show_error:(error_try_again enter_action gateway_err_str) )

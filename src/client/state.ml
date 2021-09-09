@@ -115,7 +115,7 @@ module Fragment = struct
             List.find Editor_mode.all ~f:(fun mode ->
                 String.equal
                   (String.lowercase (Editor_mode.to_string mode))
-                  (one |> String.lowercase)))
+                  (one |> String.lowercase) ) )
       |> Option.value ~default:`Guess in
     let explorer_go = true_in_query "go" in
     let editor_load = true_in_query "load-storage" in
@@ -141,7 +141,7 @@ module Fragment = struct
             List.find all_in_order ~f:(fun page ->
                 String.equal
                   (String.lowercase (Page.to_string page))
-                  (pagename |> String.lowercase))
+                  (pagename |> String.lowercase) )
             |> Option.value ~default:Explorer in
           (page, token_in_query ())
       | ["token"; addr; id] -> (Token_viewer, (addr, id))
@@ -291,14 +291,14 @@ let make_fragment ?(side_effects = true) ctxt =
            let current = Js_of_ocaml.Url.Current.get_fragment () in
            dbgf "Updating fragment %S → %a" current Fragment.pp now ;
            Current.set_fragment (Fragment.to_string now) ) ;
-         now)
+         now )
 
 let link_to_editor ctxt content ~text =
   let open Meta_html in
   let fragment = make_fragment ~side_effects:false ctxt in
   let href =
     Reactive.(map fragment) ~f:(fun frg ->
-        "#" ^ Fragment.(to_string (change_for_page frg Page.Editor))) in
+        "#" ^ Fragment.(to_string (change_for_page frg Page.Editor)) ) in
   a
     ~a:
       [ H5.a_href href
@@ -307,7 +307,7 @@ let link_to_editor ctxt content ~text =
                Reactive.set (get ctxt).editor_should_load false ;
                set_editor_content ctxt text ;
                set_page ctxt (`Changing_to Page.Editor) () ;
-               false)) ]
+               false ) ) ]
     content
 
 let link_to_explorer ctxt content ~search =
@@ -315,7 +315,7 @@ let link_to_explorer ctxt content ~search =
   let fragment = make_fragment ~side_effects:false ctxt in
   let href =
     Reactive.(map fragment) ~f:(fun frg ->
-        "#" ^ Fragment.(to_string (change_for_page frg Page.Explorer))) in
+        "#" ^ Fragment.(to_string (change_for_page frg Page.Explorer)) ) in
   a
     ~a:
       [ H5.a_href href
@@ -325,7 +325,7 @@ let link_to_explorer ctxt content ~search =
                Reactive.set (get ctxt).explorer_went false ;
                set_explorer_input ctxt search ;
                set_page ctxt (`Changing_to Page.Explorer) () ;
-               false)) ]
+               false ) ) ]
     content
 
 let if_explorer_should_go state f =
@@ -428,7 +428,7 @@ module Examples = struct
              "An on-chain pointer to metadata." ;
            uri_dev
              (Fmt.str "tezos-storage://%s.NetXrtZMmJmZSeb/contents"
-                one_off_chain_view)
+                one_off_chain_view )
              "An on-chain pointer to metadata with chain-id." ;
            uri_dev "tezos-storage:/here"
              "An on-chain pointer that requires a KT1 in context." ;
@@ -446,7 +446,7 @@ module Examples = struct
            List.iter all_mtb_from_lib ~f:(fun (ith, v) ->
                mtb_dev
                  (Tezos_contract_metadata.Metadata_contents.to_json v)
-                 (Fmt.str "Meaningless example #%d" ith)) ;
+                 (Fmt.str "Meaningless example #%d" ith) ) ;
            mby "0x05030b" "The Unit value, PACKed." ;
            mby
              "050707010000000c486\n\
@@ -462,12 +462,12 @@ module Examples = struct
             List.iter ~f:(tzself tzc)
               ["Unit"; "12"; "\"hello world\""; "(Pair 42 51)"] ;
             List.iter ~f:(tzself tzc_dev)
-              ["Unit 12"; "\"hœlló wörld\""; "(Pair 42 51 \"meh\")"]) ;
+              ["Unit 12"; "\"hœlló wörld\""; "(Pair 42 51 \"meh\")"] ) ;
            { contracts= kt1_all ()
            ; uris= uri_all ()
            ; metadata_blobs= mtb_all ()
            ; michelson_bytes= mby_all ()
-           ; michelson_concretes= tzc_all () })
+           ; michelson_concretes= tzc_all () } )
 
   type 'weight_type candidate =
     { weight: 'weight_type
@@ -496,15 +496,15 @@ module Examples = struct
       ] in
     let total =
       List.fold absolute_weights ~init:0 ~f:(fun prev candidate ->
-          prev + candidate.weight) in
+          prev + candidate.weight ) in
     List.map absolute_weights ~f:(fun candidate ->
-        {candidate with weight= Float.(of_int candidate.weight / of_int total)})
+        {candidate with weight= Float.(of_int candidate.weight / of_int total)} )
 
   let random_token (_ : _ Context.t) =
     let chosen_one =
       List.find tokens_global ~f:(fun candidate ->
           let open Float in
-          Random.float 1. < candidate.weight)
+          Random.float 1. < candidate.weight )
       |> function Some s -> s | None -> List.random_element_exn tokens_global
     in
     ( chosen_one.address
@@ -517,7 +517,7 @@ module Metadata_metadata = struct
       [ "ipfs://QmeayPYZeicG1MJSKoVnVM54qafYcvCCZbYLZuNdg36GWF"
       ; "ipfs://QmXmktVYyJ3AtzsDYAZCgpbL9MtPGv2U95wECaXcRL3Cqv"
       ; "ipfs://QmYGFcSb4z3TmpR4C6tyDWFzSWFCdqzcnjkBPeSwNZTex6" ] ~f:(fun uri ->
-        (Blob.Format.jpeg, uri))
+        (Blob.Format.jpeg, uri) )
 
   let static_sfw_multimedia : (Blob.Format.t * string) list = jpegs
 
@@ -525,5 +525,5 @@ module Metadata_metadata = struct
     Lwt.return
       (List.find_map static_sfw_multimedia ~f:(function
         | fmt, k when String.equal k uri -> Some fmt
-        | _ -> None))
+        | _ -> None ) )
 end
