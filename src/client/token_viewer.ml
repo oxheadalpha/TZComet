@@ -220,7 +220,6 @@ let error_try_again :
     -> [> Html_types.div] Meta_html.H5.elt =
  fun try_again_action msg e ->
   let open Meta_html in
-  dbgf "**** error_try_again ****" ;
   Bootstrap.alert ~kind:`Danger
     ( h3 (t "Failed To Fetch The Token 😿")
     % div e % hr ()
@@ -234,24 +233,19 @@ let show_multimedia :
     -> Contract_metadata.Token.t
     -> [> Html_types.div] Meta_html.H5.elt =
  fun ctxt {main_multimedia; address; id} ->
-  dbgf "*** entered show_multimedia ***" ;
   let open Contract_metadata.Multimedia in
   let open Meta_html in
   match main_multimedia with
-  | None ->
-      dbgf "*** match main_multimedia - None ***" ;
-      Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
+  | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
   | Some (Error exn) ->
-      dbgf "*** match main_multimedia - Error ***" ;
-      let failm msg =
-        Decorate_error.raise
-          Message.(Fmt.kstr t "Fetching %s/%d:" address id %% msg) in
-      failm Message.(Fmt.kstr t "*** Error with the multimedia ***")
-      (* Bootstrap.alert ~kind:`Danger *)
-      (*   ( t "Error while getting multimedia content:" *)
-      (*   %% Errors_html.exception_html ctxt exn ) *)
+      let not_caught =
+        "*** match main_multimedia - This error should have been caught in \
+         Contract_metadata.token_viewer! ***" in
+      dbgf "%S" not_caught ;
+      Bootstrap.alert ~kind:`Danger
+        ( t "Error while getting multimedia content??"
+        %% Errors_html.exception_html ctxt exn )
   | Some (Ok (title, mm)) ->
-      dbgf "*** match main_multimedia - Some ***" ;
       let open Contract_metadata.Multimedia in
       let maybe_censor f =
         if mm.sfw || State.always_show_multimedia ctxt then f ()
@@ -328,7 +322,6 @@ let show_token ctxt
       ; tzip21 } =
   let open Meta_html in
   let open Contract_metadata.Content.Tzip_021 in
-  dbgf "*** Entered show_token ***" ;
   let warning = function
     | `Fetching_uri (uri, e) ->
         t "Fetching URI" %% ct uri %% Errors_html.exception_html ctxt e
@@ -435,16 +428,12 @@ let show_token ctxt
       ~exn_to_html:(Errors_html.exception_html ctxt)
       Lwt.Infix.(
         fun ~mkexn () ->
-          logm
-            Message.(t "*** About to call token_fetch from within show_token") ;
-          dbgf "*** calling token_fetch from wrapped_token_fetch... ***" ;
           Contract_metadata.Token.token_fetch ctxt ~address ~id ~log:logm
           >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) in
   let main_content =
     let err_str = "*** Error getting multimedia content ***" in
     let tok_wip = Async_work.empty () in
     let _ = wrapped_token_fetch tok_wip in
-    dbgf "*** calling Async_work.render from show_token... ***" ;
     h3 ~a:[style "text-align: center"] metaname
     % div
         ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
@@ -568,8 +557,8 @@ let render ctxt =
                       (make_help ~validity:token_id_valid ~input:token_id
                          (t "A natural number.") ) )
              % item ""
-                 (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action)
-             ) ) in
+                 (make_button (t "Go 🎬") ~active:form_ready_to_go
+                    enter_action ) ) ) in
   let second_form =
     let control s = small (t s) in
     div
@@ -589,13 +578,7 @@ let render ctxt =
           (item "text-align: center"
              (make_check_box
                 (State.always_show_multimedia_bidirectional ctxt)
-                ~help:
-                  (t
-                     "Always show unknown multimedia."
-                     (* State.get_always_show_multimedia ctxt
-                        |> Reactive.bind ~f:(function
-                             | true -> t "Hide unknown multimedia by default."
-                             | false -> t "Always show unknown multimedia.") *) )
+                ~help:(t "Always show unknown multimedia.")
                 ~label:
                   ( t " YOLO Mode"
                   %% Reactive.bind (State.get_always_show_multimedia ctxt)
@@ -609,10 +592,9 @@ let render ctxt =
               enter_action ()
             with _ -> () ) ) in
   let gateway_err_str =
-    "💡 This could be that the token does not exist, that a public Tezos node \
-     is having trouble responding, or that an IPFS gateway is limiting \
+    "💡 This could be that the token does not exist, that a public Tezos \
+     node is having trouble responding, or that an IPFS gateway is limiting \
      requests ⇒" in
-  dbgf "*** calling Async_work.render from Token_viewer.render... ***" ;
   State.if_explorer_should_go ctxt enter_action ;
   h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
   % top_form % second_form
