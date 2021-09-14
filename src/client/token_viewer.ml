@@ -557,8 +557,8 @@ let render ctxt =
                       (make_help ~validity:token_id_valid ~input:token_id
                          (t "A natural number.") ) )
              % item ""
-                 (make_button (t "Go 🎬") ~active:form_ready_to_go
-                    enter_action ) ) ) in
+                 (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action)
+             ) ) in
   let second_form =
     let control s = small (t s) in
     div
@@ -592,8 +592,8 @@ let render ctxt =
               enter_action ()
             with _ -> () ) ) in
   let gateway_err_str =
-    "💡 This could be that the token does not exist, that a public Tezos \
-     node is having trouble responding, or that an IPFS gateway is limiting \
+    "💡 This could be that the token does not exist, that a public Tezos node \
+     is having trouble responding, or that an IPFS gateway is limiting \
      requests ⇒" in
   State.if_explorer_should_go ctxt enter_action ;
   h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
