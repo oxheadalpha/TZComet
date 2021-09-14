@@ -696,11 +696,6 @@ module Multimedia = struct
 
   let prepare_and_guess ~mime_types (ctxt : _ Context.t) ~uri ~log =
     let open Lwt.Infix in
-    (* let rec first_some = function
-         | [] -> Lwt.return_none
-         | f :: t -> (
-             f () >>= function Some s -> Lwt.return_some s | None -> first_some t )
-       in *)
     let found ~format ?(sfw = false) ~converted uri =
       Lwt.return {uri; sfw; format; converted_uri= converted} in
     let known_mime_type = List.Assoc.find mime_types ~equal:String.equal uri in
@@ -745,11 +740,7 @@ module Multimedia = struct
                 Lwt.return (format, src) )
               (function
                 | Decorate_error.E _ as e -> raise e
-                | other -> failf "failed to fetch the URI: %a" Exn.pp other )
-            (* Decorate_error.raise
-                           Message.(t
-                        raise (mkexn (Errors_html.exception_html ctxt e)))
-                    >>= fun content -> *) )
+                | other -> failf "failed to fetch the URI: %a" Exn.pp other ) )
       | Error e, _ ->
           failf "failed to validate the URI: %a"
             Tezos_error_monad.Error_monad.pp_print_error e in
@@ -860,7 +851,7 @@ module Token = struct
         Some s
     | None, None -> None
 
-  let fetch (ctxt : _ Context.t) ~address ~id ~log : t Lwt.t =
+  let token_fetch (ctxt : _ Context.t) ~address ~id ~log : t Lwt.t =
     let open Lwt.Infix in
     let logs prefix msg = log Message.(t prefix %% t "👉" %% t msg) in
     let warnings = ref [] in
@@ -939,10 +930,10 @@ module Token = struct
     let get_token_metadata_map_with_big_map ~log ~node big_map_id =
       Query_nodes.Node.micheline_value_of_big_map_at_nat ctxt node ~log
         ~big_map_id ~key:id in
-    let log = logs "Fetching token-metadata" in
+    let meta_log = logs "Fetching token-metadata" in
     Query_nodes.find_node_with_contract ctxt address
     >>= fun node ->
-    Fmt.kstr log "Using %s" node.Query_nodes.Node.name ;
+    Fmt.kstr meta_log "Using %s" node.Query_nodes.Node.name ;
     begin
       begin
         match (token_metadata_big_map, token_metadata_validation) with
@@ -952,10 +943,10 @@ module Token = struct
             | Some (Ok s) -> Lwt.return s
             | _ -> failm Message.(Fmt.kstr t "Token-metadata view failed.") )
         | Some big_map_id, _ ->
-            get_token_metadata_map_with_big_map ~log ~node big_map_id
+            get_token_metadata_map_with_big_map ~log:meta_log ~node big_map_id
       end
       >>= function
-      | Prim (_, "Pair", [_; full_map], _) ->
+      | Prim (_, "Pair", [_; full_map], _) -> (
           let key_values =
             Michelson.Partial_type.micheline_string_bytes_map_exn full_map in
           let get l ~k = List.Assoc.find l k ~equal:String.equal in
@@ -975,7 +966,7 @@ module Token = struct
                 Lwt.catch
                   (fun () ->
                     Uri.fetch ctxt uri ~log:(fun s ->
-                        Fmt.kstr log "At %s ‣ %s"
+                        Fmt.kstr meta_log "At %s ‣ %s"
                           (ellipsize_string u ~max_length:16 ~ellipsis:"…")
                           s )
                     >>= fun s -> Lwt.return_some (u, Ezjsonm.value_from_string s)
@@ -1029,7 +1020,7 @@ module Token = struct
                 (fun () ->
                   Multimedia.prepare_and_guess ~uri
                     ~log:(fun s ->
-                      Fmt.kstr log "Preparing/Guessing %s ⏩ %s"
+                      Fmt.kstr meta_log "Preparing/Guessing %s ⏩ %s"
                         (ellipsize_string uri ~max_length:16 ~ellipsis:"…")
                         s )
                     ctxt
@@ -1050,11 +1041,15 @@ module Token = struct
              |"KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton" ->
                 [`Hic_et_nunc id]
             | _ -> [] in
-          Lwt.return
-            (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia ?total_supply
-               ~metadata:metadata_contents
-               ~network:node.Query_nodes.Node.network ~special_knowledge address
-               id ~warnings:!warnings )
+          match main_multimedia with
+          | Some (Error exn) ->
+              failm Message.(Fmt.kstr t "Error with the multimedia.")
+          | _ ->
+              Lwt.return
+                (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia
+                   ?total_supply ~metadata:metadata_contents
+                   ~network:node.Query_nodes.Node.network ~special_knowledge
+                   address id ~warnings:!warnings ) )
       | other ->
           Decorate_error.raise
             Message.(
