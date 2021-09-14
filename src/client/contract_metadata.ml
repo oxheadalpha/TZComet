@@ -1041,12 +1041,10 @@ module Token = struct
              |"KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton" ->
                 [`Hic_et_nunc id]
             | _ -> [] in
-          (* * *)
           match main_multimedia with
           | Some (Error exn) ->
-              failm Message.(Fmt.kstr t "*** Error with the multimedia ***")
+              failm Message.(Fmt.kstr t "Error with the multimedia.")
           | _ ->
-              (* * *)
               Lwt.return
                 (make ?symbol ?name ?decimals ~tzip21 ?main_multimedia
                    ?total_supply ~metadata:metadata_contents

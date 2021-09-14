@@ -239,8 +239,8 @@ let show_multimedia :
   | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
   | Some (Error exn) ->
       let not_caught =
-        "*** match main_multimedia - This error should have been caught in \
-         Contract_metadata.token_viewer! ***" in
+        "match in main_multimedia - This error should have been caught in \
+         Contract_metadata.token_viewer!" in
       dbgf "%S" not_caught ;
       Bootstrap.alert ~kind:`Danger
         ( t "Error while getting multimedia content??"
@@ -431,7 +431,7 @@ let show_token ctxt
           Contract_metadata.Token.token_fetch ctxt ~address ~id ~log:logm
           >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) in
   let main_content =
-    let err_str = "*** Error getting multimedia content ***" in
+    let err_str = "Error getting multimedia content" in
     let tok_wip = Async_work.empty () in
     let _ = wrapped_token_fetch tok_wip in
     h3 ~a:[style "text-align: center"] metaname
