@@ -721,11 +721,7 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
   let validate_address input_value =
     match B58_hashes.check_b58_kt1_hash input_value with
     | _ -> Some input_value
-    | exception _ when String.is_prefix input_value ~prefix:"KT" -> None
-    | exception _ -> (
-      match Contract_metadata.Uri.validate input_value with
-      | Ok uri, _ -> Some input_value
-      | Error e, _ -> None ) in
+    | exception _ -> None in
   let token_viewer_link ctxt =
     let input_value = State.explorer_input_value ctxt in
     let validated = validate_address input_value in
