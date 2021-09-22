@@ -328,6 +328,24 @@ let link_to_explorer ctxt content ~search =
                false ) ) ]
     content
 
+let link_to_token_viewer ctxt content ~token_address ~token_id =
+  let open Meta_html in
+  let fragment = make_fragment ~side_effects:false ctxt in
+  let href =
+    Reactive.(map fragment) ~f:(fun frg ->
+        "#" ^ Fragment.(to_string (change_for_page frg Page.Token_viewer)) )
+  in
+  a
+    ~a:
+      [ H5.a_href href
+      ; H5.a_onclick
+          (Tyxml_lwd.Lwdom.attr (fun _ ->
+               Reactive.set (get ctxt).token_address token_address ;
+               Reactive.set (get ctxt).token_id token_id ;
+               set_page ctxt (`Changing_to Page.Token_viewer) () ;
+               false ) ) ]
+    content
+
 let if_explorer_should_go state f =
   if
     (get state).explorer_go |> Lwd.peek
