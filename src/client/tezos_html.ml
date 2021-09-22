@@ -234,6 +234,12 @@ let open_in_editor ?(and_explorer = false) ctxt text =
          t "," %% State.link_to_explorer ctxt (t "Explore") ~search:text
        else empty () ) )
 
+let open_in_token_viewer ctxt ~token_address ~token_id =
+  small
+    (parens
+       (State.link_to_token_viewer ctxt ~token_address ~token_id
+          (t "Open in token viewer") ) )
+
 let tzip16_uri_short ctxt s =
   Bootstrap.color `Info (Bootstrap.monospace (t s))
   %% open_in_editor ctxt s ~and_explorer:true
@@ -695,6 +701,7 @@ let show_extras ctxt (extr : (String.t * String.t, Message.t) Result.t List.t) =
 let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
     ?low_level_contents ?tzip_021 ctxt ~id ~warnings =
   let open Contract_metadata.Content in
+  let open Tzip_021 in
   let or_empty o f = match o with None -> empty () | Some o -> f o in
   let basics =
     List.filter_opt
@@ -711,13 +718,24 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                 ~sep:(fun () -> t " | ")
                 ~last_sep:(fun () -> t " | ") )
         %% t "]" in
+  let validate_address input_value =
+    match B58_hashes.check_b58_kt1_hash input_value with
+    | _ -> Some input_value
+    | exception _ -> None in
+  let token_viewer_link ctxt =
+    let input_value = State.explorer_input_value ctxt in
+    let validated = validate_address input_value in
+    match validated with
+    | Some s ->
+        open_in_token_viewer ctxt ~token_address:s ~token_id:(Int.to_string id)
+    | None -> empty () in
   Bootstrap.bordered ~kind:`Info ~a:[style "padding: 5px"]
     ( Bootstrap.div_lead
         ( Fmt.kstr bt "Token %d" id
         %% or_empty name (function
              | "" -> Bootstrap.color `Danger (t "<empty-name>")
              | n -> Bootstrap.color `Primary (Fmt.kstr it "“%s”" n) )
-        %% basics )
+        %% basics %% token_viewer_link ctxt )
     %% ( match List.rev_map ~f:snd warnings with
        | [] -> empty ()
        | more ->
@@ -726,8 +744,7 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
              (Bootstrap.alert ~kind:`Warning
                 ( Fmt.kstr bt "TZIP-012 Warning%s:" (if one then "" else "s")
                 %% if one then List.hd_exn more else itemize more ) ) )
-    %% or_empty tzip_021 (fun tzip21 ->
-           let open Tzip_021 in
+    %% or_empty tzip_021 (fun (tzip21 : Contract_metadata.Content.Tzip_021.t) ->
            if is_empty tzip21 then div (t "No TZIP-021 was found by TZComet.")
            else
              div
