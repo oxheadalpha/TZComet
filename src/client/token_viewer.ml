@@ -465,6 +465,27 @@ let show_token ctxt
         Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
           ~id ~warnings )
 
+(* TODO: move the appropriate things to Import, meta_html, etc...  *)
+let link_to_clipboard hidden hidden_id token_address token_id =
+  let open Js_of_ocaml.Dom_html in
+  let open Js_of_ocaml.Js.Unsafe in
+  let open Js_of_ocaml in
+  let select_all_str = Js.string "selectAll" in
+  let b = Js.bool true in
+  let tmp_url = "file:///home/marklnichols/dev/TZComet/_build/website/index.html#/token/KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc/15" in
+  let js_none = Js.Opt.option None in
+  let ellie  = getElementById hidden_id in
+
+  (* TODO: timing issues with this... *)
+  Reactive.set hidden tmp_url;
+  (* let _ = meth_call ellie "value" [|(inject "abc");|] in *)
+
+  let _ = meth_call ellie "select" [||] in
+
+  let _ = document##execCommand select_all_str b js_none in
+  let _ = meth_call document "execCommand" [|(inject "copy");|] in
+  ()
+
 let render ctxt =
   let open Meta_html in
   let result = Async_work.empty () in
@@ -472,6 +493,10 @@ let render ctxt =
   let token_id_bidi = Reactive.Bidirectional.of_var token_id in
   let token_address = State.token_address ctxt in
   let token_address_bidi = Reactive.Bidirectional.of_var token_address in
+  let hidden_id = "hidden_id" in
+  let hidden_value = Reactive.var "" in
+  let hidden_value_bidi = Reactive.Bidirectional.of_var hidden_value in
+
   let is_address_valid k =
     match B58_hashes.check_b58_kt1_hash k with
     | _ -> true
@@ -509,6 +534,11 @@ let render ctxt =
       && is_address_valid (Reactive.peek token_address)
       && not (Async_work.peek_busy result)
     then go_action ctxt ~wip:result in
+
+  (* TODO: anything needed here? *)
+  let hidden_value_action () =
+    dbgf "%S" "Hidden value action!" ; () in
+
   let _once_in_tab = enter_action () in
   let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
@@ -543,7 +573,16 @@ let render ctxt =
                       Reactive.set token_address addr ;
                       Reactive.set token_id (Int.to_string id) ;
                       enter_action () ) )
-             % item "min-width: 25em"
+               % (make_input
+                    ~id:hidden_id
+                    ~placeholder:(Reactive.pure "see?")
+                    ~enter_action:hidden_value_action hidden_value_bidi)
+               % (make_button (t "Copy to clipboard") ~active:controls_active
+                    (fun () ->
+                      let token_id = State.token_id ctxt in
+                      let token_address = State.token_address ctxt in
+                      link_to_clipboard hidden_value hidden_id token_address token_id ) )
+               % item "min-width: 25em"
                  (make_input
                     ~placeholder:(Reactive.pure "Contract address")
                     ~enter_action token_address_bidi
