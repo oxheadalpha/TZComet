@@ -465,23 +465,34 @@ let show_token ctxt
         Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
           ~id ~warnings )
 
-(* TODO: move the appropriate things to Import, meta_html, etc...  *)
-let link_to_clipboard hidden hidden_id token_address token_id =
+let link_to_clipboard ctxt hidden hidden_id token_address token_id =
   let open Js_of_ocaml.Dom_html in
   let open Js_of_ocaml.Js.Unsafe in
   let open Js_of_ocaml in
   let select_all_str = Js.string "selectAll" in
   let b = Js.bool true in
-  let tmp_url = "file:///home/marklnichols/dev/TZComet/_build/website/index.html#/token/KT1W4wh1qDc2g22DToaTfnCtALLJ7jHn38Xc/15" in
+
+  let protocol = Url.Current.protocol in
+  let slashes = if String.equal protocol "file:"
+    then "//"
+    else "/" in
+  let host = Url.Current.host in
+  let port = match Url.Current.port with
+    | Some p -> Int.to_string p ^ ":"
+    | None -> "" in
+  let host_port = if String.equal (host ^ port) ""
+    then ""
+      else host ^ port ^ "/" in
+  let path_string = Url.Current.path_string in
+  let path = Fmt.str "token/%s/%s" token_address token_id in
+  let tv_uri = protocol ^ slashes ^ host_port ^ path_string ^ "#/" ^ path in
   let js_none = Js.Opt.option None in
   let ellie  = getElementById hidden_id in
 
   (* TODO: timing issues with this... *)
-  Reactive.set hidden tmp_url;
-  (* let _ = meth_call ellie "value" [|(inject "abc");|] in *)
+  Reactive.set hidden tv_uri;
 
   let _ = meth_call ellie "select" [||] in
-
   let _ = document##execCommand select_all_str b js_none in
   let _ = meth_call document "execCommand" [|(inject "copy");|] in
   ()
@@ -536,6 +547,12 @@ let render ctxt =
     then go_action ctxt ~wip:result in
 
   (* TODO: anything needed here? *)
+  (* val change : Dom_html.event Js.t typ *)
+  (* or *)
+  (* val input : Dom_html.event Js.t typ *)
+  (* Dom_html.addEventListener tbd change *)
+  (*   (Dom_html.handler (fun ev -> *)
+  (*        Js._true)) *)
   let hidden_value_action () =
     dbgf "%S" "Hidden value action!" ; () in
 
@@ -579,9 +596,9 @@ let render ctxt =
                     ~enter_action:hidden_value_action hidden_value_bidi)
                % (make_button (t "Copy to clipboard") ~active:controls_active
                     (fun () ->
-                      let token_id = State.token_id ctxt in
-                      let token_address = State.token_address ctxt in
-                      link_to_clipboard hidden_value hidden_id token_address token_id ) )
+                      let token_id = Reactive.peek (State.token_id ctxt) in
+                      let token_address = Reactive.peek (State.token_address ctxt) in
+                      link_to_clipboard ctxt hidden_value hidden_id token_address token_id ) )
                % item "min-width: 25em"
                  (make_input
                     ~placeholder:(Reactive.pure "Contract address")
