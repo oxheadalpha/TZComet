@@ -344,6 +344,7 @@ module Bootstrap = struct
         | Input of
             { input: input
             ; placeholder: string Reactive.t option
+            ; hidden: bool Reactive.t
             ; content: string Reactive.Bidirectional.t }
         | Check_box of {input: input; checked: bool Reactive.Bidirectional.t}
         | Button of
@@ -414,7 +415,7 @@ module Bootstrap = struct
               ~a:[classes ["form-row"]]
               (List.map l ~f:(fun (cols, item) ->
                    to_div ~enter_action ~cols item ) )
-        | Input {input= {label= lbl; id; help; active}; placeholder; content} ->
+        | Input {input= {label= lbl; id; help; active}; placeholder; hidden; content} ->
             generic_input ?id ?help ~kind:`Text lbl ~active ?placeholder
               [ a_value (Reactive.Bidirectional.get content)
               ; a_oninput
@@ -478,9 +479,9 @@ module Bootstrap = struct
 
     open Item
 
-    let input ?(active = Reactive.pure true) ?id ?placeholder ?help ?label
+    let input ?(active = Reactive.pure true) ?id ?placeholder ?help ?(hidden = Reactive.pure true) ?label
         content =
-      Input {input= {label; id; help; active}; placeholder; content}
+      Input {input= {label; id; help; active}; placeholder; hidden; content}
 
     let check_box ?(active = Reactive.pure true) ?id ?help ?label checked =
       Check_box {input= {label; id; help; active}; checked}

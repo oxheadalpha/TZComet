@@ -2,9 +2,29 @@ open! Import
 
 open Js_of_ocaml
 
+let hidden_id = "hidden_id"
+let hidden_var : string Lwd.var = Reactive.var ""
+
 let go_action ctxt ~wip =
   let token_id = State.token_id ctxt |> Reactive.peek in
   let address = State.token_address ctxt |> Reactive.peek in
+
+  let protocol = Url.Current.protocol in
+  let slashes = if String.equal protocol "file:"
+    then "//"
+    else "/" in
+  let host = Url.Current.host in
+  let port = match Url.Current.port with
+    | Some p -> Int.to_string p ^ ":"
+    | None -> "" in
+  let host_port = if String.equal (host ^ port) ""
+    then ""
+    else host ^ port ^ "/" in
+  let path_string = Url.Current.path_string in
+  let path = Fmt.str "token/%s/%s" address token_id in
+  let tv_uri = protocol ^ slashes ^ host_port ^ path_string ^ "#/" ^ path in
+  let _ = Reactive.set hidden_var tv_uri in
+
   let _logh msg = Async_work.log wip msg in
   let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
   Async_work.reinit wip ;
@@ -467,36 +487,10 @@ let show_token ctxt
         Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
           ~id ~warnings )
 
-(* let set_input_change_listener *)
-(*   : target_str:string *)
-(*     -> action:(Dom_html.event Js.t -> bool Js.t) *)
-(*     -> Dom_html.event_listener_id = *)
-(*   fun ~target_str ~action -> *)
-(*   let open Dom_html in *)
-(*   dbgf "HIDDEN set_input_change_listener - getting element via id: %S" target_str; *)
-(*   let target  = getElementById_exn target_str in *)
-(*   let r = addEventListener target Event.change (Dom.handler action) (Js.bool true) in *)
-(*   r *)
-
-let link_to_clipboard hidden hidden_id token_address token_id =
+let link_to_clipboard token_address token_id =
   let open Dom_html in
   let open Js in
 
-  let protocol = Url.Current.protocol in
-  let slashes = if String.equal protocol "file:"
-    then "//"
-    else "/" in
-  let host = Url.Current.host in
-  let port = match Url.Current.port with
-    | Some p -> Int.to_string p ^ ":"
-    | None -> "" in
-  let host_port = if String.equal (host ^ port) ""
-    then ""
-      else host ^ port ^ "/" in
-  let path_string = Url.Current.path_string in
-  let path = Fmt.str "token/%s/%s" token_address token_id in
-  let tv_uri = protocol ^ slashes ^ host_port ^ path_string ^ "#/" ^ path in
-  let _ = Reactive.set hidden tv_uri in
   let ellie  = getElementById_exn hidden_id in
   let () = Unsafe.meth_call ellie "select" [||] in
   let () = document##execCommand (Js.string "selectAll") (Js.bool true) (Js.Opt.option None) in
@@ -511,9 +505,7 @@ let render ctxt =
   let token_id_bidi = Reactive.Bidirectional.of_var token_id in
   let token_address = State.token_address ctxt in
   let token_address_bidi = Reactive.Bidirectional.of_var token_address in
-  let hidden_id = "hidden_id" in
-  let hidden_value = Reactive.var "" in
-  let hidden_value_bidi = Reactive.Bidirectional.of_var hidden_value in
+  let hidden_value_bidi = Reactive.Bidirectional.of_var hidden_var in
 
   let is_address_valid k =
     match B58_hashes.check_b58_kt1_hash k with
@@ -555,13 +547,9 @@ let render ctxt =
 
   let _once_in_tab = enter_action () in
 
-  (* TODO: remove this *)
-  let hidden_value_action () =
-    dbgf "%S" "Hidden value action!" ; () in
-
-  let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
+  let make_input ?active ?id ?placeholder ?help ?label ?enter_action ?hidden bidi =
     Bootstrap.Form.(
-      make ?enter_action [input ?active ?id ?placeholder ?help ?label bidi])
+      make ?enter_action [input ?active ?id ?placeholder ?help ?label ?hidden bidi])
   in
   let make_check_box ?active ?id ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
@@ -595,12 +583,12 @@ let render ctxt =
                % (make_input
                     ~id:hidden_id
                     ~placeholder:(Reactive.pure "see?")
-                    ~enter_action:hidden_value_action hidden_value_bidi)
+                    hidden_value_bidi)
            % (make_button (t "Copy to clipboard") ~active:controls_active
                     (fun () ->
                       let token_id = Reactive.peek (State.token_id ctxt) in
                       let token_address = Reactive.peek (State.token_address ctxt) in
-                      link_to_clipboard hidden_value hidden_id token_address token_id ) )
+                      link_to_clipboard token_address token_id ) )
                % item "min-width: 25em"
                  (make_input
                     ~placeholder:(Reactive.pure "Contract address")
