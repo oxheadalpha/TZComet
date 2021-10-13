@@ -1,5 +1,7 @@
 open! Import
 
+open Js_of_ocaml
+
 let go_action ctxt ~wip =
   let token_id = State.token_id ctxt |> Reactive.peek in
   let address = State.token_address ctxt |> Reactive.peek in
@@ -465,12 +467,20 @@ let show_token ctxt
         Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
           ~id ~warnings )
 
-let link_to_clipboard ctxt hidden hidden_id token_address token_id =
-  let open Js_of_ocaml.Dom_html in
-  let open Js_of_ocaml.Js.Unsafe in
-  let open Js_of_ocaml in
-  let select_all_str = Js.string "selectAll" in
-  let b = Js.bool true in
+(* let set_input_change_listener *)
+(*   : target_str:string *)
+(*     -> action:(Dom_html.event Js.t -> bool Js.t) *)
+(*     -> Dom_html.event_listener_id = *)
+(*   fun ~target_str ~action -> *)
+(*   let open Dom_html in *)
+(*   dbgf "HIDDEN set_input_change_listener - getting element via id: %S" target_str; *)
+(*   let target  = getElementById_exn target_str in *)
+(*   let r = addEventListener target Event.change (Dom.handler action) (Js.bool true) in *)
+(*   r *)
+
+let link_to_clipboard hidden hidden_id token_address token_id =
+  let open Dom_html in
+  let open Js in
 
   let protocol = Url.Current.protocol in
   let slashes = if String.equal protocol "file:"
@@ -486,19 +496,16 @@ let link_to_clipboard ctxt hidden hidden_id token_address token_id =
   let path_string = Url.Current.path_string in
   let path = Fmt.str "token/%s/%s" token_address token_id in
   let tv_uri = protocol ^ slashes ^ host_port ^ path_string ^ "#/" ^ path in
-  let js_none = Js.Opt.option None in
-  let ellie  = getElementById hidden_id in
-
-  (* TODO: timing issues with this... *)
-  Reactive.set hidden tv_uri;
-
-  let _ = meth_call ellie "select" [||] in
-  let _ = document##execCommand select_all_str b js_none in
-  let _ = meth_call document "execCommand" [|(inject "copy");|] in
+  let _ = Reactive.set hidden tv_uri in
+  let ellie  = getElementById_exn hidden_id in
+  let () = Unsafe.meth_call ellie "select" [||] in
+  let () = document##execCommand (Js.string "selectAll") (Js.bool true) (Js.Opt.option None) in
+  let () = Unsafe.meth_call document "execCommand" [|(Unsafe.inject "copy");|] in
   ()
 
 let render ctxt =
   let open Meta_html in
+  let open Dom_html in
   let result = Async_work.empty () in
   let token_id = State.token_id ctxt in
   let token_id_bidi = Reactive.Bidirectional.of_var token_id in
@@ -546,17 +553,12 @@ let render ctxt =
       && not (Async_work.peek_busy result)
     then go_action ctxt ~wip:result in
 
-  (* TODO: anything needed here? *)
-  (* val change : Dom_html.event Js.t typ *)
-  (* or *)
-  (* val input : Dom_html.event Js.t typ *)
-  (* Dom_html.addEventListener tbd change *)
-  (*   (Dom_html.handler (fun ev -> *)
-  (*        Js._true)) *)
+  let _once_in_tab = enter_action () in
+
+  (* TODO: remove this *)
   let hidden_value_action () =
     dbgf "%S" "Hidden value action!" ; () in
 
-  let _once_in_tab = enter_action () in
   let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
       make ?enter_action [input ?active ?id ?placeholder ?help ?label bidi])
@@ -594,11 +596,11 @@ let render ctxt =
                     ~id:hidden_id
                     ~placeholder:(Reactive.pure "see?")
                     ~enter_action:hidden_value_action hidden_value_bidi)
-               % (make_button (t "Copy to clipboard") ~active:controls_active
+           % (make_button (t "Copy to clipboard") ~active:controls_active
                     (fun () ->
                       let token_id = Reactive.peek (State.token_id ctxt) in
                       let token_address = Reactive.peek (State.token_address ctxt) in
-                      link_to_clipboard ctxt hidden_value hidden_id token_address token_id ) )
+                      link_to_clipboard hidden_value hidden_id token_address token_id ) )
                % item "min-width: 25em"
                  (make_input
                     ~placeholder:(Reactive.pure "Contract address")
