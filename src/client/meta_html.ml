@@ -330,6 +330,56 @@ module Bootstrap = struct
                    li [a ~a:[classes ["active"; "nav-link"]] label] ) ) )
   end
 
+  module Modal = struct
+    let mk_modal ~modal_id ~(modal_title:string) ~modal_body ~action =
+      let open Tyxml_lwd.Lwdom in
+      let label_id = "label_id" in
+      H5.(div
+        ~a:[ classes ["modal"; "fade"]
+           ; a_id (Lwd.pure modal_id)
+           ; a_tabindex (Lwd.pure (-1))
+           ; a_role (Lwd.pure ["dialog"])
+           ; a_aria "labelledby" (Lwd.pure [label_id])
+           ; a_aria "hidden" (Lwd.pure ["true"])
+           ]
+        [ div
+            ~a:[ classes ["modal-dialog"]
+               ; a_role (Lwd.pure (["document"])) ]
+            [ div
+                ~a:[classes ["modal-content"]]
+                [ div
+                    ~a:[classes ["modal-header"]]
+                    [ h5
+                        ~a:[ classes ["modal-title"]
+                           ; a_id (Lwd.pure label_id)]
+                    [ t modal_title]
+                    ; button
+                        ~a: [ classes ["close"]
+                            ; a_aria "label" (Reactive.pure ["Close"])
+                            ; a_user_data "dismiss" (Lwd.pure "modal") ]
+                        [ span
+                          ~a: [ a_aria "hidden" (Reactive.pure ["true"])]
+                          [ t "&times" ]
+                        ]
+                    ]
+                ; div
+                    ~a:[classes ["modal-body"]]
+                    [modal_body]
+                ; div
+                    ~a: [classes ["modal-footer"]]
+                    [ button
+                        ~a: [ classes ["btn"; "btn-secondary"]
+                            ; a_user_data "dismiss" (Lwd.pure "modal")]
+                        [ t "Close" ]
+                      ; button
+                        ~a: [classes ["btn"; "btn-primary"]]
+                        [ t "Copy link" ]
+                    ]
+                ]
+            ]
+        ])
+  end
+
   module Form = struct
     module Item = struct
       type input =
@@ -344,7 +394,7 @@ module Bootstrap = struct
         | Input of
             { input: input
             ; placeholder: string Reactive.t option
-            ; hidden: bool Reactive.t
+            ; hidden: bool
             ; content: string Reactive.Bidirectional.t }
         | Check_box of {input: input; checked: bool Reactive.Bidirectional.t}
         | Button of
@@ -354,8 +404,8 @@ module Bootstrap = struct
 
       let rec to_div ?(enter_action = fun () -> ()) ?cols =
         let open H5 in
-        let generic_input ~active ?id ?help ?placeholder ~kind lbl more_a =
-          let the_id = Fresh_id.of_option "input-item" id in
+        let generic_input ~active ?id ?help ?placeholder ?(hidden = false) ~kind lbl more_a =
+            let the_id = Fresh_id.of_option "input-item" id in
           let help_id = the_id ^ "Help" in
           let full_label =
             Option.value_map ~default:(empty ()) lbl ~f:(fun lbl ->
@@ -365,6 +415,7 @@ module Bootstrap = struct
                       classes
                         ( match kind with
                         | `Text -> []
+                        | `Hidden -> []
                         | `Checkbox -> ["form-check-label"] ) ]
                   [lbl] ) in
           let full_input =
@@ -372,6 +423,7 @@ module Bootstrap = struct
               [ classes
                   [ ( match kind with
                     | `Text -> "form-control"
+                    | `Hidden -> "hidden_form-control"
                     | `Checkbox -> "form-check-input" ) ]
               ; a_id (Reactive.pure the_id)
               ; a_aria "describedBy" (Reactive.pure [help_id])
@@ -398,6 +450,7 @@ module Bootstrap = struct
           let div_content =
             match kind with
             | `Text -> [full_label; full_input; full_help]
+            | `Hidden -> [full_label; full_input; full_help]
             | `Checkbox -> [full_input; full_label; full_help] in
           let cols_class =
             match cols with
@@ -407,6 +460,7 @@ module Bootstrap = struct
           let div_classes =
             match kind with
             | `Text -> cols_class
+            | `Hidden -> cols_class
             | `Checkbox -> "form-check" :: cols_class in
           div ~a:[classes ("form-group" :: div_classes)] div_content in
         function
@@ -416,7 +470,11 @@ module Bootstrap = struct
               (List.map l ~f:(fun (cols, item) ->
                    to_div ~enter_action ~cols item ) )
         | Input {input= {label= lbl; id; help; active}; placeholder; hidden; content} ->
-            generic_input ?id ?help ~kind:`Text lbl ~active ?placeholder
+          let k = match hidden with
+          | true -> `Hidden
+          | false -> `Text in
+            generic_input ?id ?help ~kind:k lbl ~active ~hidden ?placeholder
+              (* l @ *)
               [ a_value (Reactive.Bidirectional.get content)
               ; a_oninput
                   (Tyxml_lwd.Lwdom.attr
@@ -475,11 +533,11 @@ module Bootstrap = struct
               | None -> base
               | Some n -> Fmt.str "col-md-%d" n :: base in
             div ~a:[classes cls] [the_div]
-    end
+   end
 
     open Item
 
-    let input ?(active = Reactive.pure true) ?id ?placeholder ?help ?(hidden = Reactive.pure true) ?label
+    let input ?(active = Reactive.pure true) ?id ?placeholder ?help ?(hidden = false) ?label
         content =
       Input {input= {label; id; help; active}; placeholder; hidden; content}
 

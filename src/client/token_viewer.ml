@@ -487,15 +487,14 @@ let show_token ctxt
         Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
           ~id ~warnings )
 
-let link_to_clipboard token_address token_id =
+let link_to_clipboard ctxt src_id =
   let open Dom_html in
   let open Js in
 
-  let ellie  = getElementById_exn hidden_id in
+  let ellie  = getElementById_exn src_id in
   let () = Unsafe.meth_call ellie "select" [||] in
   let () = document##execCommand (Js.string "selectAll") (Js.bool true) (Js.Opt.option None) in
-  let () = Unsafe.meth_call document "execCommand" [|(Unsafe.inject "copy");|] in
-  ()
+  Unsafe.meth_call document "execCommand" [|(Unsafe.inject "copy");|]
 
 let render ctxt =
   let open Meta_html in
@@ -547,9 +546,10 @@ let render ctxt =
 
   let _once_in_tab = enter_action () in
 
-  let make_input ?active ?id ?placeholder ?help ?label ?enter_action ?hidden bidi =
-    Bootstrap.Form.(
-      make ?enter_action [input ?active ?id ?placeholder ?help ?label ?hidden bidi])
+  (* TODO: get rid of the hidden attribute and rename anything containing 'hidden'*)
+  let make_input ?active ?id ?placeholder ?help ?label ?enter_action ?(hidden = false) bidi =
+      Bootstrap.Form.(
+      make ?enter_action [input ?active ?id ?placeholder ?help ?label ~hidden bidi])
   in
   let make_check_box ?active ?id ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
@@ -560,6 +560,30 @@ let render ctxt =
         ~action in
     Reactive.bind active ~f in
   let item s c = div ~a:[style s] c in
+
+  let clipboard_modal modal_id ctxt =
+    let copy_src = (make_input ~id:hidden_id ~placeholder:(Reactive.pure "see?") hidden_value_bidi) in
+    let body_div =
+      H5.(
+      div
+        ~a:[]
+        [ copy_src
+        ; t "test body text"]) in
+    Bootstrap.Modal.mk_modal
+      ~modal_id
+      ~modal_title:"Copy to clipboard"
+      ~modal_body:body_div
+      ~action:(link_to_clipboard ctxt) in
+
+  let launch_clipboard_modal_btn ctxt modal_id =
+    H5.(
+      button
+      ~a: [ classes ["btn"; "btn-primary"]
+          ; a_user_data "toggle" (Lwd.pure "modal")
+          ; a_user_data "target" (Lwd.pure ("#"^modal_id)) ]
+      [t "Copy to clipboard"]) in
+
+  let modal_id = "clipboard_modal_id" in
   let top_form =
     Browser_window.width ctxt
     |> Reactive.bind ~f:(fun bro_width ->
@@ -580,16 +604,7 @@ let render ctxt =
                       Reactive.set token_address addr ;
                       Reactive.set token_id (Int.to_string id) ;
                       enter_action () ) )
-               % (make_input
-                    ~id:hidden_id
-                    ~placeholder:(Reactive.pure "see?")
-                    hidden_value_bidi)
-           % (make_button (t "Copy to clipboard") ~active:controls_active
-                    (fun () ->
-                      let token_id = Reactive.peek (State.token_id ctxt) in
-                      let token_address = Reactive.peek (State.token_address ctxt) in
-                      link_to_clipboard token_address token_id ) )
-               % item "min-width: 25em"
+             % item "min-width: 25em"
                  (make_input
                     ~placeholder:(Reactive.pure "Contract address")
                     ~enter_action token_address_bidi
@@ -604,7 +619,12 @@ let render ctxt =
                          (t "A natural number.") ) )
              % item ""
                  (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action)
+             % item ""
+               (clipboard_modal modal_id ctxt)
+             % item ""
+               (launch_clipboard_modal_btn ctxt modal_id)
              ) ) in
+
   let second_form =
     let control s = small (t s) in
     div
@@ -637,6 +657,7 @@ let render ctxt =
               Reactive.set token_id (Int.to_string (current + 1)) ;
               enter_action ()
             with _ -> () ) ) in
+
   let gateway_err_str =
     "💡 This could be that the token does not exist, that a public Tezos node \
      is having trouble responding, or that an IPFS gateway is limiting \
