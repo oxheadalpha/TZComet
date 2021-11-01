@@ -2,8 +2,8 @@ open! Import
 
 open Js_of_ocaml
 
-let hidden_id = "hidden_id"
-let hidden_var : string Lwd.var = Reactive.var ""
+let copy_src_id = "copy_src_id"
+let copy_src_var : string Lwd.var = Reactive.var ""
 
 let go_action ctxt ~wip =
   let token_id = State.token_id ctxt |> Reactive.peek in
@@ -23,7 +23,7 @@ let go_action ctxt ~wip =
   let path_string = Url.Current.path_string in
   let path = Fmt.str "token/%s/%s" address token_id in
   let tv_uri = protocol ^ slashes ^ host_port ^ path_string ^ "#/" ^ path in
-  let _ = Reactive.set hidden_var tv_uri in
+  let _ = Reactive.set copy_src_var tv_uri in
 
   let _logh msg = Async_work.log wip msg in
   let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
@@ -491,10 +491,14 @@ let link_to_clipboard ctxt src_id =
   let open Dom_html in
   let open Js in
 
-  let ellie  = getElementById_exn src_id in
-  let () = Unsafe.meth_call ellie "select" [||] in
-  let () = document##execCommand (Js.string "selectAll") (Js.bool true) (Js.Opt.option None) in
-  Unsafe.meth_call document "execCommand" [|(Unsafe.inject "copy");|]
+  dbgf "getting element by Id for %S" src_id;
+    match getElementById_opt src_id with
+    | None -> dbgf "getElementByIdOpt returns None for %S" src_id;
+              ();
+    | Some ele ->
+      let () = Unsafe.meth_call ele "select" [||] in
+      let () = document##execCommand (Js.string "selectAll") (Js.bool true) (Js.Opt.option None) in
+      Unsafe.meth_call document "execCommand" [|(Unsafe.inject "copy");|]
 
 let render ctxt =
   let open Meta_html in
@@ -504,7 +508,7 @@ let render ctxt =
   let token_id_bidi = Reactive.Bidirectional.of_var token_id in
   let token_address = State.token_address ctxt in
   let token_address_bidi = Reactive.Bidirectional.of_var token_address in
-  let hidden_value_bidi = Reactive.Bidirectional.of_var hidden_var in
+  let copy_src_value_bidi = Reactive.Bidirectional.of_var copy_src_var in
 
   let is_address_valid k =
     match B58_hashes.check_b58_kt1_hash k with
@@ -546,10 +550,9 @@ let render ctxt =
 
   let _once_in_tab = enter_action () in
 
-  (* TODO: get rid of the hidden attribute and rename anything containing 'hidden'*)
-  let make_input ?active ?id ?placeholder ?help ?label ?enter_action ?(hidden = false) bidi =
+  let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
       Bootstrap.Form.(
-      make ?enter_action [input ?active ?id ?placeholder ?help ?label ~hidden bidi])
+      make ?enter_action [input ?active ?id ?placeholder ?help ?label bidi])
   in
   let make_check_box ?active ?id ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
@@ -561,24 +564,25 @@ let render ctxt =
     Reactive.bind active ~f in
   let item s c = div ~a:[style s] c in
 
-  let clipboard_modal modal_id ctxt =
-    let copy_src = (make_input ~id:hidden_id ~placeholder:(Reactive.pure "see?") hidden_value_bidi) in
+  let clipboard_modal ctxt modal_id  =
+    let copy_src = (make_input ~id:copy_src_id copy_src_value_bidi) in
+    let copy_btn = make_button (t "Copy to clipboard") ~active:controls_active
+                     (fun () -> link_to_clipboard ctxt copy_src_id) in
     let body_div =
       H5.(
       div
         ~a:[]
         [ copy_src
-        ; t "test body text"]) in
+        ; copy_btn ]) in
     Bootstrap.Modal.mk_modal
       ~modal_id
       ~modal_title:"Copy to clipboard"
-      ~modal_body:body_div
-      ~action:(link_to_clipboard ctxt) in
+      ~modal_body:body_div in
 
   let launch_clipboard_modal_btn ctxt modal_id =
     H5.(
       button
-      ~a: [ classes ["btn"; "btn-primary"]
+      ~a: [ classes ["btn"; "btn-outline-primary"]
           ; a_user_data "toggle" (Lwd.pure "modal")
           ; a_user_data "target" (Lwd.pure ("#"^modal_id)) ]
       [t "Copy to clipboard"]) in
@@ -617,13 +621,8 @@ let render ctxt =
                     ~help:
                       (make_help ~validity:token_id_valid ~input:token_id
                          (t "A natural number.") ) )
-             % item ""
-                 (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action)
-             % item ""
-               (clipboard_modal modal_id ctxt)
-             % item ""
-               (launch_clipboard_modal_btn ctxt modal_id)
-             ) ) in
+             % item "padding: 4px 0px 4px 0px"
+               (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action))) in
 
   let second_form =
     let control s = small (t s) in
@@ -667,5 +666,9 @@ let render ctxt =
   % top_form % second_form
   % div
       ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
-      (Async_work.render result ~f:(show_token ctxt)
+      ( item "padding_bottom: 16px"
+          (clipboard_modal ctxt modal_id)
+        % item ""
+          (launch_clipboard_modal_btn ctxt modal_id)
+      %  Async_work.render result ~f:(show_token ctxt)
          ~show_error:(error_try_again enter_action gateway_err_str) )

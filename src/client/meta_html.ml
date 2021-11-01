@@ -331,7 +331,7 @@ module Bootstrap = struct
   end
 
   module Modal = struct
-    let mk_modal ~modal_id ~(modal_title:string) ~modal_body ~action =
+    let mk_modal ~modal_id ~(modal_title:string) ~modal_body =
       let open Tyxml_lwd.Lwdom in
       let label_id = "label_id" in
       H5.(div
@@ -359,7 +359,7 @@ module Bootstrap = struct
                             ; a_user_data "dismiss" (Lwd.pure "modal") ]
                         [ span
                           ~a: [ a_aria "hidden" (Reactive.pure ["true"])]
-                          [ t "&times" ]
+                          [ t "" ]
                         ]
                     ]
                 ; div
@@ -371,9 +371,6 @@ module Bootstrap = struct
                         ~a: [ classes ["btn"; "btn-secondary"]
                             ; a_user_data "dismiss" (Lwd.pure "modal")]
                         [ t "Close" ]
-                      ; button
-                        ~a: [classes ["btn"; "btn-primary"]]
-                        [ t "Copy link" ]
                     ]
                 ]
             ]
@@ -394,7 +391,6 @@ module Bootstrap = struct
         | Input of
             { input: input
             ; placeholder: string Reactive.t option
-            ; hidden: bool
             ; content: string Reactive.Bidirectional.t }
         | Check_box of {input: input; checked: bool Reactive.Bidirectional.t}
         | Button of
@@ -404,7 +400,7 @@ module Bootstrap = struct
 
       let rec to_div ?(enter_action = fun () -> ()) ?cols =
         let open H5 in
-        let generic_input ~active ?id ?help ?placeholder ?(hidden = false) ~kind lbl more_a =
+        let generic_input ~active ?id ?help ?placeholder ~kind lbl more_a =
             let the_id = Fresh_id.of_option "input-item" id in
           let help_id = the_id ^ "Help" in
           let full_label =
@@ -415,7 +411,6 @@ module Bootstrap = struct
                       classes
                         ( match kind with
                         | `Text -> []
-                        | `Hidden -> []
                         | `Checkbox -> ["form-check-label"] ) ]
                   [lbl] ) in
           let full_input =
@@ -423,7 +418,6 @@ module Bootstrap = struct
               [ classes
                   [ ( match kind with
                     | `Text -> "form-control"
-                    | `Hidden -> "hidden_form-control"
                     | `Checkbox -> "form-check-input" ) ]
               ; a_id (Reactive.pure the_id)
               ; a_aria "describedBy" (Reactive.pure [help_id])
@@ -450,7 +444,6 @@ module Bootstrap = struct
           let div_content =
             match kind with
             | `Text -> [full_label; full_input; full_help]
-            | `Hidden -> [full_label; full_input; full_help]
             | `Checkbox -> [full_input; full_label; full_help] in
           let cols_class =
             match cols with
@@ -460,7 +453,6 @@ module Bootstrap = struct
           let div_classes =
             match kind with
             | `Text -> cols_class
-            | `Hidden -> cols_class
             | `Checkbox -> "form-check" :: cols_class in
           div ~a:[classes ("form-group" :: div_classes)] div_content in
         function
@@ -469,12 +461,8 @@ module Bootstrap = struct
               ~a:[classes ["form-row"]]
               (List.map l ~f:(fun (cols, item) ->
                    to_div ~enter_action ~cols item ) )
-        | Input {input= {label= lbl; id; help; active}; placeholder; hidden; content} ->
-          let k = match hidden with
-          | true -> `Hidden
-          | false -> `Text in
-            generic_input ?id ?help ~kind:k lbl ~active ~hidden ?placeholder
-              (* l @ *)
+        | Input {input= {label= lbl; id; help; active}; placeholder; content} ->
+            generic_input ?id ?help ~kind:`Text lbl ~active ?placeholder
               [ a_value (Reactive.Bidirectional.get content)
               ; a_oninput
                   (Tyxml_lwd.Lwdom.attr
@@ -537,9 +525,9 @@ module Bootstrap = struct
 
     open Item
 
-    let input ?(active = Reactive.pure true) ?id ?placeholder ?help ?(hidden = false) ?label
+    let input ?(active = Reactive.pure true) ?id ?placeholder ?help ?label
         content =
-      Input {input= {label; id; help; active}; placeholder; hidden; content}
+      Input {input= {label; id; help; active}; placeholder;  content}
 
     let check_box ?(active = Reactive.pure true) ?id ?help ?label checked =
       Check_box {input= {label; id; help; active}; checked}
