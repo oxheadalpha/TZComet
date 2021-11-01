@@ -330,6 +330,46 @@ module Bootstrap = struct
                    li [a ~a:[classes ["active"; "nav-link"]] label] ) ) )
   end
 
+  module Modal = struct
+    let mk_modal ~modal_id ~(modal_title : string) ~modal_body =
+      let open Tyxml_lwd.Lwdom in
+      let label_id = "label_id" in
+      H5.(
+        div
+          ~a:
+            [ classes ["modal"; "fade"]
+            ; a_id (Lwd.pure modal_id)
+            ; a_tabindex (Lwd.pure (-1))
+            ; a_role (Lwd.pure ["dialog"])
+            ; a_aria "labelledby" (Lwd.pure [label_id])
+            ; a_aria "hidden" (Lwd.pure ["true"]) ]
+          [ div
+              ~a:[classes ["modal-dialog"]; a_role (Lwd.pure ["document"])]
+              [ div
+                  ~a:[classes ["modal-content"]]
+                  [ div
+                      ~a:[classes ["modal-header"]]
+                      [ h5
+                          ~a:[classes ["modal-title"]; a_id (Lwd.pure label_id)]
+                          [t modal_title]
+                      ; button
+                          ~a:
+                            [ classes ["close"]
+                            ; a_aria "label" (Reactive.pure ["Close"])
+                            ; a_user_data "dismiss" (Lwd.pure "modal") ]
+                          [ span
+                              ~a:[a_aria "hidden" (Reactive.pure ["true"])]
+                              [t ""] ] ]
+                  ; div ~a:[classes ["modal-body"]] [modal_body]
+                  ; div
+                      ~a:[classes ["modal-footer"]]
+                      [ button
+                          ~a:
+                            [ classes ["btn"; "btn-secondary"]
+                            ; a_user_data "dismiss" (Lwd.pure "modal") ]
+                          [t "Close"] ] ] ] ])
+  end
+
   module Form = struct
     module Item = struct
       type input =

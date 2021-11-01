@@ -1,8 +1,24 @@
 open! Import
+open Js_of_ocaml
+
+let copy_src_id = "copy_src_id"
+let copy_src_var : string Lwd.var = Reactive.var ""
 
 let go_action ctxt ~wip =
   let token_id = State.token_id ctxt |> Reactive.peek in
   let address = State.token_address ctxt |> Reactive.peek in
+  let protocol = Url.Current.protocol in
+  let slashes = if String.equal protocol "file:" then "//" else "/" in
+  let host = Url.Current.host in
+  let port =
+    match Url.Current.port with Some p -> Int.to_string p ^ ":" | None -> ""
+  in
+  let host_port =
+    if String.equal (host ^ port) "" then "" else host ^ port ^ "/" in
+  let path_string = Url.Current.path_string in
+  let path = Fmt.str "token/%s/%s" address token_id in
+  let tv_uri = protocol ^ slashes ^ host_port ^ path_string ^ "#/" ^ path in
+  let _ = Reactive.set copy_src_var tv_uri in
   let _logh msg = Async_work.log wip msg in
   let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
   Async_work.reinit wip ;
@@ -465,13 +481,30 @@ let show_token ctxt
         Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
           ~id ~warnings )
 
+let link_to_clipboard ctxt src_id =
+  let open Dom_html in
+  let open Js in
+  dbgf "getting element by Id for %S" src_id ;
+  match getElementById_opt src_id with
+  | None ->
+      dbgf "getElementByIdOpt returns None for %S" src_id ;
+      ()
+  | Some ele ->
+      let () = Unsafe.meth_call ele "select" [||] in
+      let () =
+        document##execCommand (Js.string "selectAll") (Js.bool true)
+          (Js.Opt.option None) in
+      Unsafe.meth_call document "execCommand" [|Unsafe.inject "copy"|]
+
 let render ctxt =
   let open Meta_html in
+  let open Dom_html in
   let result = Async_work.empty () in
   let token_id = State.token_id ctxt in
   let token_id_bidi = Reactive.Bidirectional.of_var token_id in
   let token_address = State.token_address ctxt in
   let token_address_bidi = Reactive.Bidirectional.of_var token_address in
+  let copy_src_value_bidi = Reactive.Bidirectional.of_var copy_src_var in
   let is_address_valid k =
     match B58_hashes.check_b58_kt1_hash k with
     | _ -> true
@@ -523,6 +556,23 @@ let render ctxt =
         ~action in
     Reactive.bind active ~f in
   let item s c = div ~a:[style s] c in
+  let clipboard_modal ctxt modal_id =
+    let copy_src = make_input ~id:copy_src_id copy_src_value_bidi in
+    let copy_btn =
+      make_button (t "Copy to clipboard") ~active:controls_active (fun () ->
+          link_to_clipboard ctxt copy_src_id ) in
+    let body_div = H5.(div ~a:[] [copy_src; copy_btn]) in
+    Bootstrap.Modal.mk_modal ~modal_id ~modal_title:"Copy to clipboard"
+      ~modal_body:body_div in
+  let launch_clipboard_modal_btn ctxt modal_id =
+    H5.(
+      button
+        ~a:
+          [ classes ["btn"; "btn-outline-primary"]
+          ; a_user_data "toggle" (Lwd.pure "modal")
+          ; a_user_data "target" (Lwd.pure ("#" ^ modal_id)) ]
+        [t "Copy to clipboard"]) in
+  let modal_id = "clipboard_modal_id" in
   let top_form =
     Browser_window.width ctxt
     |> Reactive.bind ~f:(fun bro_width ->
@@ -556,7 +606,7 @@ let render ctxt =
                     ~help:
                       (make_help ~validity:token_id_valid ~input:token_id
                          (t "A natural number.") ) )
-             % item ""
+             % item "padding: 4px 0px 4px 0px"
                  (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action)
              ) ) in
   let second_form =
@@ -600,5 +650,7 @@ let render ctxt =
   % top_form % second_form
   % div
       ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
-      (Async_work.render result ~f:(show_token ctxt)
-         ~show_error:(error_try_again enter_action gateway_err_str) )
+      ( item "padding_bottom: 16px" (clipboard_modal ctxt modal_id)
+      % item "" (launch_clipboard_modal_btn ctxt modal_id)
+      % Async_work.render result ~f:(show_token ctxt)
+          ~show_error:(error_try_again enter_action gateway_err_str) )
