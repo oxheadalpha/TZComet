@@ -331,50 +331,43 @@ module Bootstrap = struct
   end
 
   module Modal = struct
-    let mk_modal ~modal_id ~(modal_title:string) ~modal_body =
+    let mk_modal ~modal_id ~(modal_title : string) ~modal_body =
       let open Tyxml_lwd.Lwdom in
       let label_id = "label_id" in
-      H5.(div
-        ~a:[ classes ["modal"; "fade"]
-           ; a_id (Lwd.pure modal_id)
-           ; a_tabindex (Lwd.pure (-1))
-           ; a_role (Lwd.pure ["dialog"])
-           ; a_aria "labelledby" (Lwd.pure [label_id])
-           ; a_aria "hidden" (Lwd.pure ["true"])
-           ]
-        [ div
-            ~a:[ classes ["modal-dialog"]
-               ; a_role (Lwd.pure (["document"])) ]
-            [ div
-                ~a:[classes ["modal-content"]]
-                [ div
-                    ~a:[classes ["modal-header"]]
-                    [ h5
-                        ~a:[ classes ["modal-title"]
-                           ; a_id (Lwd.pure label_id)]
-                    [ t modal_title]
-                    ; button
-                        ~a: [ classes ["close"]
+      H5.(
+        div
+          ~a:
+            [ classes ["modal"; "fade"]
+            ; a_id (Lwd.pure modal_id)
+            ; a_tabindex (Lwd.pure (-1))
+            ; a_role (Lwd.pure ["dialog"])
+            ; a_aria "labelledby" (Lwd.pure [label_id])
+            ; a_aria "hidden" (Lwd.pure ["true"]) ]
+          [ div
+              ~a:[classes ["modal-dialog"]; a_role (Lwd.pure ["document"])]
+              [ div
+                  ~a:[classes ["modal-content"]]
+                  [ div
+                      ~a:[classes ["modal-header"]]
+                      [ h5
+                          ~a:[classes ["modal-title"]; a_id (Lwd.pure label_id)]
+                          [t modal_title]
+                      ; button
+                          ~a:
+                            [ classes ["close"]
                             ; a_aria "label" (Reactive.pure ["Close"])
                             ; a_user_data "dismiss" (Lwd.pure "modal") ]
-                        [ span
-                          ~a: [ a_aria "hidden" (Reactive.pure ["true"])]
-                          [ t "" ]
-                        ]
-                    ]
-                ; div
-                    ~a:[classes ["modal-body"]]
-                    [modal_body]
-                ; div
-                    ~a: [classes ["modal-footer"]]
-                    [ button
-                        ~a: [ classes ["btn"; "btn-secondary"]
-                            ; a_user_data "dismiss" (Lwd.pure "modal")]
-                        [ t "Close" ]
-                    ]
-                ]
-            ]
-        ])
+                          [ span
+                              ~a:[a_aria "hidden" (Reactive.pure ["true"])]
+                              [t ""] ] ]
+                  ; div ~a:[classes ["modal-body"]] [modal_body]
+                  ; div
+                      ~a:[classes ["modal-footer"]]
+                      [ button
+                          ~a:
+                            [ classes ["btn"; "btn-secondary"]
+                            ; a_user_data "dismiss" (Lwd.pure "modal") ]
+                          [t "Close"] ] ] ] ])
   end
 
   module Form = struct
@@ -401,7 +394,7 @@ module Bootstrap = struct
       let rec to_div ?(enter_action = fun () -> ()) ?cols =
         let open H5 in
         let generic_input ~active ?id ?help ?placeholder ~kind lbl more_a =
-            let the_id = Fresh_id.of_option "input-item" id in
+          let the_id = Fresh_id.of_option "input-item" id in
           let help_id = the_id ^ "Help" in
           let full_label =
             Option.value_map ~default:(empty ()) lbl ~f:(fun lbl ->
@@ -521,13 +514,13 @@ module Bootstrap = struct
               | None -> base
               | Some n -> Fmt.str "col-md-%d" n :: base in
             div ~a:[classes cls] [the_div]
-   end
+    end
 
     open Item
 
     let input ?(active = Reactive.pure true) ?id ?placeholder ?help ?label
         content =
-      Input {input= {label; id; help; active}; placeholder;  content}
+      Input {input= {label; id; help; active}; placeholder; content}
 
     let check_box ?(active = Reactive.pure true) ?id ?help ?label checked =
       Check_box {input= {label; id; help; active}; checked}
