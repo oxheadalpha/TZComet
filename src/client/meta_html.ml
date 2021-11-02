@@ -331,7 +331,24 @@ module Bootstrap = struct
   end
 
   module Modal = struct
-    let mk_modal ~modal_id ~(modal_title : string) ~modal_body =
+    let ok_button ?(outline = true)  ?(size = `Normal)
+        ?(kind = `Primary) content ~action =
+        H5.(
+        let a =
+            [ classes
+                ( [ "btn"
+                  ; Fmt.str "btn-%s%s"
+                      (if outline then "outline-" else "")
+                      (Label_kind.to_string kind) ]
+                @
+                match size with
+                | `Normal -> []
+                | `Small -> ["btn-sm"]
+                | `Large -> ["btn-lg"] )
+        ; a_user_data "dismiss" (Lwd.pure "modal") ] in
+        _raw_button ~action ~a content )
+
+    let mk_modal ~modal_id ~(modal_title : string) ~modal_body ?(ok_text = "Ok") ~ok_action =
       let open Tyxml_lwd.Lwdom in
       let label_id = "label_id" in
       H5.(
@@ -363,11 +380,12 @@ module Bootstrap = struct
                   ; div ~a:[classes ["modal-body"]] [modal_body]
                   ; div
                       ~a:[classes ["modal-footer"]]
-                      [ button
+                      [ (ok_button (t ok_text) ~action:ok_action)
+                      ; button
                           ~a:
                             [ classes ["btn"; "btn-secondary"]
                             ; a_user_data "dismiss" (Lwd.pure "modal") ]
-                          [t "Close"] ] ] ] ])
+                            [t "Close"] ] ] ] ] )
   end
 
   module Form = struct

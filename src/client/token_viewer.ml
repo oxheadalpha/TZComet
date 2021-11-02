@@ -238,6 +238,7 @@ let error_try_again :
   let open Meta_html in
   Bootstrap.alert ~kind:`Danger
     ( h3 (t "Failed To Fetch The Token 😿")
+
     % div e % hr ()
     % div
         ( bt msg
@@ -558,12 +559,14 @@ let render ctxt =
   let item s c = div ~a:[style s] c in
   let clipboard_modal ctxt modal_id =
     let copy_src = make_input ~id:copy_src_id copy_src_value_bidi in
-    let copy_btn =
-      make_button (t "Copy to clipboard") ~active:controls_active (fun () ->
-          link_to_clipboard ctxt copy_src_id ) in
-    let body_div = H5.(div ~a:[] [copy_src; copy_btn]) in
-    Bootstrap.Modal.mk_modal ~modal_id ~modal_title:"Copy to clipboard"
-      ~modal_body:body_div in
+    let body_div = H5.(div ~a:[] [copy_src]) in
+    Bootstrap.Modal.mk_modal
+      ~modal_id
+      ~modal_title: "Copy token link to clipboard:"
+      ~modal_body: body_div
+      ~ok_text: "Copy"
+      ~ok_action: (fun () -> link_to_clipboard ctxt copy_src_id ) in
+
   let launch_clipboard_modal_btn ctxt modal_id =
     H5.(
       button
@@ -571,7 +574,8 @@ let render ctxt =
           [ classes ["btn"; "btn-outline-primary"]
           ; a_user_data "toggle" (Lwd.pure "modal")
           ; a_user_data "target" (Lwd.pure ("#" ^ modal_id)) ]
-        [t "Copy to clipboard"]) in
+        [t "Share 📋"]) in
+
   let modal_id = "clipboard_modal_id" in
   let top_form =
     Browser_window.width ctxt
@@ -635,6 +639,10 @@ let render ctxt =
                        ~f:(function
                        | true -> t "👀"
                        | false -> t "🤦" ) ) ) )
+
+      % item "" (clipboard_modal ctxt modal_id)
+      % item "" (launch_clipboard_modal_btn ctxt modal_id)
+
       % make_button (control "Next ⏭") ~active:form_ready_to_go (fun () ->
             try
               let current = Int.of_string (Reactive.peek token_id) in
@@ -650,7 +658,5 @@ let render ctxt =
   % top_form % second_form
   % div
       ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
-      ( item "padding_bottom: 16px" (clipboard_modal ctxt modal_id)
-      % item "" (launch_clipboard_modal_btn ctxt modal_id)
-      % Async_work.render result ~f:(show_token ctxt)
+      (Async_work.render result ~f:(show_token ctxt)
           ~show_error:(error_try_again enter_action gateway_err_str) )
