@@ -605,9 +605,10 @@ let render ctxt =
                     ~help:
                       (make_help ~validity:token_id_valid ~input:token_id
                          (t "A natural number.") ) )
-             % item "padding: 4px 0px 4px 0px"
+             % item ""
                  (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action)
-             ) ) in
+             % item "" (clipboard_modal ctxt modal_id)
+             % item "" (launch_clipboard_modal_btn ctxt modal_id) ) ) in
   let second_form =
     let control s = small (t s) in
     div
@@ -634,8 +635,6 @@ let render ctxt =
                        ~f:(function
                        | true -> t "👀"
                        | false -> t "🤦" ) ) ) )
-      % item "" (clipboard_modal ctxt modal_id)
-      % item "" (launch_clipboard_modal_btn ctxt modal_id)
       % make_button (control "Next ⏭") ~active:form_ready_to_go (fun () ->
             try
               let current = Int.of_string (Reactive.peek token_id) in
