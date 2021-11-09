@@ -218,9 +218,9 @@ let encode_michelson_string s =
     Tezos_micheline.Micheline.(String (0, s) |> strip_locations)
   |> Bytes.to_string
 
-let encode_michelson_int i =
+let encode_michelson_int z =
   Data_encoding.Binary.to_bytes_exn expr_encoding
-    Tezos_micheline.Micheline.(Int (0, Z.of_int i) |> strip_locations)
+    Tezos_micheline.Micheline.(Int (0, z) |> strip_locations)
   |> Bytes.to_string
 
 let example () =

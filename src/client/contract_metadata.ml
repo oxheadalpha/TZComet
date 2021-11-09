@@ -762,7 +762,7 @@ module Token = struct
 
   type t =
     { address: string
-    ; id: int
+    ; id: Z.t
     ; network: Network.t option
     ; symbol: string option
     ; name: string option
@@ -771,7 +771,7 @@ module Token = struct
     ; tzip21: Content.Tzip_021.t
     ; main_multimedia: (string * Multimedia.t, exn) Result.t Option.t
     ; metadata: Tezos_contract_metadata.Metadata_contents.t
-    ; special_knowledge: [`Hic_et_nunc of int] list
+    ; special_knowledge: [`Hic_et_nunc of Z.t] list
     ; warnings: (string * warning) list }
 
   let make ?symbol ?name ?decimals ?network ?main_multimedia ~tzip21
@@ -860,7 +860,8 @@ module Token = struct
       else warnings := (k, e) :: !warnings in
     let failm msg =
       Decorate_error.raise
-        Message.(Fmt.kstr t "Fetching %s/%d:" address id %% msg) in
+        Message.(Fmt.kstr t "Fetching %s/%s:" address (Z.to_string id) %% msg)
+    in
     Uri.Fetcher.set_current_contract ctxt address ;
     Lwt.catch
       (fun () ->
@@ -920,10 +921,10 @@ module Token = struct
           (total_supply, token_metadata) in
     let get_token_metadata_map_with_view () =
       Content.maybe_call_view ctxt token_metadata_validation
-        ~parameter_string:(Int.to_string id) ~address ~log:logs in
+        ~parameter_string:(Z.to_string id) ~address ~log:logs in
     let get_total_supply_with_view () =
       Content.maybe_call_view ctxt total_supply_validation
-        ~parameter_string:(Int.to_string id) ~address ~log:logs
+        ~parameter_string:(Z.to_string id) ~address ~log:logs
       >>= function
       | Some (Ok (Tezos_micheline.Micheline.Int (_, z))) -> Lwt.return_some z
       | _ -> Lwt.return_none in

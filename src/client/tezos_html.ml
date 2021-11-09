@@ -727,11 +727,11 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
     let validated = validate_address input_value in
     match validated with
     | Some s ->
-        open_in_token_viewer ctxt ~token_address:s ~token_id:(Int.to_string id)
+        open_in_token_viewer ctxt ~token_address:s ~token_id:(Z.to_string id)
     | None -> empty () in
   Bootstrap.bordered ~kind:`Info ~a:[style "padding: 5px"]
     ( Bootstrap.div_lead
-        ( Fmt.kstr bt "Token %d" id
+        ( Fmt.kstr bt "Token %a" Z.pp_print id
         %% or_empty name (function
              | "" -> Bootstrap.color `Danger (t "<empty-name>")
              | n -> Bootstrap.color `Primary (Fmt.kstr it "“%s”" n) )
@@ -895,7 +895,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                 match tokens_mich with
                 | Seq (_, nodes) ->
                     List.map nodes ~f:(function
-                      | Int (_, n) -> Z.to_int n
+                      | Int (_, n) -> n
                       | _ ->
                           raise
                             (mkexn
@@ -909,7 +909,9 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                          ( t "Wrong Micheline structure for result:"
                          %% ct (Michelson.micheline_node_to_string tokens_mich)
                          ) ) in
-              Fmt.kstr log "Got list of tokens %a" Fmt.(Dump.list int) tokens ;
+              Fmt.kstr log "Got list of tokens %a"
+                Fmt.(Dump.list Z.pp_print)
+                tokens ;
               Lwt.return (fun f -> Lwt_list.map_s f tokens)
           | `Printer_spec (spec : _ list) ->
               let open Printer_dsl in
@@ -923,7 +925,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                       else
                         Lwt.catch
                           (fun () ->
-                            f n
+                            f (Z.of_int n)
                             >>= fun () ->
                             already_seen := Set.add !already_seen n ;
                             go next )
@@ -942,9 +944,9 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                         run_f l next in
                   go spec >>= fun () -> Lwt.return_nil ) in
         let explore_token id =
-          log_prompt := Fmt.str "Exploring token %d" id ;
+          log_prompt := Fmt.str "Exploring token %a" Z.pp_print id ;
           Contract_metadata.Content.maybe_call_view ctxt token_metadata_view
-            ~parameter_string:(Int.to_string id) ~address ~log
+            ~parameter_string:(Z.to_string id) ~address ~log
           >>= fun metadata_map_opt ->
           begin
             begin
@@ -966,7 +968,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
             end
             >>= fun metadata_map ->
             Contract_metadata.Content.maybe_call_view ctxt total_supply_view
-              ~parameter_string:(Int.to_string id) ~address ~log
+              ~parameter_string:(Z.to_string id) ~address ~log
             >>= fun total_supply ->
             let unpaired_metadata =
               try

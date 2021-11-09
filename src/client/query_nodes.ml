@@ -229,8 +229,9 @@ module Node = struct
         Message.(
           t "Cannot find any value in the big-map"
           %% ct (Z.to_string big_map_id)
-          %% t "at the key" %% int ct key %% t "(hash: " % ct hash_string
-          % t ").")
+          %% t "at the key"
+          %% ct (Z.to_string key)
+          %% t "(hash: " % ct hash_string % t ").")
         ~f:(fun () ->
           Fmt.kstr (rpc_get ctxt node)
             "/chains/main/blocks/head/context/big_maps/%s/%s"
