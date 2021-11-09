@@ -28,7 +28,7 @@ let go_action ctxt ~wip =
     Lwt.Infix.(
       fun ~mkexn () ->
         let id =
-          try Int.of_string token_id
+          try Z.of_string token_id
           with _ ->
             raise
               (mkexn
@@ -350,7 +350,7 @@ let show_token ctxt
     match (name, symbol, tzip21.prefers_symbol) with
     | _, Some s, Some true -> bt s
     | Some n, _, _ -> bt n
-    | None, _, _ -> Fmt.kstr ct "%s/%d" address id in
+    | None, _, _ -> Fmt.kstr ct "%s/%a" address Z.pp_print id in
   let or_empty o f = match o with None -> empty () | Some o -> f o in
   let metadescription = or_empty tzip21.description linkify_text in
   let creators =
@@ -464,8 +464,9 @@ let show_token ctxt
           list
             (List.map sk ~f:(function `Hic_et_nunc n ->
                  bt "Special-Link:"
-                 %% url it (Fmt.str "https://www.hicetnunc.xyz/objkt/%d" n) ) )
-      )
+                 %% url it
+                      (Fmt.str "https://www.hicetnunc.xyz/objkt/%a" Z.pp_print n) )
+              ) )
     % fungible_part % div contract_info in
   div
     ~a:
@@ -512,7 +513,7 @@ let render ctxt =
   let address_valid ctxt token_address =
     Reactive.(map (get token_address) ~f:is_address_valid) in
   let is_token_id_valid i =
-    match Int.of_string i with _ -> true | exception _ -> false in
+    match Z.of_string i with _ -> true | exception _ -> false in
   let token_id_valid ctxt token_id =
     Reactive.(map (get token_id) ~f:is_token_id_valid) in
   let input_valid ctxt =
@@ -620,8 +621,8 @@ let render ctxt =
             token_ui_max_width ]
       ( make_button (control "⏮ Previous") ~active:form_ready_to_go (fun () ->
             try
-              let current = Int.of_string (Reactive.peek token_id) in
-              Reactive.set token_id (Int.to_string (current - 1)) ;
+              let current = Z.of_string (Reactive.peek token_id) in
+              Reactive.set token_id (Z.to_string (Z.pred current)) ;
               enter_action ()
             with _ -> () )
       % item ""
@@ -637,8 +638,8 @@ let render ctxt =
                        | false -> t "🤦" ) ) ) )
       % make_button (control "Next ⏭") ~active:form_ready_to_go (fun () ->
             try
-              let current = Int.of_string (Reactive.peek token_id) in
-              Reactive.set token_id (Int.to_string (current + 1)) ;
+              let current = Z.of_string (Reactive.peek token_id) in
+              Reactive.set token_id (Z.to_string (Z.succ current)) ;
               enter_action ()
             with _ -> () ) ) in
   let gateway_err_str =
