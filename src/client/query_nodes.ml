@@ -298,21 +298,14 @@ let default_nodes : Node.t list =
   List.rev
     [ Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
         ~network:`Mainnet ~info_url:smartpy
-    ; Node.create "Edonet-SmartPy" "https://edonet.smartpy.io" ~network:`Edonet
-        ~info_url:smartpy
     ; Node.create "Granadanet-SmartPy" "https://granadanet.smartpy.io"
         ~network:`Granadanet ~info_url:smartpy
-    ; Node.create "Florencenet-SmartPy" ~network:`Florencenet
-        "https://florencenet.smartpy.io/" ~info_url:smartpy
+    ; Node.create "Hangzhounet-SmartPy" ~network:`Hangzhounet
+        "https://hangzhounet.smartpy.io/" ~info_url:smartpy
     ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
         ~network:`Mainnet ~info_url:giga
-    ; Node.create "Edonet-GigaNode" "https://edonet-tezos.giganode.io"
-        ~network:`Edonet ~info_url:giga
-    ; Node.create "Florence-NoBA-net-GigaNode"
-        "https://florence-tezos.giganode.io" ~network:`Florencenet
-        ~info_url:giga
     ; Node.create "Flextesabox-node" "http://127.0.0.1:20000" ~network:`Sandbox
-        ~info_url:"https://assets.oxheadalpha.com/docs/setup/2-sandbox/" ]
+        ~info_url:"https://tezos.gitlab.io/flextesa/" ]
 
 let dev_nodes =
   List.rev
