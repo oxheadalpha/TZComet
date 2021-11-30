@@ -198,29 +198,15 @@ let paragraphs blob =
 let list_field name field f =
   option_field name (match field with [] -> None | more -> Some more) f
 
-let network (net : Network.t) =
-  match net with
-  | `Edonet | `Florencenet | `Granadanet | `Mainnet | `Sandbox ->
-      it (Network.to_string net)
+let network (net : Network.t) = it (Network.to_string net)
 
 let protocol s =
   let proto s = abbreviation s (ct (String.prefix s 12)) in
   let known name url =
     span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
   match s with
-  | "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSXRLQEb" ->
-      known "Carthage" "http://tezos.gitlab.io/protocols/006_carthage.html"
-  | "PsBabyM1eUXZseaJdmXFApDSBqj8YBfwELoxZHHW77EMcAbbwAS" ->
-      known "Babylon" "http://tezos.gitlab.io/protocols/005_babylon.html"
-  | "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo" ->
-      known "Delphi" "https://blog.nomadic-labs.com/delphi-changelog.html"
-  | "PtEdo2ZkT9oKpimTah6x2embF25oss54njMuPzkJTEi5RqfdZFA" ->
-      known "Edo" "http://tezos.gitlab.io/protocols/008_edo.html"
-  | "PsFLorBArSaXjuy9oP76Qv1v2FRYnUs7TFtteK5GkRBC24JvbdE" ->
-      known "Florence-BA"
-        "http://tezos.gitlab.io/protocols/009_florence_BA.html"
-  | "PsFLorenaUUuikDWvMDr6fGBRG8kt3e3D3fHoXK1j1BFRxeSH4i" ->
-      known "Florence" "http://tezos.gitlab.io/protocols/009_florence.html"
+  | "PtHangz2aRngywmSRGGvrcTyMbbdpWdpFKuS4uMWxg2RaH9i1qx" ->
+      known "Hangzhou" "http://tezos.gitlab.io/protocols/011_hangzhou.html"
   | "PtGRANADsDU8R9daYKAgWnQYAJ64omN1o3KMGVCykShA97vQbvV" ->
       known "Granada" "http://tezos.gitlab.io/protocols/010_granada.html"
   | s -> proto s

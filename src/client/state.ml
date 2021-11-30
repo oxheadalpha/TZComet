@@ -378,7 +378,7 @@ module Examples = struct
 
   let get state =
     let https_ok =
-      "https://raw.githubusercontent.com/tqtezos/TZComet/8d95f7b/data/metadata_example0.json"
+      "https://raw.githubusercontent.com/oxheadalpha/TZComet/8d95f7b/data/metadata_example0.json"
     in
     let hash_of_https_ok =
       (* `sha256sum data/metadata_example0.json` → Achtung, the URL
@@ -501,8 +501,8 @@ module Examples = struct
       (* weight, name, kt1, min-token, max-token *)
       [ range_of_tuple
           (100, "Alchememist", alchememist_blockchain_adventures, 0, 15)
-      ; range_of_tuple (600, "HicEtNunc", hicetnunc_version_2, 300, 306100)
-      ; range_of_tuple (200, "Kalamint", kalamint, 1, 32559)
+      ; range_of_tuple (600, "HicEtNunc", hicetnunc_version_2, 300, 564520)
+      ; range_of_tuple (200, "Kalamint", kalamint, 1, 62345)
       ; range_of_tuple
           (100, "OpenMinter-0", "KT1PuASz2FWF7fhdWidFpV5v9zqTVtYxexAS", 0, 4)
       ; range_of_tuple

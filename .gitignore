@@ -28,5 +28,5 @@ setup.log
 # Local OPAM switch
 _opam/
 
-# local-vendor files
-local-vendor/
+# local-vendor build files
+/local-vendor/

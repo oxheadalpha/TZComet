@@ -465,7 +465,7 @@ let show_token ctxt
             (List.map sk ~f:(function `Hic_et_nunc n ->
                  bt "Special-Link:"
                  %% url it
-                      (Fmt.str "https://www.hicetnunc.xyz/objkt/%a" Z.pp_print n) )
+                      (Fmt.str "https://hicetnunc.art/objkt/%a" Z.pp_print n) )
               ) )
     % fungible_part % div contract_info in
   div
