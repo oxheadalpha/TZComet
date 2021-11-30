@@ -73,7 +73,7 @@ let about_page state =
              %% link
                   ~target:
                     (Fmt.str "https://github.com/oxheadalpha/TZComet/commit/%s"
-                       vs)
+                       vs )
                   (it vs) )
       % Reactive.bind (State.dev_mode state) (function
           | true -> t " (in “dev” mode)."
