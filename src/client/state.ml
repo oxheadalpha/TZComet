@@ -398,10 +398,6 @@ module Examples = struct
            let mtb, mtb_dev, mtb_all = aggl ~dev () in
            let mby, mby_dev, mby_all = aggl ~dev () in
            let tzc, tzc_dev, tzc_all = aggl ~dev () in
-           let kt1_fa2_smartpy = "KT1SdkPRwaU4TmQqyKPX47CKfhJB93HR5XTC" in
-           kt1 kt1_fa2_smartpy
-             "An FA2-SmartPy on Granadanet with a few example tokens, fungible \
-              or not, also using TZIP-021, and on-chain-storage." ;
            kt1 alchememist_blockchain_adventures
              "An NFT collection by “The Alchememist” on Mainnet." ;
            kt1 hicetnunc_version_2
