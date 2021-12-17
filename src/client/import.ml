@@ -272,6 +272,7 @@ module Ezjsonm = struct
           | #Ezjsonm.value as v -> pp_value ppf v ) in
       let stack = ref [] in
       let fail_stack fmt =
+        dbgf "fail_stack called"; 
         Fmt.kstr
           (fun m ->
             let (a, b), (c, d) = Jsonm.decoded_range d in
@@ -435,7 +436,9 @@ module Ezjsonm = struct
                   | `Eoi -> t "end of input" ) in
             t "JSON Parsing: at line" %% int ct line %% t ", column"
             %% int ct col % t ":" %% err_message % t ".")
-    | exception e -> Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
+    | exception e ->
+        dbgf "value_from_string - exception: %a" Exn.pp e;  
+        Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
 end
 
 module Blob = struct
