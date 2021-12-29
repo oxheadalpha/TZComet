@@ -248,8 +248,7 @@ let show_multimedia :
        _ Context.t
     -> Contract_metadata.Token.t
     -> [> Html_types.div] Meta_html.H5.elt =
- fun ctxt {main_multimedia; address; id} ->
-  let open Contract_metadata.Multimedia in
+ fun ctxt {main_multimedia; _} ->
   let open Meta_html in
   match main_multimedia with
   | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
@@ -332,10 +331,10 @@ let show_token ctxt
       ; name
       ; decimals
       ; total_supply
-      ; main_multimedia
       ; metadata
       ; special_knowledge
-      ; tzip21 } =
+      ; tzip21
+      ; _ } =
   let open Meta_html in
   let open Contract_metadata.Content.Tzip_021 in
   let warning = function
@@ -443,7 +442,7 @@ let show_token ctxt
     Async_work.async_catch wip
       ~exn_to_html:(Errors_html.exception_html ctxt)
       Lwt.Infix.(
-        fun ~mkexn () ->
+        fun ~mkexn:_ () ->
           Contract_metadata.Token.token_fetch ctxt ~address ~id ~log:logm
           >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) in
   let main_content =
@@ -482,7 +481,7 @@ let show_token ctxt
         Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
           ~id ~warnings )
 
-let link_to_clipboard ctxt src_id =
+let link_to_clipboard _ctxt src_id =
   let open Dom_html in
   let open Js in
   dbgf "getting element by Id for %S" src_id ;
@@ -499,7 +498,6 @@ let link_to_clipboard ctxt src_id =
 
 let render ctxt =
   let open Meta_html in
-  let open Dom_html in
   let result = Async_work.empty () in
   let token_id = State.token_id ctxt in
   let token_id_bidi = Reactive.Bidirectional.of_var token_id in
@@ -507,14 +505,14 @@ let render ctxt =
   let token_address_bidi = Reactive.Bidirectional.of_var token_address in
   let copy_src_value_bidi = Reactive.Bidirectional.of_var copy_src_var in
   let is_address_valid k =
-    match B58_hashes.check_b58_kt1_hash k with
-    | _ -> true
+    match Tezai_base58_digest.Identifier.Kt1_address.check k with
+    | () -> true
     | exception _ -> false in
-  let address_valid ctxt token_address =
+  let address_valid _ctxt token_address =
     Reactive.(map (get token_address) ~f:is_address_valid) in
   let is_token_id_valid i =
     match Z.of_string i with _ -> true | exception _ -> false in
-  let token_id_valid ctxt token_id =
+  let token_id_valid _ctxt token_id =
     Reactive.(map (get token_id) ~f:is_token_id_valid) in
   let input_valid ctxt =
     Reactive.(
@@ -526,7 +524,7 @@ let render ctxt =
       bind
         (validity ctxt input ** get input)
         ~f:(function
-          | true, more -> content %% t "👍"
+          | true, _ -> content %% t "👍"
           | false, "" -> content
           | false, more ->
               content %% Bootstrap.color `Danger (ct more %% t "is wrong.") ))
@@ -562,9 +560,10 @@ let render ctxt =
     let body_div = H5.(div ~a:[] [copy_src]) in
     Bootstrap.Modal.mk_modal ~modal_id
       ~modal_title:"Copy token link to clipboard:" ~modal_body:body_div
-      ~ok_text:"Copy" ~ok_action:(fun () -> link_to_clipboard ctxt copy_src_id)
-  in
-  let launch_clipboard_modal_btn ctxt modal_id =
+      ~ok_text:"Copy"
+      ~ok_action:(fun () -> link_to_clipboard ctxt copy_src_id)
+      () in
+  let launch_clipboard_modal_btn _ctxt modal_id =
     H5.(
       button
         ~a:

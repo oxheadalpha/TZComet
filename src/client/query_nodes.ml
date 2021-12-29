@@ -134,7 +134,7 @@ module Node = struct
                  |> value_to_string) )
           "/chains/main/blocks/head/context/contracts/%s/storage/normalized"
           address )
-      (fun e ->
+      (fun _ ->
         log "Node does not handle /normalized" ;
         Fmt.kstr
           (rpc_get state_handle node)
@@ -194,7 +194,9 @@ module Node = struct
 
   let bytes_value_of_big_map_at_string ctxt node ~big_map_id ~key ~log =
     let open Lwt in
-    let hash_string = B58_hashes.b58_script_id_hash_of_michelson_string key in
+    let hash_string =
+      Tezos_contract_metadata.Michelson_bytes
+      .b58_script_id_hash_of_michelson_string key in
     Decorate_error.(
       reraise
         Message.(
@@ -223,7 +225,9 @@ module Node = struct
 
   let micheline_value_of_big_map_at_nat ctxt node ~big_map_id ~key ~log =
     let open Lwt in
-    let hash_string = B58_hashes.b58_script_id_hash_of_michelson_int key in
+    let hash_string =
+      Tezos_contract_metadata.Michelson_bytes
+      .b58_script_id_hash_of_michelson_int key in
     Decorate_error.(
       reraise
         Message.(
@@ -338,7 +342,7 @@ let loop_status ctxt = Reactive.get (get ctxt).loop_status
 let set_loop_status ctxt = Reactive.set (get ctxt).loop_status
 
 let observe_nodes ctxt =
-  let data = Reactive.(get_nodes ~map:Fn.id ctxt) in
+  let data = get_nodes ~map:Fn.id ctxt in
   let data_root = Reactive.observe data in
   let nodes = Reactive.quick_sample data_root in
   Reactive.quick_release data_root ;
@@ -403,7 +407,7 @@ let find_node_with_contract ctxt addr =
               return_false ) )
         (observe_nodes ctxt)
       >>= fun node -> Lwt.return node )
-    (fun exn ->
+    (fun _ ->
       Decorate_error.raise ~trace:(List.rev !trace)
         Message.(t "Cannot find a node that knows about address" %% ct addr) )
 

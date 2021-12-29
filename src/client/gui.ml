@@ -16,10 +16,10 @@ let navigation_menu state =
       fragment in
   let tzcomet =
     bt "TZComet"
-    % Reactive.bind fragment_self (fun f ->
+    % Reactive.bind fragment_self ~f:(fun f ->
           (* Invisible, but kept in order to keep pulling the fragment. *)
           span ~a:[style "font-size: 20%"] (link (t " ") ~target:("#" ^ f)) )
-    %% Reactive.bind (State.dev_mode state) (function
+    %% Reactive.bind (State.dev_mode state) ~f:(function
          | true -> it "(dev)"
          | false -> empty () ) in
   let all_items =
@@ -61,7 +61,6 @@ let navigation_menu state =
 
 let about_page state =
   let open Meta_html in
-  let open State in
   let p = Bootstrap.p_lead in
   h2 (t "TZComet")
   % p
@@ -75,7 +74,7 @@ let about_page state =
                     (Fmt.str "https://github.com/oxheadalpha/TZComet/commit/%s"
                        vs )
                   (it vs) )
-      % Reactive.bind (State.dev_mode state) (function
+      % Reactive.bind (State.dev_mode state) ~f:(function
           | true -> t " (in “dev” mode)."
           | false -> t "." ) )
   % p (t "An explorer/editor/validator/visualizer for Tezos contract metadata.")
@@ -89,7 +88,7 @@ let about_page state =
       % url ct
           "https://gitlab.com/tzip/tzip/-/blob/master/proposals/tzip-16/tzip-16.md"
       % t "." )
-  % Reactive.bind (State.dev_mode state) (function
+  % Reactive.bind (State.dev_mode state) ~f:(function
       | false -> empty ()
       | true ->
           h2 (t "Dev-mode Junk:")
@@ -310,9 +309,9 @@ module Editor = struct
     let packed_mich =
       if Poly.(kind = Format `Michelson) then
         match process_micheline ctxt input_bytes with
-        | Error e -> None
+        | Error _ -> None
         | Ok (_, _, packed) -> (
-          match packed with Ok o -> Some ("\x05" ^ o) | Error e -> None )
+          match packed with Ok o -> Some ("\x05" ^ o) | Error _ -> None )
       else None in
     let binary_from_hex =
       if Poly.(kind = Format `Hex) then
@@ -382,15 +381,24 @@ module Editor = struct
         x in
       let ldgr bytes =
         hash "Ledger-BLAKE2B-Base58"
-          (Base58.raw_encode (B58_hashes.blake2b bytes)) in
-      let blake2b bytes = hash "BLAKE2B-Hex" (hex (B58_hashes.blake2b bytes)) in
+          Tezai_base58_digest.(
+            Crypto_hash.String.blake2b ~size:32 bytes |> Raw.String.to_base58)
+        (* (Base58.raw_encode (B58_hashes.blake2b bytes)) *) in
+      let blake2b bytes =
+        hash "BLAKE2B-Hex"
+          (hex (Tezai_base58_digest.Crypto_hash.String.blake2b ~size:32 bytes))
+      in
       let sha256 bytes =
-        hash "SHA256-Hex" (hex (B58_hashes.B58_crypto.sha256 bytes)) in
+        hash "SHA256-Hex"
+          (hex (Tezai_base58_digest.Crypto_hash.String.sha256 bytes)) in
       let sha512 bytes =
-        hash "SHA512-Hex" (hex (B58_hashes.B58_crypto.sha512 bytes)) in
+        hash "SHA512-Hex"
+          (hex (Tezai_base58_digest.Crypto_hash.String.sha512 bytes)) in
       let expr58 bytes =
         hash "Script-ID-hash (big-map access)"
-          (B58_hashes.b58_script_id_hash bytes) in
+          Tezai_base58_digest.Identifier.Script_expr_hash.(
+            hash_string (* B58_hashes.b58_script_id_hash *) bytes |> encode)
+      in
       let items = ref [] in
       let item k b h = items := make_item k b h :: !items in
       item "Raw Input" input_bytes [ldgr; blake2b; sha256; sha512] ;
@@ -421,7 +429,7 @@ module Editor = struct
                (fmt, (input, Format fmt, [])) ) in
     let display_guess =
       Reactive.bind format_result ~f:(function
-        | `Guess, (inp, kind, logs) ->
+        | `Guess, (_, kind, _) ->
             let normal c = Bootstrap.color `Secondary c in
             div
               ~a:
@@ -438,7 +446,7 @@ module Editor = struct
          state: *)
       let collapse_binary = Bootstrap.Collapse.make () in
       let collapse_logs = Bootstrap.Collapse.make () in
-      Reactive.bind format_result ~f:(fun (mode, (inp, kind, logs)) ->
+      Reactive.bind format_result ~f:(fun (_, (inp, kind, logs)) ->
           let show_logs, logs =
             match logs with
             | [] -> (empty (), empty ())
@@ -522,7 +530,7 @@ module Editor = struct
           State.transform_editor_content ctxt ~f:(fun x ->
               let v = Ezjsonm.value_from_string x in
               Ezjsonm.value_to_string ~minify v )
-        with e ->
+        with _ ->
           let verb = if minify then "minify" else "re-indent" in
           editor_message
             Message.(t "Failed to" %% t verb % t ", the JSON has to be valid.")
@@ -617,8 +625,8 @@ end
 
 module Explorer = struct
   let validate_intput input_value =
-    match B58_hashes.check_b58_kt1_hash input_value with
-    | _ -> `KT1 input_value
+    match Tezai_base58_digest.Identifier.Kt1_address.check input_value with
+    | () -> `KT1 input_value
     | exception _ when String.is_prefix input_value ~prefix:"KT" ->
         `Error
           ( input_value
@@ -644,7 +652,7 @@ module Explorer = struct
           cct txt %% t "is a not a valid address nor a TZIP-16 URI"
           |> Bootstrap.color `Danger )
 
-  let full_input_quick ctxt =
+  let full_input_quick _ctxt =
     let open Meta_html in
     function
     | `KT1 k -> t "Contract" %% Tezos_html.Block_explorer.kt1_display k
@@ -678,7 +686,7 @@ module Explorer = struct
     %% pre (ct metadata_json)
     %% Tezos_html.error_trace ctxt error
 
-  let uri_there_but_wrong ctxt ~full_input ~uri_string ~error =
+  let uri_there_but_wrong ctxt ~full_input ~uri_string:_ ~error =
     let open Meta_html in
     full_input_bloc ctxt full_input
     % h4 (t "Invalid URI")
@@ -718,7 +726,6 @@ module Explorer = struct
                   (mkexn (uri_failed_to_fetch ctxt ~full_input ~uri ~error:e))
                 )
             >>= fun json_code ->
-            let open Tezos_contract_metadata.Metadata_contents in
             dbgf "before of-json" ;
             match Contract_metadata.Content.of_json json_code with
             | Ok (_, _) ->
@@ -804,24 +811,25 @@ let root_document state =
   Bootstrap.container ~suffix:"-fluid"
     ( navigation_menu state
     % Reactive.bind (State.page state)
-        State.Page.(
-          function
-          | `Changing_to p ->
-              Lwt.async
-                Lwt.Infix.(
-                  fun () ->
-                    Js_of_ocaml_lwt.Lwt_js.yield ()
-                    >>= fun () ->
-                    State.set_page state (`Page p) () ;
-                    Lwt.return_unit) ;
-              div
-                H5.(
-                  img ()
-                    ~a:[a_width (Reactive.pure 100)]
-                    ~src:(Reactive.pure "loading.gif")
-                    ~alt:(Reactive.pure "Loading spinner GIF"))
-          | `Page Explorer -> Explorer.page state
-          | `Page Editor -> Lazy.force editor
-          | `Page Token_viewer -> Token_viewer.render state
-          | `Page Settings -> Lazy.force settings
-          | `Page About -> Lazy.force about) )
+        ~f:
+          State.Page.(
+            function
+            | `Changing_to p ->
+                Lwt.async
+                  Lwt.Infix.(
+                    fun () ->
+                      Js_of_ocaml_lwt.Lwt_js.yield ()
+                      >>= fun () ->
+                      State.set_page state (`Page p) () ;
+                      Lwt.return_unit) ;
+                div
+                  H5.(
+                    img ()
+                      ~a:[a_width (Reactive.pure 100)]
+                      ~src:(Reactive.pure "loading.gif")
+                      ~alt:(Reactive.pure "Loading spinner GIF"))
+            | `Page Explorer -> Explorer.page state
+            | `Page Editor -> Lazy.force editor
+            | `Page Token_viewer -> Token_viewer.render state
+            | `Page Settings -> Lazy.force settings
+            | `Page About -> Lazy.force about) )
