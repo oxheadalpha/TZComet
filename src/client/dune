@@ -13,7 +13,5 @@
   re.posix
   tezos-contract-metadata
   digestif.ocaml
-  ;; tezos-crypto → does not work in JS
-  base58
   lwd
   tyxml-lwd))
