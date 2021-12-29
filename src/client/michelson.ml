@@ -89,14 +89,14 @@ module Partial_type = struct
     ; structure: Structure.t }
 
   open Structure
-  open Tezos_contract_metadata.Metadata_contents.View.Implementation
-  open Tezos_contract_metadata.Metadata_contents.Michelson_blob
+  open! Tezos_contract_metadata.Metadata_contents.View.Implementation
+  open! Tezos_contract_metadata.Metadata_contents.Michelson_blob
 
   let of_type ?(annotations = []) (Micheline m) =
     let view_annots = annotations in
     let open Tezos_micheline.Micheline in
     let describe annot =
-      List.find view_annots ~f:(fun (k, v) ->
+      List.find view_annots ~f:(fun (k, _) ->
           List.mem annot k ~equal:String.equal ) in
     let rec go tp =
       let raw = strip_locations tp in
@@ -120,7 +120,7 @@ module Partial_type = struct
           , annot ) ->
           leaf (Map (String, Bytes)) ~annot
       | Prim (_, _, _, annot) -> leaf Any ~annot
-      | tp -> leaf Any in
+      | _ -> leaf Any in
     {original= m; structure= go (root m)}
 
   let rec fill_structure_with_value mf node =
@@ -179,7 +179,7 @@ module Partial_type = struct
 
   open Meta_html
 
-  let rec validity_error = function
+  let validity_error = function
     | Nat -> t "Invalid natural number."
     | Mutez -> t "Invalid μꜩ value."
     | Bytes -> t "Invalid bytes value."
@@ -357,7 +357,7 @@ module Partial_type = struct
           let content = Reactive.peek leaf.v in
           show_bytes_result ~tzip16_uri (`Zero_x content)
             ?description:leaf.description
-      | Leaf {kind= Map (String, Bytes); v; description} -> (
+      | Leaf {kind= Map (String, Bytes); v; description; _} -> (
           let content = Reactive.peek v in
           match
             parse_micheline ~check_primitives:false ~check_indentation:false
@@ -375,7 +375,7 @@ module Partial_type = struct
                          % list (show_bytes_result ~tzip16_uri (`Raw_string v)) )
                     ) ]
             with _ -> default content description )
-          | Error el -> default content description )
+          | Error _ -> default content description )
       | Leaf leaf -> default (Reactive.peek leaf.v) leaf.description
       | Pair {left; right} -> structure left @ structure right in
     structure mf.structure

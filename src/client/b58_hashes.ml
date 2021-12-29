@@ -1,5 +1,5 @@
+(*
 open Import
-
 module B58_crypto = struct
   let sha256 s = Digestif.SHA256.(to_raw_string (digest_string s))
   let sha512 s = Digestif.SHA512.(to_raw_string (digest_string s))
@@ -123,3 +123,4 @@ let crypto_test () =
   michelson_string_expr_hash "" ;
   michelson_string_expr_hash "foo" ;
   ()
+*)

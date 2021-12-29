@@ -70,7 +70,6 @@ let is_empty {status; _} =
   Reactive.(get status |> map ~f:(function Empty -> true | _ -> false))
 
 let async_catch :
-    type b.
        'a t
     -> exn_to_html:(exn -> log_item)
     -> (mkexn:(log_item -> exn) -> unit -> unit Lwt.t)
@@ -81,12 +80,11 @@ let async_catch :
   async (fun () ->
       catch
         (fun () -> f ~mkexn:(fun x -> Work_failed x) ())
-        Meta_html.(
-          function
+        (function
           | Work_failed l -> error wip l ; return ()
           | exn ->
               error wip (exn_to_html exn) ;
-              return ()) )
+              return () ) )
 
 let default_show_error e =
   let open Meta_html in

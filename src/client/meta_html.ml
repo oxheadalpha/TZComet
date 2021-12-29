@@ -126,7 +126,7 @@ module Bootstrap = struct
     (* Using `?a:Some` to force the type inference to see the optional argument. *)
     f ?a:(Some [classes ["text-muted"]]) content
 
-  let spinner ?(kind = `Primary) content =
+  let spinner ?kind:_ content =
     H5.div
       ~a:[classes ["spinner-border"]; H5.a_role (Lwd.pure ["status"])]
       [H5.span ~a:[classes ["sr-only"]] [content]]
@@ -208,7 +208,7 @@ module Bootstrap = struct
               h6 ~a:[a_class (Reactive.pure ["dropdown-header"])] [content] )
       in
       H5.(
-        let open Tyxml_lwd.Lwdom in
+        let open! Tyxml_lwd.Lwdom in
         div
           ~a:
             [ a_class (Reactive.pure ["dropdown"])
@@ -275,7 +275,7 @@ module Bootstrap = struct
                                 | true -> ["nav-item"; "active"]
                                 | false -> ["nav-item"])
                               active) *)
-                     Reactive.bind active (function
+                     Reactive.bind active ~f:(function
                        | true ->
                            li
                              ~a:[classes ["nav-item"; "active"]]
@@ -322,7 +322,7 @@ module Bootstrap = struct
                          ~a:
                            [ classes ["nav-link"]
                            ; H5.a_onclick
-                               (Tyxml_lwd.Lwdom.attr (fun ev ->
+                               (Tyxml_lwd.Lwdom.attr (fun _ev ->
                                     action () ; true ) ) ]
                          label ]
                | false ->
@@ -349,8 +349,8 @@ module Bootstrap = struct
         _raw_button ~action ~a content)
 
     let mk_modal ~modal_id ~(modal_title : string) ~modal_body ?(ok_text = "Ok")
-        ~ok_action =
-      let open Tyxml_lwd.Lwdom in
+        ~ok_action () =
+      let open! Tyxml_lwd.Lwdom in
       let label_id = "label_id" in
       H5.(
         div
@@ -617,7 +617,6 @@ module Bootstrap = struct
     type t = {id: string Reactive.t; state: state Reactive.var}
 
     let make ?id () =
-      let open H5 in
       let (state : state Reactive.var) = Reactive.var `Hidden in
       let the_id_prim =
         Reactive.prim
@@ -638,7 +637,7 @@ module Bootstrap = struct
            | `Hiding | `Hidden -> true
            | `Showing | `Shown -> false )
 
-    let make_button ?(kind = `Primary) ?style ?more_classes t content =
+    let make_button ?(kind = `Primary) ?style ?more_classes:_ t content =
       let more_a =
         Option.value_map style ~default:[] ~f:(fun s -> [H5.a_style s]) in
       H5.button

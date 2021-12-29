@@ -113,7 +113,7 @@ module Node = struct
                              |> Ezjsonm.value_to_string ~minify:false
                            with _ -> frame.content )))
       ~raise:(fun timeout ->
-        fail Message.(Fmt.kstr t "timeouted (%03.f seconds)." timeout) )
+        fail Message.(Fmt.kstr t "timeouted (%f seconds)." timeout) )
 
   let ping ctxt node =
     let open Lwt.Infix in
