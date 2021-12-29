@@ -285,7 +285,7 @@ module Ezjsonm = struct
           | `In_object (Some n, l) :: more ->
               stack := `In_object (None, (n, v) :: l) :: more
           | [] -> stack := [(v :> Stack_type.t)]
-          | other -> fail_stack "wrong stack" in
+          | _other -> fail_stack "wrong stack" in
         let pop () =
           match !stack with
           | _ :: more -> stack := more
@@ -294,16 +294,16 @@ module Ezjsonm = struct
         | `Os -> stack := `In_object (None, []) :: !stack
         | `Oe -> (
           match !stack with
-          | `In_object (Some n, l) :: more -> fail_stack "name not none"
-          | `In_object (None, l) :: more ->
+          | `In_object (Some _, _) :: _more -> fail_stack "name not none"
+          | `In_object (None, l) :: _more ->
               pop () ;
               stack_value (`O (List.rev l))
-          | other ->
+          | _other ->
               fail_stack "wrong stack, expecting in-object to close object" )
         | `As -> stack := `In_array [] :: !stack
         | `Ae -> (
           match !stack with
-          | `In_array l :: more ->
+          | `In_array l :: _more ->
               pop () ;
               stack_value (`A (List.rev l))
           | _ -> fail_stack "array end not in array" )
@@ -311,7 +311,7 @@ module Ezjsonm = struct
           match !stack with
           | `In_object (None, l) :: more ->
               stack := `In_object (Some n, l) :: more
-          | other ->
+          | _other ->
               fail_stack "wrong stack, expecting in-object for field-name" )
         | (`Bool _ | `Null | `Float _ | `String _) as v -> stack_value v ) ;
         match !stack with
