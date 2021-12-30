@@ -94,12 +94,13 @@ ensure_setup () {
 eval $(opam env)
 
 root_path=${root:-.}
+dune_profile=${profile:-release}
 
 build_all () {
     eval $(opam env)
     dune build @check
     mkdir -p _build/website/
-    dune build --profile release $root_path/src/client/main.bc.js
+    dune build --profile "$dune_profile" $root_path/src/client/main.bc.js
     cp _build/default/$root_path/src/client/main.bc.js _build/website/main-client.js
     cp $root_path/data/loading.gif _build/website/
     chmod 600 _build/website/*
