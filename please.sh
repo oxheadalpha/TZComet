@@ -93,17 +93,18 @@ ensure_setup () {
 
 eval $(opam env)
 
+root_path=${root:-.}
+
 build_all () {
     eval $(opam env)
-    dune clean
+    dune build @check
     mkdir -p _build/website/
-    dune build --profile release src/client/main.bc.js
-    cp _build/default/src/client/main.bc.js _build/website/main-client.js
-    cp data/loading.gif _build/website/
+    dune build --profile release $root_path/src/client/main.bc.js
+    cp _build/default/$root_path/src/client/main.bc.js _build/website/main-client.js
+    cp $root_path/data/loading.gif _build/website/
     chmod 600 _build/website/*
-    dune exec src/gen-web/main.exe index "TZComet" > _build/website/index.html
+    dune exec $root_path/src/gen-web/main.exe index "TZComet" > _build/website/index.html
     echo "Done: file://$PWD/_build/website/index.html"
-    dune build src/deploy-examples/main.exe
 }
 build_ () {
     build_all
