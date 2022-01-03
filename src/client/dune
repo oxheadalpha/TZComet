@@ -5,13 +5,5 @@
   (flags --no-inline))
  (preprocess
   (pps js_of_ocaml-ppx))
- (libraries
-  zarith_stubs_js
-  fmt
-  base
-  js_of_ocaml-lwt
-  re.posix
-  tezos-contract-metadata
-  digestif.ocaml
-  lwd
-  tyxml-lwd))
+ (libraries zarith_stubs_js fmt base js_of_ocaml-lwt re.posix
+   tezos-contract-metadata digestif.ocaml lwd tyxml-lwd))
