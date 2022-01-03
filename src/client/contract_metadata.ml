@@ -2,7 +2,7 @@ open Import
 
 module Uri = struct
   let validate uri_code =
-    let open Tezos_contract_metadata.Metadata_uri in
+    let open Tezai_contract_metadata.Metadata_uri in
     let errors = ref [] in
     let error w src e = errors := (w, src, e) :: !errors in
     let validate_kt1_address s =
@@ -44,7 +44,7 @@ module Uri = struct
   end
 
   let rec needs_context_address =
-    let open Tezos_contract_metadata.Metadata_uri in
+    let open Tezai_contract_metadata.Metadata_uri in
     function
     | Storage {address= None; _} -> true
     | Web _ | Storage _ | Ipfs _ -> false
@@ -57,7 +57,7 @@ module Uri = struct
     Fmt.str "%s%s%s" gateway cid path
 
   let to_web_address ctxt =
-    let open Tezos_contract_metadata.Metadata_uri in
+    let open Tezai_contract_metadata.Metadata_uri in
     function
     | Web http -> Some http
     | Ipfs {cid; path} -> Some (to_ipfs_gateway ctxt ~cid ~path)
@@ -72,7 +72,7 @@ module Uri = struct
     System.slow_step ctxt
     >>= fun () ->
     let rec resolve =
-      let open Tezos_contract_metadata.Metadata_uri in
+      let open Tezai_contract_metadata.Metadata_uri in
       function
       | Web http ->
           logf "HTTP %S (may fail because of origin policy)" http ;

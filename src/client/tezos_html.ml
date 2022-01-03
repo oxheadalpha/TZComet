@@ -45,7 +45,7 @@ let tzip_021_url =
 
 let uri_parsing_error err =
   let open Meta_html in
-  let open Tezos_contract_metadata.Metadata_uri.Parsing_error in
+  let open Tezai_contract_metadata.Metadata_uri.Parsing_error in
   let details =
     let sha256_host_advice =
       t "The host should look like:"
@@ -155,7 +155,7 @@ let single_error ctxt =
   | Exn other_exn ->
       Errors_html.exception_html ctxt other_exn
         ~handlers:[json_encoding_error; simple_exns_handler]
-  | Tezos_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
+  | Tezai_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
       parsing_error ->
       uri_parsing_error parsing_error
   | other ->
@@ -233,7 +233,7 @@ let tzip16_uri_short ctxt s =
   %% open_in_editor ctxt s ~and_explorer:true
 
 let metadata_uri ?(open_in_editor_link = true) ctxt uri =
-  let open Tezos_contract_metadata.Metadata_uri in
+  let open Tezai_contract_metadata.Metadata_uri in
   let ct = monot in
   let rec go uri =
     match uri with
@@ -271,7 +271,7 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
   ( if open_in_editor_link then
     div
       (open_in_editor ctxt
-         (Tezos_contract_metadata.Metadata_uri.to_string_uri uri) )
+         (Tezai_contract_metadata.Metadata_uri.to_string_uri uri) )
   else empty () )
   % div (go uri)
 
