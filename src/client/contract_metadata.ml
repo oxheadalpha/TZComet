@@ -176,7 +176,7 @@ module Content = struct
         fix j in
       let contents =
         Json_encoding.destruct
-          Tezos_contract_metadata.Metadata_contents.encoding jsonm in
+          Tezai_contract_metadata.Metadata_contents.encoding jsonm in
       Ok (!warnings, contents)
     with e -> Tezos_error_monad.Error_monad.error_exn e
 
@@ -238,6 +238,7 @@ module Content = struct
 
   module Q = Query_nodes
   open Tezos_contract_metadata
+  open Tezai_contract_metadata
   module Query_nodes = Q
 
   type metadata = Metadata_contents.t
@@ -536,7 +537,7 @@ module Content = struct
 
   module Tzip_021 = struct
     let claim metadata =
-      List.find metadata.Tezos_contract_metadata.Metadata_contents.interfaces
+      List.find metadata.Tezai_contract_metadata.Metadata_contents.interfaces
         ~f:(fun claim -> String.is_prefix claim ~prefix:"TZIP-021")
 
     type uri_format =
@@ -772,7 +773,7 @@ module Token = struct
     ; total_supply: Z.t option
     ; tzip21: Content.Tzip_021.t
     ; main_multimedia: (string * Multimedia.t, exn) Result.t Option.t
-    ; metadata: Tezos_contract_metadata.Metadata_contents.t
+    ; metadata: Tezai_contract_metadata.Metadata_contents.t
     ; special_knowledge: [`Hic_et_nunc of Z.t] list
     ; warnings: (string * warning) list }
 
@@ -876,7 +877,7 @@ module Token = struct
     >>= fun token_metadata_big_map ->
     Query_nodes.metadata_value ctxt ~address ~key:"" ~log:(logs "Getting URI")
     >>= (fun metadata_uri ->
-          let open Tezos_contract_metadata.Metadata_contents in
+          let open Tezai_contract_metadata.Metadata_contents in
           let empty () = Lwt.return (make []) in
           match Uri.validate metadata_uri with
           | Ok uri, _ -> (

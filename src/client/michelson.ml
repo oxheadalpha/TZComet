@@ -89,8 +89,8 @@ module Partial_type = struct
     ; structure: Structure.t }
 
   open Structure
-  open! Tezos_contract_metadata.Metadata_contents.View.Implementation
-  open! Tezos_contract_metadata.Metadata_contents.Michelson_blob
+  open! Tezai_contract_metadata.Metadata_contents.View.Implementation
+  open! Tezai_contract_metadata.Metadata_contents.Michelson_blob
 
   let of_type ?(annotations = []) (Micheline m) =
     let view_annots = annotations in

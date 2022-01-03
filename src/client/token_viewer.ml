@@ -367,7 +367,7 @@ let show_token ctxt
                 ~sep:(fun () -> t ", ")
                 ~last_sep:(fun () -> t ", ") ) ) in
   let contract_info =
-    let open Tezos_contract_metadata.Metadata_contents in
+    let open Tezai_contract_metadata.Metadata_contents in
     let sep () = t ", " in
     let item c = div (bt "→" %% c) in
     let itemo o = or_empty o item in

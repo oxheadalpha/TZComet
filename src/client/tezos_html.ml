@@ -275,12 +275,12 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
   else empty () )
   % div (go uri)
 
-let mich (Tezos_contract_metadata.Metadata_contents.Michelson_blob.Micheline m)
+let mich (Tezai_contract_metadata.Metadata_contents.Michelson_blob.Micheline m)
     =
   Michelson.micheline_canonical_to_string m
 
 let view_result ctxt ~result ~storage ~address ~view ~parameter =
-  let open Tezos_contract_metadata.Metadata_contents in
+  let open Tezai_contract_metadata.Metadata_contents in
   let open View in
   let open Implementation in
   let open Michelson_storage in
@@ -314,7 +314,7 @@ let view_result ctxt ~result ~storage ~address ~view ~parameter =
          ; ("Current storage", mich_node storage) ] )
 
 let michelson_view ctxt ~view =
-  let open Tezos_contract_metadata.Metadata_contents in
+  let open Tezai_contract_metadata.Metadata_contents in
   let open View in
   let open Implementation in
   let open Michelson_storage in
@@ -462,7 +462,7 @@ let michelson_instruction s =
   link (t s) ~target:(Fmt.str "https://michelson.nomadic-labs.com/#instr-%s" s)
 
 let metadata_validation_error _ctxt =
-  let open Tezos_contract_metadata.Metadata_contents in
+  let open Tezos_contract_metadata.Contract_metadata.Content in
   let open Validation.Error in
   let the_off_chain_view view = t "The off-chain-view “" % ct view % t "”" in
   function
@@ -489,8 +489,7 @@ let metadata_validation_error _ctxt =
       % t "."
 
 let metadata_validation_warning _ctxt =
-  let open Tezos_contract_metadata.Metadata_contents in
-  let open Validation.Warning in
+  let open Tezos_contract_metadata.Contract_metadata.Content.Validation.Warning in
   function
   | Wrong_author_format author ->
       t "The author" %% Fmt.kstr ct "%S" author
@@ -1429,7 +1428,7 @@ let author ~namet s =
 
 let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
     ?open_in_editor_link ctxt =
-  let open Tezos_contract_metadata.Metadata_contents in
+  let open Tezai_contract_metadata.Metadata_contents in
   fun (*  as *) metadata ->
     let ct = monot in
     let license_elt l =
@@ -1643,7 +1642,7 @@ let big_answer level content =
 let show_metadata_full_validation ?token_metadata_big_map ctxt
     ~add_explore_tokens_button ~add_open_in_editor_button
     ~show_validation_big_answer inpo =
-  let open Tezos_contract_metadata.Metadata_contents in
+  let open Tezos_contract_metadata.Contract_metadata.Content in
   match Contract_metadata.Content.of_json inpo with
   | Ok (legacy_warnings, m) ->
       let errs, warns =

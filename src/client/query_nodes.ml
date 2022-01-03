@@ -426,7 +426,7 @@ let metadata_value ctxt ~address ~key ~(log : string -> unit) =
 let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   let open Lwt in
   let open
-    Tezos_contract_metadata.Metadata_contents.View.Implementation
+    Tezai_contract_metadata.Metadata_contents.View.Implementation
     .Michelson_storage in
   let logf f =
     Fmt.kstr
