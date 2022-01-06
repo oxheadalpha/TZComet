@@ -158,26 +158,18 @@ end
 
 let gen_eight_byte_mults n =
     let eight = "AF00DFED" in
-    let rec loop acc n = 
+    let rec loop acc n =
       if n > 0
         then loop (eight ^ acc) (n - 1)
-        else acc 
+        else acc
     in "0x" ^ loop "" n
 
 let to_hex s =
   Fmt.str "0x%s"
     (let (`Hex x) = Hex.of_string s in
-      x ) 
+      x )
 
-let parse_test () =
-  let the_bytes = gen_eight_byte_mults 1000 in
-  let test_json : string = 
-    let before = " {\"prim\": \"Pair\", \"args\": [{\"bytes\": \"" in
-    let after = "\"}, {\"int\": \"40462\"}]}" 
-    in (before ^ the_bytes ^ after ) in 
-  Stdlib.output_string Stdlib.stdout (test_json ^ "\n"); 
-  let _z_value = Ezjsonm.value_from_string test_json in
-  Stdlib.output_string Stdlib.stdout ("Done." ^ "\n")
+let parse_test () = ()
 
 let all ?(dry_run = false) ?only ~logfile () =
   let originated = ref [] in

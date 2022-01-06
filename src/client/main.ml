@@ -50,8 +50,27 @@ let lwd_onload _ =
       Lwt.return_unit) ;
   Js._false
 
+  let gen_eight_byte_mults n =
+    let eight = "AF00DFED" in
+    let rec loop acc n =
+      if n > 0
+      then loop (eight ^ acc) (n - 1)
+      else acc
+    in "0x" ^ loop "" n
+
+  let parse_test () =
+    let the_bytes = gen_eight_byte_mults 1000 in
+    let test_json : string =
+          let before = " {\"prim\": \"Pair\", \"args\": [{\"bytes\": \"" in
+          let after = "\"}, {\"int\": \"40462\"}]}"
+                            in (before ^ the_bytes ^ after ) in
+    Stdlib.output_string Stdlib.stdout (test_json ^ "\n");
+    let _z_value = Ezjsonm.value_from_string test_json in
+    Stdlib.output_string Stdlib.stdout ("Done." ^ "\n")
+
 let _ =
   dbgf "Hello Main!" ;
   let open Js_of_ocaml in
+  parse_test ();
   (Lwt.async_exception_hook := fun e -> dbgf "Async Exn: %s" (Exn.to_string e)) ;
   Dom_html.window##.onload := Dom_html.handler lwd_onload

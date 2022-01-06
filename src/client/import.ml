@@ -240,16 +240,52 @@ module Ezjsonm = struct
   include Ezjsonm
 
   module Stack_reimplementation = struct
-    exception Escape of ((int * int) * (int * int)) * Jsonm.error
+    exception Escape of ((int * int) * (int * int)) * Tzcomet_jsonm.error
 
     let json_of_src src =
-      let d = Jsonm.decoder src in
+        let _ = match src with
+        | `Channel _c -> dbgf "json_of_src - about to call Tzcomet_jsonm.decode - `Channel";
+        | `String s -> dbgf "json_of_src - about to call Tzcomet_jsonm.decode on a string: %S" s;
+        | `Manual -> dbgf "json_of_src - about to call Tzcomet_jsonm.decode - `Manual";
+      in
+      let d = Tzcomet_jsonm.decoder src in
       let dec () =
-        match Jsonm.decode d with
-        | `Lexeme l -> l
-        | `Error e -> raise (Escape (Jsonm.decoded_range d, e))
-        | `End | `Await -> assert false in
-      let pp_value ppf v = Fmt.pf ppf "%s" (Ezjsonm.value_to_string v) in
+        (* match Tzcomet_jsonm.decode d with *)
+        dbgf "Before Tzcomet_jsonm.decode.....";
+        let deco = Tzcomet_jsonm.decode d in
+        dbgf ".....after Tzcomet_jsonm.decode";
+        match deco with
+        | `Lexeme l ->
+          dbgf "json_of_src - decode to `Lexeme: %a" Tzcomet_jsonm.pp_lexeme l;
+          l
+        | `Error e ->
+          dbgf "json_of_src - decoded to `Error e";
+          raise (Escape (Tzcomet_jsonm.decoded_range d, e))
+        | `End | `Await ->
+          dbgf "json_of_src - decoded to `End or `Await";
+          assert false in
+
+      (* let pp_value ppf v = Fmt.pf ppf "%s" (Ezjsonm.value_to_string v) in *)
+      let pp_value ppf v =
+        dbgf "json_of_src, about to call Ezjsonm.value_to_string...v matches:";
+        (* match v with *)
+        (* | `Null -> Stdlib.output_string Stdlib.stdout ("Parsed to null" ^ "\n"); *)
+        (* | `Bool _b -> Stdlib.output_string Stdlib.stdout ("Parsed to bool" ^ "\n"); *)
+        (* | `Float _f -> Stdlib.output_string Stdlib.stdout ("Parsed to float" ^ "\n"); *)
+        (* | `String _s -> Stdlib.output_string Stdlib.stdout ("Parsed to string" ^ "\n"); *)
+        (* | `A _a_list -> Stdlib.output_string Stdlib.stdout ("Parsed to list" ^ "\n"); *)
+        (* | `O _obj_list -> Stdlib.output_string Stdlib.stdout ("Parsed to object list" ^ "\n"); *)
+        match v with
+        | `Null -> dbgf ("Parsed to null");
+        | `Bool _b -> dbgf ("Parsed to bool");
+        | `Float _f -> dbgf ("Parsed to float");
+        | `String _s -> dbgf ("Parsed to string");
+        | `A _a_list -> dbgf ("Parsed to list");
+        | `O _obj_list -> dbgf ("Parsed to object list");
+
+        let the_val = Ezjsonm.value_to_string v in
+        Fmt.pf ppf "%s" the_val in
+
       let module Stack_type = struct
         type t =
           [ `A of Ezjsonm.value List.t
@@ -272,10 +308,10 @@ module Ezjsonm = struct
           | #Ezjsonm.value as v -> pp_value ppf v ) in
       let stack = ref [] in
       let fail_stack fmt =
-        dbgf "fail_stack called"; 
+        dbgf "fail_stack called";
         Fmt.kstr
           (fun m ->
-            let (a, b), (c, d) = Jsonm.decoded_range d in
+            let (a, b), (c, d) = Tzcomet_jsonm.decoded_range d in
             Fmt.failwith "%s [%d,%d - %d,%d stack: %a]" m a b c d pp_stack
               !stack )
           fmt in
@@ -323,8 +359,8 @@ module Ezjsonm = struct
       try `JSON (go ()) with Escape (r, e) -> `Error (r, e)
 
     let value_to_dst ?(minify = true) dst json =
-      let encoder = Jsonm.encoder ~minify dst in
-      let encode l = ignore (Jsonm.encode encoder (`Lexeme l)) in
+      let encoder = Tzcomet_jsonm.encoder ~minify dst in
+      let encode l = ignore (Tzcomet_jsonm.encode encoder (`Lexeme l)) in
       let rec go = function
         | [] -> ()
         | `Value ((`Bool _ | `Null | `Float _ | `String _) as v) :: more ->
@@ -346,7 +382,7 @@ module Ezjsonm = struct
             go more
         | `Array (v :: aa) :: more -> go (`Value v :: `Array aa :: more) in
       go [`Value json] ;
-      ignore (Jsonm.encode encoder `End)
+      ignore (Tzcomet_jsonm.encode encoder `End)
   end
 
   open Stack_reimplementation
@@ -359,6 +395,7 @@ module Ezjsonm = struct
     Buffer.contents buf
 
   let value_from_string s =
+    dbgf "Import.Ezjsonm.value_from_string called with: %S" s;
     match json_of_src (`String s) with
     | `JSON j -> j
     | `Error (((line, col), (eline, ecol)), err) ->
@@ -437,7 +474,8 @@ module Ezjsonm = struct
             t "JSON Parsing: at line" %% int ct line %% t ", column"
             %% int ct col % t ":" %% err_message % t ".")
     | exception e ->
-        dbgf "value_from_string - exception: %a" Exn.pp e;  
+        (* MLN: This one reached: *)
+        dbgf "Import.Ezjosnm.value_from_string - exception: %a" Exn.pp e;
         Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
 end
 

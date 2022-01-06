@@ -1,3 +1,13 @@
 (executable
  (name main)
- (libraries fmt unix base hex ezjsonm))
+ (js_of_ocaml
+  (flags --no-inline --pretty))
+ (preprocess
+  (pps js_of_ocaml-ppx))
+ (libraries
+   fmt
+   unix
+   base
+   hex
+   js_of_ocaml-lwt
+   ezjsonm))
