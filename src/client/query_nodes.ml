@@ -497,7 +497,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
          carthagenet *)
       let code =
         match view.code with
-        | Micheline mich ->
+        | Michelson_blob mich ->
             let open Tezos_micheline.Micheline in
             let node = root mich in
             let rec go = function
@@ -511,7 +511,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
                   Prim (_loc, _prim, List.map ~f:go args, _annot)
               | Seq (loc, args) -> Seq (loc, List.map ~f:go args) in
             go node |> strip_locations in
-      {view with code= Micheline code} in
+      {view with code= Michelson_blob code} in
     build_off_chain_view_contract view ~contract_balance:(Z.of_string balance)
       ~contract_address:address ~contract_storage ~view_parameters
       ~contract_storage_type ~contract_parameter_type in

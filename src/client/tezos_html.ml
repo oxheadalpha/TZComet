@@ -275,7 +275,8 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
   else empty () )
   % div (go uri)
 
-let mich (Tezai_contract_metadata.Metadata_contents.Michelson_blob.Micheline m)
+let mich
+    (Tezai_contract_metadata.Metadata_contents.Michelson_blob.Michelson_blob m)
     =
   Michelson.micheline_canonical_to_string m
 
@@ -1572,7 +1573,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                   (let sep () = t "|" in
                    oxfordize_list more ~map:ct ~sep ~last_sep:sep )
               % t "]" ) in
-      let expand (Michelson_blob.Micheline m as mm) =
+      let expand (Michelson_blob.Michelson_blob m as mm) =
         let open Tezos_micheline.Micheline in
         let qit s =
           abbreviation
