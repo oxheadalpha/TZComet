@@ -243,48 +243,14 @@ module Ezjsonm = struct
     exception Escape of ((int * int) * (int * int)) * Tzcomet_jsonm.error
 
     let json_of_src src =
-        let _ = match src with
-        | `Channel _c -> dbgf "json_of_src - about to call Tzcomet_jsonm.decode - `Channel";
-        | `String s -> dbgf "json_of_src - about to call Tzcomet_jsonm.decode on a string: %S" s;
-        | `Manual -> dbgf "json_of_src - about to call Tzcomet_jsonm.decode - `Manual";
-      in
       let d = Tzcomet_jsonm.decoder src in
       let dec () =
-        (* match Tzcomet_jsonm.decode d with *)
-        dbgf "Before Tzcomet_jsonm.decode.....";
-        let deco = Tzcomet_jsonm.decode d in
-        dbgf ".....after Tzcomet_jsonm.decode";
-        match deco with
-        | `Lexeme l ->
-          dbgf "json_of_src - decode to `Lexeme: %a" Tzcomet_jsonm.pp_lexeme l;
-          l
-        | `Error e ->
-          dbgf "json_of_src - decoded to `Error e";
-          raise (Escape (Tzcomet_jsonm.decoded_range d, e))
-        | `End | `Await ->
-          dbgf "json_of_src - decoded to `End or `Await";
-          assert false in
+        match Tzcomet_jsonm.decode d with
+        | `Lexeme l -> l
+        | `Error e -> raise (Escape (Tzcomet_jsonm.decoded_range d, e))
+        | `End | `Await -> assert false in
 
-      (* let pp_value ppf v = Fmt.pf ppf "%s" (Ezjsonm.value_to_string v) in *)
-      let pp_value ppf v =
-        dbgf "json_of_src, about to call Ezjsonm.value_to_string...v matches:";
-        (* match v with *)
-        (* | `Null -> Stdlib.output_string Stdlib.stdout ("Parsed to null" ^ "\n"); *)
-        (* | `Bool _b -> Stdlib.output_string Stdlib.stdout ("Parsed to bool" ^ "\n"); *)
-        (* | `Float _f -> Stdlib.output_string Stdlib.stdout ("Parsed to float" ^ "\n"); *)
-        (* | `String _s -> Stdlib.output_string Stdlib.stdout ("Parsed to string" ^ "\n"); *)
-        (* | `A _a_list -> Stdlib.output_string Stdlib.stdout ("Parsed to list" ^ "\n"); *)
-        (* | `O _obj_list -> Stdlib.output_string Stdlib.stdout ("Parsed to object list" ^ "\n"); *)
-        match v with
-        | `Null -> dbgf ("Parsed to null");
-        | `Bool _b -> dbgf ("Parsed to bool");
-        | `Float _f -> dbgf ("Parsed to float");
-        | `String _s -> dbgf ("Parsed to string");
-        | `A _a_list -> dbgf ("Parsed to list");
-        | `O _obj_list -> dbgf ("Parsed to object list");
-
-        let the_val = Ezjsonm.value_to_string v in
-        Fmt.pf ppf "%s" the_val in
+      let pp_value ppf v = Fmt.pf ppf "%s" (Ezjsonm.value_to_string v) in
 
       let module Stack_type = struct
         type t =
@@ -308,7 +274,6 @@ module Ezjsonm = struct
           | #Ezjsonm.value as v -> pp_value ppf v ) in
       let stack = ref [] in
       let fail_stack fmt =
-        dbgf "fail_stack called";
         Fmt.kstr
           (fun m ->
             let (a, b), (c, d) = Tzcomet_jsonm.decoded_range d in
@@ -395,11 +360,9 @@ module Ezjsonm = struct
     Buffer.contents buf
 
   let value_from_string s =
-    dbgf "Import.Ezjsonm.value_from_string called with: %S" s;
     match json_of_src (`String s) with
     | `JSON j -> j
     | `Error (((line, col), (eline, ecol)), err) ->
-        dbgf "Error l-%d c-%d -- l-%d c-%d" line col eline ecol ;
         Decorate_error.raise
           Message.(
             (* Adapted from
@@ -474,8 +437,6 @@ module Ezjsonm = struct
             t "JSON Parsing: at line" %% int ct line %% t ", column"
             %% int ct col % t ":" %% err_message % t ".")
     | exception e ->
-        (* MLN: This one reached: *)
-        dbgf "Import.Ezjosnm.value_from_string - exception: %a" Exn.pp e;
         Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
 end
 

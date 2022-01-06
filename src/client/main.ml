@@ -58,7 +58,8 @@ let lwd_onload _ =
       else acc
     in "0x" ^ loop "" n
 
-  let parse_test () =
+  (* TODO: run this as a test *)
+  let _parse_test () =
     let the_bytes = gen_eight_byte_mults 1000 in
     let test_json : string =
           let before = " {\"prim\": \"Pair\", \"args\": [{\"bytes\": \"" in
@@ -71,6 +72,5 @@ let lwd_onload _ =
 let _ =
   dbgf "Hello Main!" ;
   let open Js_of_ocaml in
-  parse_test ();
   (Lwt.async_exception_hook := fun e -> dbgf "Async Exn: %s" (Exn.to_string e)) ;
   Dom_html.window##.onload := Dom_html.handler lwd_onload
