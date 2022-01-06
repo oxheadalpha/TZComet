@@ -435,8 +435,7 @@ module Ezjsonm = struct
                   | `Eoi -> t "end of input" ) in
             t "JSON Parsing: at line" %% int ct line %% t ", column"
             %% int ct col % t ":" %% err_message % t ".")
-    | exception e ->
-        Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
+    | exception e -> Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
 end
 
 module Blob = struct
