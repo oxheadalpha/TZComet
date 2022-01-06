@@ -42,7 +42,7 @@ type lexeme = [
     A {e well-formed} sequence of lexemes belongs to the language of
     the [json] grammar:
 {[
-  json = value
+  json = value 
 object = `Os *member `Oe
 member = (`Name s) value
  array = `As *value `Ae
