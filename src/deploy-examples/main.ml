@@ -94,13 +94,6 @@ storage (pair nat (big_map %metadata string bytes));
 code { PUSH nat 42; FAILWITH; };
 |tz}
 
-let contract_bug () =
-{tz|
-parameter unit;
-storage (pair bytes (big_map %metadata string bytes));
-code { PUSH nat 42; FAILWITH; };
-|tz}
-
 module Micheline_views = struct
   open Ezjsonm
 
@@ -109,7 +102,6 @@ module Micheline_views = struct
 
   let int i = dict [("int", string (Int.to_string i))]
   let michstring s = dict [("string", string s)]
-
 
   let michbytes b =
     let (`Hex hex) = Hex.of_string b in
@@ -156,21 +148,6 @@ module Micheline_views = struct
           ~annotations code ]
 end
 
-let gen_eight_byte_mults n =
-    let eight = "AF00DFED" in
-    let rec loop acc n =
-      if n > 0
-        then loop (eight ^ acc) (n - 1)
-        else acc
-    in "0x" ^ loop "" n
-
-let to_hex s =
-  Fmt.str "0x%s"
-    (let (`Hex x) = Hex.of_string s in
-      x )
-
-let parse_test () = ()
-
 let all ?(dry_run = false) ?only ~logfile () =
   let originated = ref [] in
   let add name description kt1 =
@@ -192,30 +169,17 @@ let all ?(dry_run = false) ?only ~logfile () =
         add name description kt1 in
   let simple name description ?(the_nat = 7) bm =
     let source = contract () in
-    (* let to_hex s = *)
-    (*   Fmt.str "0x%s" *)
-    (*     (let (`Hex x) = Hex.of_string s in *)
-    (*      x ) in *)
+    let to_hex s =
+      Fmt.str "0x%s"
+        (let (`Hex x) = Hex.of_string s in
+         x ) in
     let init =
       Fmt.str "(Pair %d {%s})" the_nat
         (String.concat ~sep:" ; "
            (List.map bm ~f:(fun (k, v) -> Fmt.str "Elt %S %s" k (to_hex v))) )
     in
     originate ~description ~logfile ~name ~source ~init () in
-  let simple_bug name description ?(the_bytes = gen_eight_byte_mults 1000) bm =
-    let source = contract_bug () in
-    let init =
-      Fmt.str "(Pair %s {%s})" the_bytes
-        (String.concat ~sep:" ; "
-           (List.map bm ~f:(fun (k, v) -> Fmt.str "Elt %S %s" k (to_hex v))) )
-    in
-    originate ~description ~logfile ~name ~source ~init () in
   let root uri = ("", uri) in
-  let self_host_bug name description json =
-    simple_bug name description
-      [ root "tezos-storage:contents"
-      ; ("contents", Ezjsonm.value_to_string json)]
-  in
   let self_host name description json =
     simple name description
       (* (Fmt.str "Self-hosted JSON.\n\n%s\n\n```json\n%s\n```\n\n" description
@@ -352,8 +316,6 @@ let all ?(dry_run = false) ?only ~logfile () =
     self_host "empty_but_valid" "Empty, but valid metadata." Ezjsonm.(dict []) ;
     self_host "just_version" "Has just a version string."
       Ezjsonm.(dict [("version", string "tzcomet-example v0.0.42")]) ;
-    self_host_bug "just_buggy" "Is just buggy."
-      Ezjsonm.(dict [("version", string "tzcomet-example v0.0.42")]) ;
     self_describe "with_basics" "This contract has few more fields." basics ;
     self_describe "one_off_chain_view"
       "This contract has a one off-chain-view which is actually reused for the \
@@ -416,7 +378,6 @@ let () =
   match Array.to_list Caml.Sys.argv |> List.tl_exn with
   | ["all"] -> all () ~logfile ~dry_run
   | "only" :: these -> all () ~logfile ~dry_run ~only:these
-  | ["parsetest"] -> parse_test ()
   | other :: _ ->
       Fmt.epr "Unknown command: %S!\n%!" other ;
       usage () ;

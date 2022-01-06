@@ -249,9 +249,7 @@ module Ezjsonm = struct
         | `Lexeme l -> l
         | `Error e -> raise (Escape (Tzcomet_jsonm.decoded_range d, e))
         | `End | `Await -> assert false in
-
       let pp_value ppf v = Fmt.pf ppf "%s" (Ezjsonm.value_to_string v) in
-
       let module Stack_type = struct
         type t =
           [ `A of Ezjsonm.value List.t
@@ -363,6 +361,7 @@ module Ezjsonm = struct
     match json_of_src (`String s) with
     | `JSON j -> j
     | `Error (((line, col), (eline, ecol)), err) ->
+        dbgf "Error l-%d c-%d -- l-%d c-%d" line col eline ecol ;
         Decorate_error.raise
           Message.(
             (* Adapted from

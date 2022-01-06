@@ -719,6 +719,7 @@ module Explorer = struct
                 )
             >>= fun json_code ->
             let open Tezos_contract_metadata.Metadata_contents in
+            dbgf "before of-json" ;
             match Contract_metadata.Content.of_json json_code with
             | Ok (_, _) ->
                 Async_work.ok result
