@@ -2,7 +2,7 @@
  (name main)
  (modes js)
  (js_of_ocaml
-  (flags --no-inline))
+  (flags --no-inline --pretty))
  (preprocess
   (pps js_of_ocaml-ppx))
  (libraries
