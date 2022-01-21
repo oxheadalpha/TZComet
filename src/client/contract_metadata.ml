@@ -352,9 +352,8 @@ module Content = struct
         Decorate_error.raise
           Message.(
             t "Wrong %token_metadata annotation:"
-            %% kpp ct
-                 Tezos_contract_metadata.Micheline_helpers
-                 .pp_arbitrary_micheline node) in
+            %% kpp ct Tezai_michelson.Untyped.pp
+                 (Tezai_michelson.Untyped.of_micheline_node node)) in
     match (storage_node, type_node) with
     | Prim (_, "Pair", [l; r], ans), Prim (_, "pair", [lt; rt], ant) ->
         check_annots ans storage_node ;
@@ -400,7 +399,11 @@ module Content = struct
     >>= fun metacontract ->
     let Node.Contract.{storage_node; type_node; _} = metacontract in
     let tmbm_id =
-      match find_token_metadata_big_map ~storage_node ~type_node with
+      match
+        find_token_metadata_big_map
+          ~storage_node:(Tezai_michelson.Untyped.to_micheline_node storage_node)
+          ~type_node:(Tezai_michelson.Untyped.to_micheline_node type_node)
+      with
       | [one] -> one
       | other ->
           Decorate_error.raise
@@ -415,8 +418,9 @@ module Content = struct
     let open Lwt.Infix in
     let parameter =
       let open Michelson in
-      parse_micheline_exn ~check_indentation:false parameter_string
-        ~check_primitives:false in
+      Tezai_michelson.Untyped.of_micheline_node
+        (parse_micheline_exn ~check_indentation:false parameter_string
+           ~check_primitives:false ) in
     Query_nodes.call_off_chain_view ctxt ~log ~address ~view ~parameter
     >>= function
     | Ok (result, _) -> Lwt.return (Ok result) | Error s -> Lwt.return (Error s)
@@ -930,6 +934,8 @@ module Token = struct
     let get_total_supply_with_view () =
       Content.maybe_call_view ctxt total_supply_validation
         ~parameter_string:(Z.to_string id) ~address ~log:(logs "Call View")
+      >|= Option.map
+            ~f:(Result.map ~f:Tezai_michelson.Untyped.to_micheline_node)
       >>= function
       | Some (Ok (Tezos_micheline.Micheline.Int (_, z))) -> Lwt.return_some z
       | _ -> Lwt.return_none in
@@ -946,7 +952,8 @@ module Token = struct
         | _, Valid _ | None, _ -> (
             get_token_metadata_map_with_view ()
             >>= function
-            | Some (Ok s) -> Lwt.return s
+            | Some (Ok s) ->
+                Lwt.return (Tezai_michelson.Untyped.to_micheline_node s)
             | _ -> failm Message.(Fmt.kstr t "Token-metadata view failed.") )
         | Some big_map_id, _ ->
             get_token_metadata_map_with_big_map ~log:meta_log ~node big_map_id

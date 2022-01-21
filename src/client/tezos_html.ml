@@ -386,11 +386,17 @@ let michelson_view ctxt ~view =
                         parse_micheline_exn ~check_indentation:false "Unit"
                           ~check_primitives:false in
                   Query_nodes.call_off_chain_view ctxt ~log
-                    ~address:(Reactive.peek address) ~view ~parameter
+                    ~address:(Reactive.peek address) ~view
+                    ~parameter:
+                      (Tezai_michelson.Untyped.of_micheline_node parameter)
                   >>= function
                   | Ok (result, storage) ->
                       Async_work.ok wip
-                        (view_result ctxt ~result ~storage
+                        (view_result ctxt
+                           ~result:
+                             (Tezai_michelson.Untyped.to_micheline_node result)
+                           ~storage:
+                             (Tezai_michelson.Untyped.to_micheline_node storage)
                            ~address:(Reactive.peek address) ~view ~parameter ) ;
                       Lwt.return ()
                   | Error s ->
@@ -661,7 +667,8 @@ let show_total_supply (_ctxt : _ Context.t) ?decimals z =
         Z.pp_print z
   | None | (exception _) -> Fmt.kstr t "%a Units (no decimals)" Z.pp_print z
 
-let show_total_supply_result ctxt ?decimals = function
+let show_total_supply_result ctxt ?decimals ts =
+  match Result.map ~f:Tezai_michelson.Untyped.to_micheline_node ts with
   | Ok (Tezos_micheline.Micheline.Int (_, z)) ->
       show_total_supply ctxt ?decimals z
   | other -> ct "Error: " %% show_micheline_result other
@@ -883,8 +890,8 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                 ~parameter_string:"Unit" ~address ~log
               >>= fun tokens_mich ->
               let tokens =
-                match tokens_mich with
-                | Seq (_, nodes) ->
+                match Tezai_michelson.Untyped.to_micheline_node tokens_mich with
+                | Seq (_, nodes) as seq_node ->
                     List.map nodes ~f:(function
                       | Int (_, n) -> n
                       | _ ->
@@ -892,14 +899,13 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                             (mkexn
                                ( t "Wrong Micheline structure for result:"
                                %% ct
-                                    (Michelson.micheline_node_to_string
-                                       tokens_mich ) ) ) )
-                | _ ->
+                                    (Michelson.micheline_node_to_string seq_node)
+                               ) ) )
+                | n ->
                     raise
                       (mkexn
                          ( t "Wrong Micheline structure for result:"
-                         %% ct (Michelson.micheline_node_to_string tokens_mich)
-                         ) ) in
+                         %% ct (Michelson.micheline_node_to_string n) ) ) in
               Fmt.kstr log "Got list of tokens %a"
                 Fmt.(Dump.list Z.pp_print)
                 tokens ;
@@ -954,7 +960,8 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                     ~log ~big_map_id ~key:id
                   >>= fun mich ->
                   Fmt.kstr log "Got value from big-map" ;
-                  Lwt.return (Ok mich)
+                  Lwt.return
+                    (Ok (Tezai_michelson.Untyped.of_micheline_node mich))
               | None, None -> Decorate_error.raise Message.(t "Not available")
             end
             >>= fun metadata_map ->
@@ -965,7 +972,10 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
               try
                 let nope = Decorate_error.raise in
                 let ok =
-                  match metadata_map with
+                  match
+                    Result.map ~f:Tezai_michelson.Untyped.to_micheline_node
+                      metadata_map
+                  with
                   | Error s -> nope Message.(t "Error getting view:" %% ct s)
                   | Ok (Prim (_, "Pair", [_; full_map], _)) ->
                       Michelson.Partial_type.micheline_string_bytes_map_exn

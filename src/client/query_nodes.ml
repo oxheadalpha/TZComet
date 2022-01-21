@@ -142,8 +142,8 @@ module Node = struct
 
   module Contract = struct
     type t =
-      { storage_node: (int, string) Tezos_micheline.Micheline.node
-      ; type_node: (int, string) Tezos_micheline.Micheline.node
+      { storage_node: Tezai_michelson.Untyped.t
+      ; type_node: Tezai_michelson.Untyped.t
       ; metadata_big_map: Z.t }
 
     let make ~storage_node ~type_node ~metadata_big_map =
@@ -157,22 +157,22 @@ module Node = struct
     let get = rpc_get state_handle node in
     let log fmt = Fmt.kstr log fmt in
     log "Got raw storage: %s" storage_string ;
-    let mich_storage = Michelson.micheline_of_json storage_string in
-    log "As concrete: %a"
-      Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
-      mich_storage ;
+    let mich_storage =
+      Tezai_michelson.Untyped.of_json (Ezjsonm.value_from_string storage_string)
+    in
+    log "As concrete: %a" Tezai_michelson.Untyped.pp mich_storage ;
     System.slow_step state_handle
     >>= fun () ->
     Fmt.kstr get "/chains/main/blocks/head/context/contracts/%s/script" address
     >>= fun script_string ->
     log "Got raw script: %s…" (ellipsize_string script_string ~max_length:30) ;
     let mich_storage_type =
-      Michelson.micheline_of_json script_string
-      |> Tezos_micheline.Micheline.strip_locations
-      |> Tezos_contract_metadata.Micheline_helpers.get_storage_type_exn in
-    log "Storage type: %a"
-      Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
-      mich_storage_type ;
+      let mich =
+        match Ezjsonm.value_from_string script_string with
+        | `O (("code", code) :: _) -> Tezai_michelson.Untyped.of_json code
+        | _ -> assert false in
+      Tezai_michelson.Untyped_contract.get_storage_type_exn mich in
+    log "Storage type: %a" Tezai_michelson.Untyped.pp mich_storage_type ;
     System.slow_step state_handle
     >>= fun () ->
     let bgs =
@@ -434,8 +434,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
         log s ;
         dbgf "call_off_chain_view: %s" s )
       f in
-  logf "Calling %s(%a)" address
-    Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline parameter ;
+  logf "Calling %s(%a)" address Tezai_michelson.Untyped.pp parameter ;
   find_node_with_contract ctxt address
   >>= fun node ->
   logf "Found contract with node %S" node.name ;
@@ -480,18 +479,18 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   >>= fun chain_id ->
   let chain_id = Ezjsonm.(value_from_string chain_id |> get_string) in
   logf "Got the script: %s" (ellipsize_string script ~max_length:30) ;
-  let contract_storage = Michelson.micheline_of_json storage in
+  let contract_storage =
+    Tezai_michelson.Untyped.of_json (Ezjsonm.value_from_string storage) in
   let `Contract view_contract, `Input view_input, `Storage view_storage =
-    let code_mich = Michelson.micheline_of_json script in
-    let open Tezos_contract_metadata.Micheline_helpers in
-    let contract_storage_type =
-      get_storage_type_exn (Tezos_micheline.Micheline.strip_locations code_mich)
-    in
-    let contract_parameter_type =
-      get_parameter_type_exn
-        (Tezos_micheline.Micheline.strip_locations code_mich) in
-    let view_parameters =
-      Tezos_micheline.Micheline.(strip_locations parameter |> root) in
+    let code_mich =
+      match Ezjsonm.value_from_string script with
+      | `O (("code", code) :: _) -> Tezai_michelson.Untyped.of_json code
+      | _ -> assert false
+      (*  Michelson.micheline_of_json script *) in
+    let open Tezai_michelson.Untyped_contract in
+    let contract_storage_type = get_storage_type_exn code_mich in
+    let contract_parameter_type = get_parameter_type_exn code_mich in
+    let view_parameters = parameter in
     let view =
       (* TEMPORARY: this is one macro expansion for the test that is on
          carthagenet *)
@@ -512,20 +511,18 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
               | Seq (loc, args) -> Seq (loc, List.map ~f:go args) in
             go node |> strip_locations in
       {view with code= Michelson_blob code} in
-    build_off_chain_view_contract view ~contract_balance:(Z.of_string balance)
-      ~contract_address:address ~contract_storage ~view_parameters
-      ~contract_storage_type ~contract_parameter_type in
-  logf "Made the view-script: %a"
-    Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
-    view_contract ;
-  logf "Made the view-input: %a"
-    Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline view_input ;
-  logf "Made the view-storage: %a"
-    Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline
-    view_storage ;
+    Tezos_contract_metadata.Micheline_helpers.build_off_chain_view_contract view
+      ~contract_balance:(Z.of_string balance) ~contract_address:address
+      ~contract_storage ~view_parameters ~contract_storage_type
+      ~contract_parameter_type in
+  logf "Made the view-script: %a" Tezai_michelson.Untyped.pp view_contract ;
+  logf "Made the view-input: %a" Tezai_michelson.Untyped.pp view_input ;
+  logf "Made the view-storage: %a" Tezai_michelson.Untyped.pp view_storage ;
   let constructed =
     let michjson which mich =
-      try Michelson.micheline_to_ezjsonm mich
+      try
+        Michelson.micheline_to_ezjsonm
+          (Tezai_michelson.Untyped.to_micheline_node mich)
       with e -> Fmt.failwith "micheline_to_ezjsonm '%s' → %a" which Exn.pp e
     in
     let open Ezjsonm in
@@ -562,9 +559,8 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       | Some json -> Michelson.micheline_of_ezjsonm json in
     let open Tezos_micheline.Micheline in
     match mich with
-    | Prim (_, "Some", [s], _) -> s
+    | Prim (_, "Some", [s], _) -> Tezai_michelson.Untyped.of_micheline_node s
     | other ->
-        Fmt.failwith "Result is not (Some _): %a"
-          Tezos_contract_metadata.Micheline_helpers.pp_arbitrary_micheline other
-  in
+        Fmt.failwith "Result is not (Some _): %a" Tezai_michelson.Untyped.pp
+          (Tezai_michelson.Untyped.of_micheline_node other) in
   return (Ok (actual_result, contract_storage))
