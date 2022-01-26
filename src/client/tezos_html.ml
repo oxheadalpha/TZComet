@@ -582,6 +582,11 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                 H5.video
                   ~a:[H5.a_controls (); style "max-width: 100%"]
                   ~src:(Lwd.pure web) []
+            | app_x when String.equal app_x "application/x-directory" ->
+              Bootstrap.alert ~kind:`Danger
+                (bt "MIME-Type:" %% ct mime)
+              %% bt "TBD"
+              %% fetch_and_show ()
             | _ ->
                 Bootstrap.alert ~kind:`Danger
                   (bt "Unknown MIME-Type:" %% ct mime)
