@@ -73,11 +73,6 @@ let parse_hex_bytes bytes =
     let open Tezos_error_monad.Error_monad in
     Error [Exn e]
 
-let pack_node_expression e =
-  Data_encoding.Binary.to_bytes_exn expr_encoding
-    (Tezos_micheline.Micheline.strip_locations e)
-  |> Bytes.to_string
-
 let encode_michelson_string s =
   Data_encoding.Binary.to_bytes_exn expr_encoding
     Tezos_micheline.Micheline.(String (0, s) |> strip_locations)

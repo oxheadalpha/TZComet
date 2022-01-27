@@ -278,7 +278,8 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
 let mich
     (Tezai_contract_metadata.Metadata_contents.Michelson_blob.Michelson_blob m)
     =
-  Michelson.micheline_canonical_to_string m
+  Tezai_michelson.Concrete_syntax.to_string
+    (Tezai_michelson.Untyped.of_canonical_micheline m)
 
 let view_result ctxt ~result ~storage ~address ~view ~parameter =
   let open Tezai_contract_metadata.Metadata_contents in
@@ -376,19 +377,17 @@ let michelson_view ctxt ~view =
               Lwt.Infix.(
                 fun ~mkexn:_ () ->
                   let parameter =
-                    let open Michelson in
                     match parameter_input with
                     | Some mf ->
                         Michelson.Partial_type.peek mf
-                        |> parse_micheline_exn ~check_indentation:false
-                             ~check_primitives:false
+                        |> Tezai_michelson.Concrete_syntax.parse_exn
+                             ~check_indentation:false ~check_primitives:false
                     | None ->
-                        parse_micheline_exn ~check_indentation:false "Unit"
+                        Tezai_michelson.Concrete_syntax.parse_exn
+                          ~check_indentation:false "Unit"
                           ~check_primitives:false in
                   Query_nodes.call_off_chain_view ctxt ~log
-                    ~address:(Reactive.peek address) ~view
-                    ~parameter:
-                      (Tezai_michelson.Untyped.of_micheline_node parameter)
+                    ~address:(Reactive.peek address) ~view ~parameter
                   >>= function
                   | Ok (result, storage) ->
                       Async_work.ok wip
@@ -397,7 +396,10 @@ let michelson_view ctxt ~view =
                              (Tezai_michelson.Untyped.to_micheline_node result)
                            ~storage:
                              (Tezai_michelson.Untyped.to_micheline_node storage)
-                           ~address:(Reactive.peek address) ~view ~parameter ) ;
+                           ~address:(Reactive.peek address) ~view
+                           ~parameter:
+                             (Tezai_michelson.Untyped.to_micheline_node
+                                parameter ) ) ;
                       Lwt.return ()
                   | Error s ->
                       Async_work.error wip (t "Error:" %% ct s) ;
@@ -1148,8 +1150,10 @@ let metadata_substandards ?token_metadata_big_map
                            errorify
                              ( t "is wrong:"
                              %% ct
-                                  (Michelson.micheline_canonical_to_string
-                                     pt.original ) )
+                                  Tezai_michelson.(
+                                    Concrete_syntax.to_string
+                                      (Untyped.of_canonical_micheline
+                                         pt.original )) )
                        | `Unchecked_Parameter, None ->
                            errorify (t "is expectedly not defined.")
                        | `Unchecked_Parameter, Some _ ->
@@ -1166,8 +1170,10 @@ let metadata_substandards ?token_metadata_big_map
                            errorify
                              ( t "is wrong:"
                              %% ct
-                                  (Michelson.micheline_canonical_to_string
-                                     pt.original ) ) ) ]
+                                  Tezai_michelson.(
+                                    Concrete_syntax.to_string
+                                      (Untyped.of_canonical_micheline
+                                         pt.original )) ) ) ]
             | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
           let show_permissions_descriptor pd =
             match pd with

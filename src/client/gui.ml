@@ -259,23 +259,19 @@ module Editor = struct
 
   let process_micheline ctxt inp =
     try
-      match
-        Michelson.parse_micheline
+      let o =
+        Tezai_michelson.Concrete_syntax.parse_exn
           ~check_indentation:(State.check_micheline_indentation ctxt)
-          ~check_primitives:false inp
-      with
-      | Ok o ->
-          let concrete = Michelson.micheline_node_to_string o in
-          let json =
-            Tezai_michelson.Untyped.to_json
-              (Tezai_michelson.Untyped.of_micheline_node o) in
-          let packed =
-            try
-              (* The packing can raise for missing primitives. *)
-              Ok (Michelson_bytes.pack_node_expression o)
-            with e -> Error e in
-          Ok (concrete, json, packed)
-      | Error e -> Error e
+          ~check_primitives:false inp in
+      let concrete = Tezai_michelson.Concrete_syntax.to_string o in
+      let json = Tezai_michelson.Untyped.to_json o in
+      let packed =
+        try
+          (* The packing can raise for missing primitives. *)
+          Ok (Tezai_michelson.Pack.pack o)
+          (* Michelson_bytes.pack_node_expression o) *)
+        with e -> Error e in
+      Ok (concrete, json, packed)
     with e -> Error [Tezos_error_monad.Error_monad.Exn e]
 
   let show_michelson ctxt inp =
