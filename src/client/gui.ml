@@ -266,7 +266,9 @@ module Editor = struct
       with
       | Ok o ->
           let concrete = Michelson.micheline_node_to_string o in
-          let json = Michelson.micheline_to_ezjsonm o in
+          let json =
+            Tezai_michelson.Untyped.to_json
+              (Tezai_michelson.Untyped.of_micheline_node o) in
           let packed =
             try
               (* The packing can raise for missing primitives. *)

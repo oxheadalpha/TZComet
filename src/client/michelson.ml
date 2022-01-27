@@ -10,12 +10,6 @@ let micheline_of_json s =
   dbgf "micheline_of_json: done parsing" ;
   Tezai_michelson.Untyped.of_json json
 
-let micheline_to_ezjsonm mich =
-  let enc =
-    Micheline.canonical_encoding ~variant:"custom" Data_encoding.string in
-  let json = Data_encoding.Json.construct enc (Micheline.strip_locations mich) in
-  json
-
 let parse_micheline ~check_indentation ~check_primitives m =
   let rec primitive_check =
     let open Tezos_micheline.Micheline in

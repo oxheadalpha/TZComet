@@ -520,9 +520,7 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
   logf "Made the view-storage: %a" Tezai_michelson.Untyped.pp view_storage ;
   let constructed =
     let michjson which mich =
-      try
-        Michelson.micheline_to_ezjsonm
-          (Tezai_michelson.Untyped.to_micheline_node mich)
+      try Tezai_michelson.Untyped.to_json mich
       with e -> Fmt.failwith "micheline_to_ezjsonm '%s' → %a" which Exn.pp e
     in
     let open Ezjsonm in
