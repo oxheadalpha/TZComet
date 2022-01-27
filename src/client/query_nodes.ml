@@ -556,9 +556,9 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
     let mich =
       match List.Assoc.find ~equal:String.equal d "storage" with
       | None -> Fmt.failwith "Result has not storage: %S" result
-      | Some json -> Michelson.micheline_of_ezjsonm json in
+      | Some json -> Tezai_michelson.Untyped.of_json json in
     let open Tezos_micheline.Micheline in
-    match mich with
+    match Tezai_michelson.Untyped.to_micheline_node mich with
     | Prim (_, "Some", [s], _) -> Tezai_michelson.Untyped.of_micheline_node s
     | other ->
         Fmt.failwith "Result is not (Some _): %a" Tezai_michelson.Untyped.pp

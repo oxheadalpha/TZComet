@@ -1,12 +1,6 @@
 open! Import
 open Tezos_micheline
 
-let micheline_of_ezjsonm json =
-  let enc =
-    Micheline.canonical_encoding ~variant:"custom" Data_encoding.string in
-  let mich = Data_encoding.Json.destruct enc json in
-  Micheline.root mich
-
 let micheline_of_json s =
   dbgf "micheline_of_json : %d bytes" (String.length s) ;
   let json =
@@ -14,7 +8,7 @@ let micheline_of_json s =
     | `O (("code", code) :: _) -> code
     | other -> other in
   dbgf "micheline_of_json: done parsing" ;
-  micheline_of_ezjsonm json
+  Tezai_michelson.Untyped.of_json json
 
 let micheline_to_ezjsonm mich =
   let enc =

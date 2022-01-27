@@ -960,8 +960,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                     ~log ~big_map_id ~key:id
                   >>= fun mich ->
                   Fmt.kstr log "Got value from big-map" ;
-                  Lwt.return
-                    (Ok (Tezai_michelson.Untyped.of_micheline_node mich))
+                  Lwt.return (Ok mich)
               | None, None -> Decorate_error.raise Message.(t "Not available")
             end
             >>= fun metadata_map ->

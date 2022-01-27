@@ -953,12 +953,13 @@ module Token = struct
             get_token_metadata_map_with_view ()
             >>= function
             | Some (Ok s) ->
-                Lwt.return (Tezai_michelson.Untyped.to_micheline_node s)
+                Lwt.return (* Tezai_michelson.Untyped.to_micheline_node *) s
             | _ -> failm Message.(Fmt.kstr t "Token-metadata view failed.") )
         | Some big_map_id, _ ->
             get_token_metadata_map_with_big_map ~log:meta_log ~node big_map_id
       end
-      >>= function
+      >>= fun mich ->
+      match Tezai_michelson.Untyped.to_micheline_node mich with
       | Prim (_, "Pair", [_; full_map], _) -> (
           let key_values =
             Michelson.Partial_type.micheline_string_bytes_map_exn full_map in
