@@ -205,6 +205,8 @@ let protocol s =
   let known name url =
     span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
   match s with
+  | "Psithaca2MLRFYargivpo7YvUr7wUDqyxrdhC5CQq78mRvimz6A" ->
+      known "Ithaca" "http://tezos.gitlab.io/protocols/012_ithaca.html"
   | "PtHangz2aRngywmSRGGvrcTyMbbdpWdpFKuS4uMWxg2RaH9i1qx" ->
       known "Hangzhou" "http://tezos.gitlab.io/protocols/011_hangzhou.html"
   | "PtGRANADsDU8R9daYKAgWnQYAJ64omN1o3KMGVCykShA97vQbvV" ->

@@ -80,6 +80,7 @@ ensure_setup () {
     opam pin add -n ocamlformat "$ocamlformat_version"
     opam pin add -n tyxml 4.5.0
     opam pin add -n zarith 1.11 # zarith_stubs_js fails with 1.12
+    opam pin add -n js_of_ocaml-lwt 3.11.0
     # see https://github.com/janestreet/zarith_stubs_js/pull/8
     opam install --deps-only \
          local-vendor/tezos/src/lib_contract_metadata/tezos-contract-metadata.opam
