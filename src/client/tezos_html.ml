@@ -657,7 +657,7 @@ module Printer_dsl = struct
 end
 
 let show_micheline_result = function
-  | Ok node -> ct (Michelson.micheline_node_to_string node)
+  | Ok node -> ct (Tezai_michelson.Concrete_syntax.to_string node)
   | Error s -> Bootstrap.color `Danger (t s)
 
 let show_total_supply (_ctxt : _ Context.t) ?decimals z =
@@ -670,8 +670,9 @@ let show_total_supply (_ctxt : _ Context.t) ?decimals z =
   | None | (exception _) -> Fmt.kstr t "%a Units (no decimals)" Z.pp_print z
 
 let show_total_supply_result ctxt ?decimals ts =
-  match Result.map ~f:Tezai_michelson.Untyped.to_micheline_node ts with
-  | Ok (Tezos_micheline.Micheline.Int (_, z)) ->
+  match ts with
+  | Ok (Tezai_michelson.Untyped.Micheline (Tezos_micheline.Micheline.Int (_, z)))
+    ->
       show_total_supply ctxt ?decimals z
   | other -> ct "Error: " %% show_micheline_result other
 

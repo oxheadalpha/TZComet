@@ -950,8 +950,7 @@ module Token = struct
         | _, Valid _ | None, _ -> (
             get_token_metadata_map_with_view ()
             >>= function
-            | Some (Ok s) ->
-                Lwt.return (* Tezai_michelson.Untyped.to_micheline_node *) s
+            | Some (Ok s) -> Lwt.return s
             | _ -> failm Message.(Fmt.kstr t "Token-metadata view failed.") )
         | Some big_map_id, _ ->
             get_token_metadata_map_with_big_map ~log:meta_log ~node big_map_id
