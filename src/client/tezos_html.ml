@@ -671,8 +671,7 @@ let show_total_supply (_ctxt : _ Context.t) ?decimals z =
 
 let show_total_supply_result ctxt ?decimals ts =
   match ts with
-  | Ok (Tezai_michelson.Untyped.Micheline (Tezos_micheline.Micheline.Int (_, z)))
-    ->
+  | Ok (Tezos_micheline.Micheline.Int (_, z)) ->
       show_total_supply ctxt ?decimals z
   | other -> ct "Error: " %% show_micheline_result other
 
