@@ -327,9 +327,7 @@ module Partial_type = struct
           with
           | node -> (
             try
-              let map =
-                micheline_string_bytes_map_exn
-                  (Tezai_michelson.Untyped.to_micheline_node node) in
+              let map = micheline_string_bytes_map_exn node in
               [ t "Map"
                 %% parens (ct "string → bytes")
                 % desc description % t ":"

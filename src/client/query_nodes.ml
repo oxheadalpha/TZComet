@@ -555,10 +555,10 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
       match List.Assoc.find ~equal:String.equal d "storage" with
       | None -> Fmt.failwith "Result has not storage: %S" result
       | Some json -> Tezai_michelson.Untyped.of_json json in
-    let open Tezos_micheline.Micheline in
-    match Tezai_michelson.Untyped.to_micheline_node mich with
-    | Prim (_, "Some", [s], _) -> Tezai_michelson.Untyped.of_micheline_node s
+    let open Tezai_michelson.Untyped.M in
+    match mich with
+    | Prim (_, "Some", [s], _) -> s
     | other ->
         Fmt.failwith "Result is not (Some _): %a" Tezai_michelson.Untyped.pp
-          (Tezai_michelson.Untyped.of_micheline_node other) in
+          other in
   return (Ok (actual_result, contract_storage))

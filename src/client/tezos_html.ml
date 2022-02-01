@@ -391,15 +391,8 @@ let michelson_view ctxt ~view =
                   >>= function
                   | Ok (result, storage) ->
                       Async_work.ok wip
-                        (view_result ctxt
-                           ~result:
-                             (Tezai_michelson.Untyped.to_micheline_node result)
-                           ~storage:
-                             (Tezai_michelson.Untyped.to_micheline_node storage)
-                           ~address:(Reactive.peek address) ~view
-                           ~parameter:
-                             (Tezai_michelson.Untyped.to_micheline_node
-                                parameter ) ) ;
+                        (view_result ctxt ~result ~storage
+                           ~address:(Reactive.peek address) ~view ~parameter ) ;
                       Lwt.return ()
                   | Error s ->
                       Async_work.error wip (t "Error:" %% ct s) ;
@@ -892,7 +885,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                 ~parameter_string:"Unit" ~address ~log
               >>= fun tokens_mich ->
               let tokens =
-                match Tezai_michelson.Untyped.to_micheline_node tokens_mich with
+                match tokens_mich with
                 | Seq (_, nodes) as seq_node ->
                     List.map nodes ~f:(function
                       | Int (_, n) -> n
@@ -973,10 +966,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
               try
                 let nope = Decorate_error.raise in
                 let ok =
-                  match
-                    Result.map ~f:Tezai_michelson.Untyped.to_micheline_node
-                      metadata_map
-                  with
+                  match metadata_map with
                   | Error s -> nope Message.(t "Error getting view:" %% ct s)
                   | Ok (Prim (_, "Pair", [_; full_map], _)) ->
                       Michelson.Partial_type.micheline_string_bytes_map_exn

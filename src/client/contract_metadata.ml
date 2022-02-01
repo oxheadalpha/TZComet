@@ -399,11 +399,7 @@ module Content = struct
     >>= fun metacontract ->
     let Node.Contract.{storage_node; type_node; _} = metacontract in
     let tmbm_id =
-      match
-        find_token_metadata_big_map
-          ~storage_node:(Tezai_michelson.Untyped.to_micheline_node storage_node)
-          ~type_node:(Tezai_michelson.Untyped.to_micheline_node type_node)
-      with
+      match find_token_metadata_big_map ~storage_node ~type_node with
       | [one] -> one
       | other ->
           Decorate_error.raise
@@ -932,8 +928,6 @@ module Token = struct
     let get_total_supply_with_view () =
       Content.maybe_call_view ctxt total_supply_validation
         ~parameter_string:(Z.to_string id) ~address ~log:(logs "Call View")
-      >|= Option.map
-            ~f:(Result.map ~f:Tezai_michelson.Untyped.to_micheline_node)
       >>= function
       | Some (Ok (Tezos_micheline.Micheline.Int (_, z))) -> Lwt.return_some z
       | _ -> Lwt.return_none in
@@ -956,7 +950,7 @@ module Token = struct
             get_token_metadata_map_with_big_map ~log:meta_log ~node big_map_id
       end
       >>= fun mich ->
-      match Tezai_michelson.Untyped.to_micheline_node mich with
+      match mich with
       | Prim (_, "Pair", [_; full_map], _) -> (
           let key_values =
             Michelson.Partial_type.micheline_string_bytes_map_exn full_map in
