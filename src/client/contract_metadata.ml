@@ -417,10 +417,8 @@ module Content = struct
       ~log =
     let open Lwt.Infix in
     let parameter =
-      let open Michelson in
-      Tezai_michelson.Untyped.of_micheline_node
-        (parse_micheline_exn ~check_indentation:false parameter_string
-           ~check_primitives:false ) in
+      Tezai_michelson.Concrete_syntax.parse_exn ~check_indentation:false
+        parameter_string ~check_primitives:false in
     Query_nodes.call_off_chain_view ctxt ~log ~address ~view ~parameter
     >>= function
     | Ok (result, _) -> Lwt.return (Ok result) | Error s -> Lwt.return (Error s)
