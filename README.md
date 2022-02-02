@@ -27,6 +27,32 @@ The module Tzcomet_jsonm was copied from:
 
 This fork of Jsonm fixes the stack overflow error that can occur when parsing large objects in JSOO.
 
+## Deployment
+
+This of course, requires push access to
+[oxheadalpha/TZComet](https://github.com/oxheadalpha/TZComet/) for it to impact
+[tzcomet.io](https://tzcomet.io) (but one can make it happen in their own fork
+and it will be at `<org-or-user>.github.io/TZComet`).
+
+
+First time, create a local `gh-pages` branch:
+
+    git branch gh-pages -t origin/gh-pages
+
+To deploy the current working directory to `/staging`:
+
+    ./please.sh deploy togithub
+    # Current branch is now gh-pages
+    git push origin gh-pages
+    git checkout master # or back to where you were
+
+(this calls does trigger the build).
+
+To deploy `origin/master` to production:
+
+    prod=true ./please.sh deploy togithub
+    # And push like for /staging
+
 
 ## See Also
 
