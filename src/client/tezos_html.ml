@@ -579,11 +579,10 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
             let prefix = "ipfs://" in
             let pre_len = String.length prefix in
             let suffix =
-              if String.is_prefix ~prefix uri
-              then String.sub uri pre_len (String.length uri - pre_len )
+              if String.is_prefix ~prefix uri then
+                String.sub uri pre_len (String.length uri - pre_len)
               else uri in
             Contract_metadata.Uri.Fetcher.main_ipfs_gateway ^ suffix in
-
           let content =
             match mime with
             | image when String.is_prefix image ~prefix:"image/" ->
@@ -596,10 +595,11 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                   ~a:[H5.a_controls (); style "max-width: 100%"]
                   ~src:(Lwd.pure web) []
             | app_x when String.equal app_x "application/x-directory" ->
-              let converted_uri = convert_uri uri in
-              H5.iframe
-                  ~a:[H5.a_src (Lwd.pure converted_uri);
-                      H5.a_width (Lwd.pure 1000)]
+                let converted_uri = convert_uri uri in
+                H5.iframe
+                  ~a:
+                    [ H5.a_src (Lwd.pure converted_uri)
+                    ; H5.a_width (Lwd.pure 1000) ]
                   [H5.txt (Lwd.pure "This should be an iframe")]
             | _ ->
                 Bootstrap.alert ~kind:`Danger

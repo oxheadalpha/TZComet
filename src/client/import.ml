@@ -454,7 +454,7 @@ module Blob = struct
       | vid when String.is_prefix vid ~prefix:"video/" ->
           (`Video, String.chop_prefix_exn vid ~prefix:"video/")
       | app_x when String.equal app_x "application/x-directory" ->
-        (`Appx, String.chop_prefix_exn app_x ~prefix:"application/")
+          (`Appx, String.chop_prefix_exn app_x ~prefix:"application/")
       | other -> Fmt.failwith "Unknown MIME type: %S" other
 
     let to_mime = function

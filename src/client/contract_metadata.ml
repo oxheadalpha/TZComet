@@ -26,11 +26,13 @@ module Uri = struct
   module Fetcher = struct
     type gateway = {main: string; alternate: string}
     type t = {current_contract: string option Reactive.var; gateway: gateway}
+
     let main_ipfs_gateway = "https://gateway.ipfs.io/ipfs/"
     let alt_ipfs_gateway = "https://dweb.link/ipfs/"
 
     let create () =
-      {current_contract= Reactive.var None; gateway= {main=main_ipfs_gateway; alternate=alt_ipfs_gateway}}
+      { current_contract= Reactive.var None
+      ; gateway= {main= main_ipfs_gateway; alternate= alt_ipfs_gateway} }
 
     let get (ctxt : < fetcher: t ; .. > Context.t) = ctxt#fetcher
     let current_contract ctxt = (get ctxt).current_contract
@@ -699,7 +701,6 @@ module Multimedia = struct
     let found ~format ?(sfw = false) ~converted uri =
       Lwt.return {uri; sfw; format; converted_uri= converted} in
     let known_mime_type = List.Assoc.find mime_types ~equal:String.equal uri in
-
     let failf fmt =
       Fmt.kstr
         (fun s ->
@@ -707,7 +708,6 @@ module Multimedia = struct
             Message.(
               t "Preparing and guessing format for" %% ct uri % t ":" %% t s) )
         fmt in
-
     let guess_format content =
       let format = Blob.guess_format content in
       match format with
@@ -716,7 +716,6 @@ module Multimedia = struct
           let (`Hex hx) = Hex.of_string content in
           failf "could not guess the format of the content: 0x%s"
             (bytes_summary ~left:24 ~right:0 hx) in
-
     let convert ~format uri =
       let open Uri in
       match validate uri with

@@ -276,7 +276,7 @@ let show_multimedia :
                     | `Image, "svg+xml" -> "Vector Graphics"
                     | `Image, _ -> "Image"
                     | `Video, _ -> "Video"
-                    | `Appx, _ -> "Application/x-directory")
+                    | `Appx, _ -> "Application/x-directory" )
               | false -> t "Hide Multimedia" )
             f in
       let wrap_mm c =
@@ -323,13 +323,13 @@ let show_multimedia :
                    ~src:(Lwd.pure mm.converted_uri)
                    [] )
           | `Appx, _ ->
-              dbgf "Converted URI: %S" mm.converted_uri;
-             wrap_mm
-               (H5.iframe ~a:[style mm_style;
-                              H5.a_src (Lwd.pure mm.converted_uri)]
-                           (* H5.a_width (Lwd.pure 500); *)
-                           (* H5.a_height (Lwd.pure 500); *)
-                          [H5.txt (Lwd.pure "This should be an iframe")]))
+              dbgf "Converted URI: %S" mm.converted_uri ;
+              wrap_mm
+                (H5.iframe
+                   ~a:[style mm_style; H5.a_src (Lwd.pure mm.converted_uri)]
+                   (* H5.a_width (Lwd.pure 500); *)
+                   (* H5.a_height (Lwd.pure 500); *)
+                   [H5.txt (Lwd.pure "This should be an iframe")] ) )
 
 let show_token ctxt
     Contract_metadata.Token.
