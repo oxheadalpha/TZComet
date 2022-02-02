@@ -542,6 +542,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                     let content_type =
                       match format with
                       | Some ((`Image, _) as f) -> Blob.Format.to_mime f
+                      | Some ((`Appx, _) as f) -> Blob.Format.to_mime f
                       | _ ->
                           Async_work.log result
                             (bt "WARNING: Cannot guess content type …") ;
@@ -569,8 +570,18 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                 | Error error, _ -> raise (mkexn (error_trace ctxt error))) )
     in
     let show_button ~web ~mime () =
+      let open Contract_metadata in
       button (Fmt.kstr t "Show Content") ~action:(fun () ->
           Reactive.set show true ;
+          let convert_uri uri =
+            let prefix = "ipfs://" in
+            let pre_len = String.length prefix in
+            let suffix =
+              if String.is_prefix ~prefix uri
+              then String.sub uri pre_len (String.length uri - pre_len )
+              else uri in
+            Contract_metadata.Uri.Fetcher.main_ipfs_gateway ^ suffix in
+
           let content =
             match mime with
             | image when String.is_prefix image ~prefix:"image/" ->
@@ -583,10 +594,11 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                   ~a:[H5.a_controls (); style "max-width: 100%"]
                   ~src:(Lwd.pure web) []
             | app_x when String.equal app_x "application/x-directory" ->
-              Bootstrap.alert ~kind:`Danger
-                (bt "MIME-Type:" %% ct mime)
-              %% bt "TBD"
-              %% fetch_and_show ()
+              let converted_uri = convert_uri uri in
+              H5.iframe
+                  ~a:[H5.a_src (Lwd.pure converted_uri);
+                      H5.a_width (Lwd.pure 1000)]
+                  [H5.txt (Lwd.pure "This should be an iframe")]
             | _ ->
                 Bootstrap.alert ~kind:`Danger
                   (bt "Unknown MIME-Type:" %% ct mime)
