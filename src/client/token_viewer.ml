@@ -327,8 +327,6 @@ let show_multimedia :
               wrap_mm
                 (H5.iframe
                    ~a:[style mm_style; H5.a_src (Lwd.pure mm.converted_uri)]
-                   (* H5.a_width (Lwd.pure 500); *)
-                   (* H5.a_height (Lwd.pure 500); *)
                    [H5.txt (Lwd.pure "This should be an iframe")] ) )
 
 let show_token ctxt
