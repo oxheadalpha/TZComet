@@ -275,7 +275,8 @@ let show_multimedia :
                     ( match mm.format with
                     | `Image, "svg+xml" -> "Vector Graphics"
                     | `Image, _ -> "Image"
-                    | `Video, _ -> "Video" )
+                    | `Video, _ -> "Video"
+                    | `Appx, _ -> "Application/x-directory" )
               | false -> t "Hide Multimedia" )
             f in
       let wrap_mm c =
@@ -320,7 +321,13 @@ let show_multimedia :
                 (H5.video
                    ~a:[H5.a_controls (); style mm_style]
                    ~src:(Lwd.pure mm.converted_uri)
-                   [] ) )
+                   [] )
+          | `Appx, _ ->
+              dbgf "Converted URI: %S" mm.converted_uri ;
+              wrap_mm
+                (H5.iframe
+                   ~a:[style mm_style; H5.a_src (Lwd.pure mm.converted_uri)]
+                   [H5.txt (Lwd.pure "This should be an iframe")] ) )
 
 let show_token ctxt
     Contract_metadata.Token.

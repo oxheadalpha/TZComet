@@ -41,6 +41,7 @@ module H = struct
   let td ?a l = singletize H5.td ?a l
   let th ?a l = singletize H5.th ?a l
   let blockquote ?a l = singletize H5.blockquote ?a l
+  let iframe ?a l = singletize H5.iframe ?a l
 end
 
 let hr = H5.hr

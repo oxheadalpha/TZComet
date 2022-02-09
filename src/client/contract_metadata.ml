@@ -27,10 +27,12 @@ module Uri = struct
     type gateway = {main: string; alternate: string}
     type t = {current_contract: string option Reactive.var; gateway: gateway}
 
+    let main_ipfs_gateway = "https://gateway.ipfs.io/ipfs/"
+    let alt_ipfs_gateway = "https://dweb.link/ipfs/"
+
     let create () =
-      let main = "https://gateway.ipfs.io/ipfs/" in
-      let alternate = "https://dweb.link/ipfs/" in
-      {current_contract= Reactive.var None; gateway= {main; alternate}}
+      { current_contract= Reactive.var None
+      ; gateway= {main= main_ipfs_gateway; alternate= alt_ipfs_gateway} }
 
     let get (ctxt : < fetcher: t ; .. > Context.t) = ctxt#fetcher
     let current_contract ctxt = (get ctxt).current_contract
