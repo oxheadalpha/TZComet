@@ -446,7 +446,7 @@ module Blob = struct
     let jpeg = (`Image, "jpeg")
     let png = (`Image, "png")
     let mp4 = (`Video, "mp4")
-    let appx = (`Appx, "appx")
+    let appx = (`Appx, "x-directory")
 
     let of_mime_exn = function
       | image when String.is_prefix image ~prefix:"image/" ->

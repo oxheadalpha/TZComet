@@ -276,7 +276,7 @@ let show_multimedia :
                     | `Image, "svg+xml" -> "Vector Graphics"
                     | `Image, _ -> "Image"
                     | `Video, _ -> "Video"
-                    | `Appx, _ -> "Application/x-directory" )
+                    | `Appx, _ -> "Embedded Web Page" )
               | false -> t "Hide Multimedia" )
             f in
       let wrap_mm c =
