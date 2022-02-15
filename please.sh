@@ -104,7 +104,8 @@ build_all () {
     cp _build/default/$root_path/src/client/main.bc.js _build/website/main-client.js
     cp $root_path/data/loading.gif _build/website/
     chmod 600 _build/website/*
-    dune exec $root_path/src/gen-web/main.exe index "TZComet" > _build/website/index.html
+    dune exec $root_path/src/gen-web/main.exe index "TZComet" \
+         $root_path/data/loading.gif > _build/website/index.html
     echo "Done: file://$PWD/_build/website/index.html"
 }
 build_ () {

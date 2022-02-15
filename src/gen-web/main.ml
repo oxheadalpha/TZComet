@@ -1,7 +1,12 @@
 open! Base
 
-let base_bootstrap page_title =
+let base_bootstrap ~page_title ~loading_gif =
   (* From there: https://getbootstrap.com/docs/4.5/getting-started/introduction/ *)
+  let loading_uri =
+    let content_type = "image/gif" in
+    let data = Stdio.In_channel.read_all loading_gif in
+    Fmt.str "data:%s;base64,%s" content_type
+      (Base64.encode_exn ~pad:true ~alphabet:Base64.default_alphabet data) in
   String.concat ~sep:""
     [ {html|
 <!doctype html>
@@ -20,8 +25,10 @@ let base_bootstrap page_title =
   </head>
   <body>
     <div id="attach-ui">
-     <h2>Loading TZComet …</h2>
-     <img src="loading.gif"/><br/><br/>
+|html}
+    ; Fmt.str "<h2>Loading %s …</h2>" page_title
+    ; Fmt.str "<img src=%S/><br/><br/>" loading_uri
+    ; {html|
      See also <a href="https://github.com/oxheadalpha/TZComet">https://github.com/oxheadalpha/TZComet</a>
     </div>
     <!-- Optional JavaScript -->
@@ -57,9 +64,13 @@ $(document).on('hidden.bs.collapse', function (e) {
 
 let () =
   let usage () =
-    Fmt.epr "usage: %s index '<page-title>'\n%!" Caml.Sys.argv.(0) in
+    Fmt.epr "usage: %s index '<page-title>' '<loading-gif-location>'\n%!"
+      Caml.Sys.argv.(0) in
   match Caml.Sys.argv.(1) with
-  | "index" -> Fmt.pr "%s\n%!" (base_bootstrap Caml.Sys.argv.(2))
+  | "index" ->
+      Fmt.pr "%s\n%!"
+        (base_bootstrap ~page_title:Caml.Sys.argv.(2)
+           ~loading_gif:Caml.Sys.argv.(3) )
   | other ->
       Fmt.epr "Unknown command: %S!\n%!" other ;
       usage () ;
