@@ -23,72 +23,7 @@ let bytes_summary ?(threshold = 25) ?(left = 10) ?(right = 10) bytes =
         (String.sub bytes ~pos:(m - right) ~len:right)
 
 module Context = struct type 'a t = 'a constraint 'a = < .. > end
-
-module Reactive = struct
-  include Lwd
-
-  let ( ** ) = pair
-  let split_var v = (get v, set v)
-  let bind_var : 'a var -> f:('a -> 'b t) -> 'b t = fun v ~f -> bind ~f (get v)
-
-  module Bidirectional = struct
-    type 'a t = {lwd: 'a Lwd.t; set: 'a -> unit}
-
-    let make lwd set = {lwd; set}
-    let of_var v = make (Lwd.get v) (Lwd.set v)
-    let get v = v.lwd
-    let set v x = v.set x
-    let convert {lwd; set} f t = {lwd= map lwd ~f; set= (fun x -> set (t x))}
-  end
-
-  module Table = struct
-    include Lwd_table
-
-    let append = append'
-
-    let concat_map ~map table =
-      Lwd.join (Lwd_table.map_reduce map Lwd_seq.lwd_monoid table)
-
-    let fold t ~init ~f =
-      let rec go acc = function
-        | None -> acc
-        | Some row -> (
-          match get row with None -> acc | Some x -> go (f acc x) (next row) )
-      in
-      go init (first t)
-
-    let iter_rows t ~f =
-      let rec go = function
-        | None -> ()
-        | Some s ->
-            let prepare_next = next s in
-            f s ; go prepare_next in
-      go (first t)
-
-    module Lwt = struct
-      open Lwt.Infix
-
-      let find_map (type a) t ~f =
-        let exception Found of a in
-        Lwt.catch
-          (fun () ->
-            fold t ~init:Lwt.return_none ~f:(fun pnone x ->
-                pnone
-                >>= fun none ->
-                f x
-                >>= function
-                | Some x -> Lwt.fail (Found x) | None -> Lwt.return none ) )
-          (function Found x -> Lwt.return_some x | e -> Lwt.fail e)
-
-      let find x ~f =
-        find_map x ~f:(fun x ->
-            f x
-            >>= function true -> Lwt.return_some x | false -> Lwt.return_none )
-    end
-  end
-
-  module Sequence = Lwd_seq
-end
+module Reactive = Lwd_bootstrap.Reactive
 
 module Message = struct
   type t =
