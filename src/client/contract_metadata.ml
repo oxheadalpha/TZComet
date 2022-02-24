@@ -57,7 +57,6 @@ module Uri = struct
       if alt_gateway then (Fetcher.gateway ctxt).alternate
       else (Fetcher.gateway ctxt).main in
     let result = Fmt.str "%s%s%s" gateway cid path in
-    dbgf "MLN: to_ipfs_gateway - cid: %S, path: %s, result: %s" cid path result ;
     result
 
   let find_ipfs_cid ~uri =
