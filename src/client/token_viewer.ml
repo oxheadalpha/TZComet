@@ -276,7 +276,8 @@ let show_multimedia :
                     | `Image, "svg+xml" -> "Vector Graphics"
                     | `Image, _ -> "Image"
                     | `Video, _ -> "Video"
-                    | `Appx, _ -> "Embedded Web Page" )
+                    | `Appx, _ -> "Embedded Web Page"
+                    | `Html, _ -> "HTML" )
               | false -> t "Hide Multimedia" )
             f in
       let wrap_mm c =
@@ -312,7 +313,15 @@ let show_multimedia :
           | `Image, _ ->
               wrap_mm
                 (link ~target:mm.converted_uri
-                   (H5.img ~a:[style mm_style]
+                   (H5.img
+                      ~a:
+                        [ style mm_style
+                        ; H5.a_onerror
+                            (Tyxml_lwd.Lwdom.attr (fun _ ->
+                                 let _z =
+                                   Contract_metadata.Uri.swap_alt_gateway ctxt
+                                     ~uri:mm.converted_uri in
+                                 false ) ) ]
                       ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
                       ~src:(Lwd.pure mm.converted_uri)
                       () ) )
@@ -322,8 +331,7 @@ let show_multimedia :
                    ~a:[H5.a_controls (); style mm_style]
                    ~src:(Lwd.pure mm.converted_uri)
                    [] )
-          | `Appx, _ ->
-              dbgf "Converted URI: %S" mm.converted_uri ;
+          | `Appx, _ | `Html, _ ->
               wrap_mm
                 (H5.iframe
                    ~a:[style mm_style; H5.a_src (Lwd.pure mm.converted_uri)]

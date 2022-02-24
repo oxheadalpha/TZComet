@@ -56,7 +56,30 @@ module Uri = struct
     let gateway =
       if alt_gateway then (Fetcher.gateway ctxt).alternate
       else (Fetcher.gateway ctxt).main in
-    Fmt.str "%s%s%s" gateway cid path
+    let result = Fmt.str "%s%s%s" gateway cid path in
+    dbgf "MLN: to_ipfs_gateway - cid: %S, path: %s, result: %s" cid path result ;
+    result
+
+  let find_ipfs_cid ~uri =
+    if not (String.contains uri '/') then None
+    else
+      let f (isNext, result) sub_s =
+        match (isNext, result) with
+        | b, s when String.equal sub_s "ipfs" -> (true, s)
+        | b, s when Bool.equal b true -> (false, sub_s)
+        | b, s -> (b, s) in
+      let splitz = String.split_on_chars ~on:['/'] uri in
+      match List.fold ~f ~init:(false, "") splitz with
+      | _, "" -> None
+      | _, result -> Some result
+
+  let swap_alt_gateway ctxt ~uri =
+    let result =
+      match find_ipfs_cid ~uri with
+      | Some cid -> to_ipfs_gateway ~alt_gateway:true ctxt ~cid ~path:""
+      | None -> uri in
+    dbgf "MLN: swap_alt_gateway - uri: %S, result: %S" uri result ;
+    result
 
   let to_web_address ctxt =
     let open Tezos_contract_metadata.Metadata_uri in

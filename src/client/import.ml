@@ -440,7 +440,7 @@ end
 
 module Blob = struct
   module Format = struct
-    type t = [`Image | `Video | `Appx] * string
+    type t = [`Image | `Video | `Appx | `Html] * string
 
     let gif = (`Image, "gif")
     let jpeg = (`Image, "jpeg")
@@ -455,12 +455,15 @@ module Blob = struct
           (`Video, String.chop_prefix_exn vid ~prefix:"video/")
       | app_x when String.equal app_x "application/x-directory" ->
           (`Appx, String.chop_prefix_exn app_x ~prefix:"application/")
+      | html when String.equal html "text/html" ->
+          (`Html, String.chop_prefix_exn html ~prefix:"text/")
       | other -> Fmt.failwith "Unknown MIME type: %S" other
 
     let to_mime = function
       | `Image, f -> "image/" ^ f
       | `Video, f -> "video/" ^ f
-      | `Appx, f -> "application/x-directory/" ^ f
+      | `Appx, f -> "application/" ^ f
+      | `Html, f -> "text/" ^ f
   end
 
   let guess_format s : Format.t option =
