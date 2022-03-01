@@ -8,16 +8,13 @@ let go_action ctxt ~wip =
   let token_id = State.token_id ctxt |> Reactive.peek in
   let address = State.token_address ctxt |> Reactive.peek in
   let protocol = Url.Current.protocol in
-  let slashes = if String.equal protocol "file:" then "//" else "/" in
   let host = Url.Current.host in
   let port =
     match Url.Current.port with Some p -> Int.to_string p ^ ":" | None -> ""
   in
-  let host_port =
-    if String.equal (host ^ port) "" then "" else host ^ port ^ "/" in
   let path_string = Url.Current.path_string in
   let path = Fmt.str "token/%s/%s" address token_id in
-  let tv_uri = protocol ^ slashes ^ host_port ^ path_string ^ "#/" ^ path in
+  let tv_uri = protocol ^ "//" ^ host ^ port ^ path_string ^ "#/" ^ path in
   let _ = Reactive.set copy_src_var tv_uri in
   let _logh msg = Async_work.log wip msg in
   let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
