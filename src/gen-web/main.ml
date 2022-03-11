@@ -1,6 +1,6 @@
 open! Base
 
-let base_bootstrap ~page_title ~loading_gif =
+let base_bootstrap ~page_title ~loading_gif ?bootstrap_css () =
   (* From there: https://getbootstrap.com/docs/4.5/getting-started/introduction/ *)
   let loading_uri =
     let content_type = "image/gif" in
@@ -16,10 +16,13 @@ let base_bootstrap ~page_title ~loading_gif =
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
-
-    <title>|html}
+    <!-- Bootstrap CSS -->|html}
+    ; ( match bootstrap_css with
+      | None ->
+          Fmt.str
+            {html|<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">|html}
+      | Some uri -> Fmt.str {html|<link rel="stylesheet" href=%S >|html} uri )
+    ; {html|<title>|html}
     ; page_title
     ; {html|</title>
   </head>
@@ -64,13 +67,15 @@ $(document).on('hidden.bs.collapse', function (e) {
 
 let () =
   let usage () =
-    Fmt.epr "usage: %s index '<page-title>' '<loading-gif-location>'\n%!"
+    Fmt.epr
+      "usage: %s index '<page-title>' '<loading-gif-location>' [<css-uri>]\n%!"
       Caml.Sys.argv.(0) in
   match Caml.Sys.argv.(1) with
   | "index" ->
+      let bootstrap_css = try Some Caml.Sys.argv.(4) with _ -> None in
       Fmt.pr "%s\n%!"
         (base_bootstrap ~page_title:Caml.Sys.argv.(2)
-           ~loading_gif:Caml.Sys.argv.(3) )
+           ~loading_gif:Caml.Sys.argv.(3) ?bootstrap_css () )
   | other ->
       Fmt.epr "Unknown command: %S!\n%!" other ;
       usage () ;
