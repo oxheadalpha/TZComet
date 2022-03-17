@@ -240,18 +240,12 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
     match uri with
     | Web u -> t "Web URL:" %% url ct u
     | Ipfs {cid; path} ->
-        let gatewayed =
-          Contract_metadata.Uri.to_ipfs_gateway ~alt_gateway:false ctxt ~cid
-            ~path in
-        let gatewayed_alt =
-          Contract_metadata.Uri.to_ipfs_gateway ~alt_gateway:true ctxt ~cid
-            ~path in
+        let gatewayed = Contract_metadata.Uri.to_ipfs_gateway ctxt ~cid ~path in
         field_head "IPFS URI"
         % itemize
             [ field "CID" (ct cid)
             ; field "Path" (ct path)
-            ; t "(Try " %% url ct gatewayed % t "  "
-            ; t "or " %% url ct gatewayed_alt % t ")" ]
+            ; t "(Try " %% url ct gatewayed % t ")" ]
     | Storage {network; address; key} ->
         field_head "In-Contract-Storage"
         % itemize
@@ -531,6 +525,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
             ~exn_to_html:(Errors_html.exception_html ctxt)
             Lwt.Infix.(
               fun ~mkexn () ->
+                (* TODO: MLN - is this getting validated twice and should uri be passed to fetch instead of uri16? *)
                 match Contract_metadata.Uri.validate uri with
                 | Ok uri16, _ ->
                     Lwt.catch
@@ -607,7 +602,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
               if String.is_prefix ~prefix uri then
                 String.sub uri pre_len (String.length uri - pre_len)
               else uri in
-            Contract_metadata.Uri.Fetcher.main_ipfs_gateway ^ suffix in
+            Ipfs_gateways.current_gateway ctxt ^ suffix in
           let content =
             match mime with
             | image when String.is_prefix image ~prefix:"image/" ->
