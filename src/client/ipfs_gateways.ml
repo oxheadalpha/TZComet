@@ -3,7 +3,7 @@ open! Import
 type t = {gateways: string list Reactive.var; current_index: int Reactive.var}
 
 let default_gateways : string list =
-  [ "https://gatewaaaaaaay.ipfs.io/ipfs/"
+  [ "https://gateway.ipfs.io/ipfs/"
   ; "https://dweb.link/ipfs/"
   ; "https://cloudflare-ipfs.com" ]
 
