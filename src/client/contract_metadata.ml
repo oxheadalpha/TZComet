@@ -54,8 +54,8 @@ module Uri = struct
     else
       let f (isNext, result) sub_s =
         match (isNext, result) with
-        | b, s when String.equal sub_s "ipfs" -> (true, s)
-        | b, s when Bool.equal b true -> (false, sub_s)
+        | _, s when String.equal sub_s "ipfs" -> (true, s)
+        | b, _ when Bool.equal b true -> (false, sub_s)
         | b, s -> (b, s) in
       let splitz = String.split_on_chars ~on:['/'] uri in
       match List.fold ~f ~init:(false, "") splitz with
@@ -1050,7 +1050,7 @@ module Token = struct
                 [`Hic_et_nunc id]
             | _ -> [] in
           match main_multimedia with
-          | Some (Error exn) ->
+          | Some (Error _) ->
               let _ = Ipfs_gateways.try_next ctxt in
               failm Message.(Fmt.kstr t "Error with the multimedia.")
           | _ ->

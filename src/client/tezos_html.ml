@@ -597,13 +597,12 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                                    [ H5.a_src (Lwd.pure src)
                                    ; H5.a_style (Lwd.pure "max-width: 100%") ]
                                  [H5.txt (Lwd.pure "This should be an iframe")]
-                           | other ->
+                           | _other ->
                                raise (mkexn (t "Unexpected content type")) ) ) ;
                     Lwt.return ()
                 | Error error, _ -> raise (mkexn (error_trace ctxt error))) )
     in
     let show_button ~web ~mime () =
-      let open Contract_metadata in
       button (Fmt.kstr t "Show Content") ~action:(fun () ->
           Reactive.set show true ;
           let ipfs_uri uri =
@@ -611,7 +610,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
             let pre_len = String.length prefix in
             let suffix =
               if String.is_prefix ~prefix uri then
-                String.sub uri pre_len (String.length uri - pre_len)
+                String.sub uri ~pos:pre_len ~len:(String.length uri - pre_len)
               else uri in
             Ipfs_gateways.current_gateway ctxt ^ suffix in
           let content =
@@ -676,7 +675,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
 module Printer_dsl = struct
   type t = [`Open_right_range of Z.t | `Page of Z.t | `Range of Z.t * Z.t] list
 
-  let parse ctxt iter_input =
+  let parse _ctxt iter_input =
     let to_z s =
       try Z.of_string s
       with _ -> Fmt.failwith "The string %S is not an integer." s in
