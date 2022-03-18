@@ -40,6 +40,9 @@ let remove_gateway ctxt ~uri =
   let gws = Reactive.peek ipfs.gateways in
   let new_list = List.filter gws (fun u -> not (String.equal u uri)) in
   let new_len = List.length new_list in
-  let prev_idx = Reactive.peek ipfs.current_index in
-  if prev_idx >= new_len then Reactive.set (current_index ctxt) 0 ;
-  Reactive.set (gateways ctxt) new_list
+  if phys_equal new_len 0 then false (* tried to remove them all *)
+  else
+    let prev_idx = Reactive.peek ipfs.current_index in
+    if prev_idx >= new_len then Reactive.set (current_index ctxt) 0 ;
+    Reactive.set (gateways ctxt) new_list ;
+    true
