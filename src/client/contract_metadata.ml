@@ -24,19 +24,11 @@ module Uri = struct
     (uri, List.rev !errors)
 
   module Fetcher = struct
-    type gateway = {main: string; alternate: string}
-    type t = {current_contract: string option Reactive.var; gateway: gateway}
+    type t = {current_contract: string option Reactive.var}
 
-    let main_ipfs_gateway = "https://gateway.ipfs.io/ipfs/"
-    let alt_ipfs_gateway = "https://dweb.link/ipfs/"
-
-    let create () =
-      { current_contract= Reactive.var None
-      ; gateway= {main= main_ipfs_gateway; alternate= alt_ipfs_gateway} }
-
+    let create () = {current_contract= Reactive.var None}
     let get (ctxt : < fetcher: t ; .. > Context.t) = ctxt#fetcher
     let current_contract ctxt = (get ctxt).current_contract
-    let gateway ctxt = (get ctxt).gateway
 
     let set_current_contract ctxt s =
       Reactive.set (get ctxt).current_contract (Some s)
@@ -52,12 +44,10 @@ module Uri = struct
     | Web _ | Storage _ | Ipfs _ -> false
     | Hash {target; _} -> needs_context_address target
 
-  let to_ipfs_gateway ?(alt_gateway = false) ctxt ~cid ~path =
-    let gateway =
-      if alt_gateway then (Fetcher.gateway ctxt).alternate
-      else (Fetcher.gateway ctxt).main in
-    let result = Fmt.str "%s%s%s" gateway cid path in
-    result
+  let to_ipfs_gateway ctxt ~cid ~path =
+    let open Ipfs_gateways in
+    let current_gateway = current_gateway ctxt in
+    Fmt.str "%s%s%s" current_gateway cid path
 
   let find_ipfs_cid ~uri =
     if not (String.contains uri '/') then None
@@ -71,14 +61,6 @@ module Uri = struct
       match List.fold ~f ~init:(false, "") splitz with
       | _, "" -> None
       | _, result -> Some result
-
-  let swap_alt_gateway ctxt ~uri =
-    let result =
-      match find_ipfs_cid ~uri with
-      | Some cid -> to_ipfs_gateway ~alt_gateway:true ctxt ~cid ~path:""
-      | None -> uri in
-    dbgf "MLN: swap_alt_gateway - uri: %S, result: %S" uri result ;
-    result
 
   let to_web_address ctxt =
     let open Tezos_contract_metadata.Metadata_uri in
@@ -129,13 +111,11 @@ module Uri = struct
       | Ipfs {cid; path} ->
           logf "IPFS CID %S path %S" cid path ;
           let gatewayed = to_ipfs_gateway ctxt ~cid ~path in
-          (* resolve (Web gatewayed) *)
           Lwt.catch
             (fun () -> resolve (Web gatewayed))
             (fun e ->
               dbgf "Trying alternate IPFS gateway..." ;
-              let gatewayed_alt =
-                to_ipfs_gateway ctxt ~alt_gateway:true ~cid ~path in
+              let gatewayed_alt = to_ipfs_gateway ctxt ~cid ~path in
               resolve (Web gatewayed_alt) )
       | Storage {network= None; address; key} ->
           let addr =
@@ -1068,6 +1048,7 @@ module Token = struct
             | _ -> [] in
           match main_multimedia with
           | Some (Error exn) ->
+              let _ = Ipfs_gateways.try_next ctxt in
               failm Message.(Fmt.kstr t "Error with the multimedia.")
           | _ ->
               Lwt.return

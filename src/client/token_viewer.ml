@@ -39,6 +39,10 @@ let go_action ctxt ~wip =
         >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) ;
   ()
 
+let retry_go_action ctxt ~wip =
+  let _ = Ipfs_gateways.try_next ctxt in
+  go_action ctxt ~wip
+
 let twitter_icon =
   {|data:image/x-icon;base64,
 iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAA0pJREFUWAnt
@@ -315,9 +319,10 @@ let show_multimedia :
                         [ style mm_style
                         ; H5.a_onerror
                             (Tyxml_lwd.Lwdom.attr (fun _ ->
-                                 let _z =
-                                   Contract_metadata.Uri.swap_alt_gateway ctxt
-                                     ~uri:mm.converted_uri in
+                                 dbgf
+                                   "MLN: Token_viewer.show_multimedia - Error \
+                                    in `Image display - %S"
+                                   mm.converted_uri ;
                                  false ) ) ]
                       ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
                       ~src:(Lwd.pure mm.converted_uri)
@@ -331,7 +336,13 @@ let show_multimedia :
           | `Appx, _ | `Html, _ ->
               wrap_mm
                 (H5.iframe
-                   ~a:[style mm_style; H5.a_src (Lwd.pure mm.converted_uri)]
+                   ~a:
+                     [ style mm_style
+                     ; H5.a_onerror
+                         (Tyxml_lwd.Lwdom.attr (fun _ ->
+                              let _ = Ipfs_gateways.try_next ctxt in
+                              false ) )
+                     ; H5.a_src (Lwd.pure mm.converted_uri) ]
                    [H5.txt (Lwd.pure "This should be an iframe")] ) )
 
 let show_token ctxt
@@ -467,7 +478,9 @@ let show_token ctxt
         ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
         (Async_work.render tok_wip ~f:(show_multimedia ctxt)
            ~show_error:
-             (error_try_again (fun () -> go_action ctxt ~wip:tok_wip) err_str) )
+             (error_try_again
+                (fun () -> retry_go_action ctxt ~wip:tok_wip)
+                err_str ) )
     % Bootstrap.p_lead metadescription
     % div creators % div tags
     % ( match special_knowledge with
@@ -555,6 +568,9 @@ let render ctxt =
       && is_address_valid (Reactive.peek token_address)
       && not (Async_work.peek_busy result)
     then go_action ctxt ~wip:result in
+  let retry_enter_action ctxt =
+    let _ = Ipfs_gateways.try_next ctxt in
+    enter_action in
   let _once_in_tab = enter_action () in
   let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
@@ -664,4 +680,4 @@ let render ctxt =
   % div
       ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
       (Async_work.render result ~f:(show_token ctxt)
-         ~show_error:(error_try_again enter_action gateway_err_str) )
+         ~show_error:(error_try_again (retry_enter_action ctxt) gateway_err_str) )
