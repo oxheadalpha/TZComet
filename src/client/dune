@@ -6,4 +6,5 @@
  (preprocess
   (pps js_of_ocaml-ppx))
  (libraries zarith_stubs_js fmt base js_of_ocaml-lwt re.posix tezai-michelson
-   tezos-contract-metadata digestif.ocaml lwd tyxml-lwd lwd-bootstrap))
+   tezai-contract-metadata-manipulation base64 digestif.ocaml lwd tyxml-lwd
+   lwd-bootstrap))

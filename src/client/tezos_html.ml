@@ -464,7 +464,9 @@ let michelson_instruction s =
   link (t s) ~target:(Fmt.str "https://michelson.nomadic-labs.com/#instr-%s" s)
 
 let metadata_validation_error _ctxt =
-  let open Tezos_contract_metadata.Contract_metadata.Content in
+  let module Validation =
+    Tezai_contract_metadata_manipulation.Content_validation
+  in
   let open Validation.Error in
   let the_off_chain_view view = t "The off-chain-view “" % ct view % t "”" in
   function
@@ -491,7 +493,10 @@ let metadata_validation_error _ctxt =
       % t "."
 
 let metadata_validation_warning _ctxt =
-  let open Tezos_contract_metadata.Contract_metadata.Content.Validation.Warning in
+  let module Validation =
+    Tezai_contract_metadata_manipulation.Content_validation
+  in
+  let open Validation.Warning in
   function
   | Wrong_author_format author ->
       t "The author" %% Fmt.kstr ct "%S" author
@@ -1493,8 +1498,8 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                      @ normal_field "Path" (ct raq.path)
                      @ normal_field "Method"
                          (Fmt.kstr ct "%s"
-                            (Cohttp.Code.string_of_method raq.meth) ) ) ) ) )
-      in
+                            (Rest_api_query.string_of_cohttp_compatible_meth
+                               raq.meth ) ) ) ) ) ) in
       let maybe_collapse content =
         if collapsing then
           let open Bootstrap.Collapse in
@@ -1648,7 +1653,10 @@ let big_answer level content =
 let show_metadata_full_validation ?token_metadata_big_map ctxt
     ~add_explore_tokens_button ~add_open_in_editor_button
     ~show_validation_big_answer inpo =
-  let open Tezos_contract_metadata.Contract_metadata.Content in
+  (* let open Tezos_contract_metadata.Contract_metadata.Content in *)
+  let module Validation =
+    Tezai_contract_metadata_manipulation.Content_validation
+  in
   match Contract_metadata.Content.of_json inpo with
   | Ok (legacy_warnings, m) ->
       let errs, warns =

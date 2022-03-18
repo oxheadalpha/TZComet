@@ -237,7 +237,6 @@ module Content = struct
   end
 
   module Q = Query_nodes
-  open Tezos_contract_metadata
   open Tezai_contract_metadata
   module Query_nodes = Q
 

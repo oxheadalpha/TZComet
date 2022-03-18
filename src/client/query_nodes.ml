@@ -176,8 +176,9 @@ module Node = struct
     System.slow_step state_handle
     >>= fun () ->
     let bgs =
-      Tezos_contract_metadata.Micheline_helpers.find_metadata_big_maps
-        ~storage_node:mich_storage ~type_node:mich_storage_type in
+      Tezai_contract_metadata_manipulation.Micheline_helpers
+      .find_metadata_big_maps ~storage_node:mich_storage
+        ~type_node:mich_storage_type in
     match bgs with
     | [] -> Fmt.failwith "Contract has no valid %%metadata big-map!"
     | _ :: _ :: _ ->
@@ -195,7 +196,7 @@ module Node = struct
   let bytes_value_of_big_map_at_string ctxt node ~big_map_id ~key ~log =
     let open Lwt in
     let hash_string =
-      Tezos_contract_metadata.Michelson_bytes
+      Tezai_contract_metadata_manipulation.Michelson_bytes
       .b58_script_id_hash_of_michelson_string key in
     Decorate_error.(
       reraise
@@ -226,7 +227,7 @@ module Node = struct
   let micheline_value_of_big_map_at_nat ctxt node ~big_map_id ~key ~log =
     let open Lwt in
     let hash_string =
-      Tezos_contract_metadata.Michelson_bytes
+      Tezai_contract_metadata_manipulation.Michelson_bytes
       .b58_script_id_hash_of_michelson_int key in
     Decorate_error.(
       reraise
@@ -511,10 +512,10 @@ let call_off_chain_view ctxt ~log ~address ~view ~parameter =
               | Seq (loc, args) -> Seq (loc, List.map ~f:go args) in
             go node |> strip_locations in
       {view with code= Michelson_blob code} in
-    Tezos_contract_metadata.Micheline_helpers.build_off_chain_view_contract view
-      ~contract_balance:(Z.of_string balance) ~contract_address:address
-      ~contract_storage ~view_parameters ~contract_storage_type
-      ~contract_parameter_type in
+    Tezai_contract_metadata_manipulation.Micheline_helpers
+    .build_off_chain_view_contract view ~contract_balance:(Z.of_string balance)
+      ~contract_address:address ~contract_storage ~view_parameters
+      ~contract_storage_type ~contract_parameter_type in
   logf "Made the view-script: %a" Tezai_michelson.Untyped.pp view_contract ;
   logf "Made the view-input: %a" Tezai_michelson.Untyped.pp view_input ;
   logf "Made the view-storage: %a" Tezai_michelson.Untyped.pp view_storage ;
