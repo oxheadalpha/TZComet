@@ -175,14 +175,14 @@ module Ezjsonm = struct
   include Ezjsonm
 
   module Stack_reimplementation = struct
-    exception Escape of ((int * int) * (int * int)) * Jsonm.error
+    exception Escape of ((int * int) * (int * int)) * Tzcomet_jsonm.error
 
     let json_of_src src =
-      let d = Jsonm.decoder src in
+      let d = Tzcomet_jsonm.decoder src in
       let dec () =
-        match Jsonm.decode d with
+        match Tzcomet_jsonm.decode d with
         | `Lexeme l -> l
-        | `Error e -> raise (Escape (Jsonm.decoded_range d, e))
+        | `Error e -> raise (Escape (Tzcomet_jsonm.decoded_range d, e))
         | `End | `Await -> assert false in
       let pp_value ppf v = Fmt.pf ppf "%s" (Ezjsonm.value_to_string v) in
       let module Stack_type = struct
@@ -209,7 +209,7 @@ module Ezjsonm = struct
       let fail_stack fmt =
         Fmt.kstr
           (fun m ->
-            let (a, b), (c, d) = Jsonm.decoded_range d in
+            let (a, b), (c, d) = Tzcomet_jsonm.decoded_range d in
             Fmt.failwith "%s [%d,%d - %d,%d stack: %a]" m a b c d pp_stack
               !stack )
           fmt in
@@ -257,8 +257,8 @@ module Ezjsonm = struct
       try `JSON (go ()) with Escape (r, e) -> `Error (r, e)
 
     let value_to_dst ?(minify = true) dst json =
-      let encoder = Jsonm.encoder ~minify dst in
-      let encode l = ignore (Jsonm.encode encoder (`Lexeme l)) in
+      let encoder = Tzcomet_jsonm.encoder ~minify dst in
+      let encode l = ignore (Tzcomet_jsonm.encode encoder (`Lexeme l)) in
       let rec go = function
         | [] -> ()
         | `Value ((`Bool _ | `Null | `Float _ | `String _) as v) :: more ->
@@ -280,7 +280,7 @@ module Ezjsonm = struct
             go more
         | `Array (v :: aa) :: more -> go (`Value v :: `Array aa :: more) in
       go [`Value json] ;
-      ignore (Jsonm.encode encoder `End)
+      ignore (Tzcomet_jsonm.encode encoder `End)
   end
 
   open Stack_reimplementation
@@ -375,23 +375,30 @@ end
 
 module Blob = struct
   module Format = struct
-    type t = [`Image | `Video] * string
+    type t = [`Image | `Video | `Appx | `Html] * string
 
     let gif = (`Image, "gif")
     let jpeg = (`Image, "jpeg")
     let png = (`Image, "png")
     let mp4 = (`Video, "mp4")
+    let appx = (`Appx, "x-directory")
 
     let of_mime_exn = function
       | image when String.is_prefix image ~prefix:"image/" ->
           (`Image, String.chop_prefix_exn image ~prefix:"image/")
       | vid when String.is_prefix vid ~prefix:"video/" ->
           (`Video, String.chop_prefix_exn vid ~prefix:"video/")
+      | app_x when String.equal app_x "application/x-directory" ->
+          (`Appx, String.chop_prefix_exn app_x ~prefix:"application/")
+      | html when String.equal html "text/html" ->
+          (`Html, String.chop_prefix_exn html ~prefix:"text/")
       | other -> Fmt.failwith "Unknown MIME type: %S" other
 
     let to_mime = function
       | `Image, f -> "image/" ^ f
       | `Video, f -> "video/" ^ f
+      | `Appx, f -> "application/" ^ f
+      | `Html, f -> "text/" ^ f
   end
 
   let guess_format s : Format.t option =

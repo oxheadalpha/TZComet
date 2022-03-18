@@ -317,14 +317,12 @@ let default_nodes : Node.t list =
         "https://mainnet.api.tez.ie" ~info_url:ecad
     ; Node.create "Mainnet-Blockscale" ~network:`Mainnet
         "https://rpc.tzbeta.net/" ~info_url:ecad
-    ; Node.create "Testnet-Blockscale" ~network:`Idiazabalnet
+    ; Node.create "Testnet-Blockscale" ~network:`Ithacanet
         "https://rpczero.tzbeta.net/" ~info_url:ecad
     ; Node.create "Hangzhounet-ECAD-Labs" ~network:`Hangzhounet
         "https://hangzhounet.api.tez.ie" ~info_url:ecad
     ; Node.create "Ithacanet-ECAD-Labs" ~network:`Ithacanet
         "https://ithacanet.ecadinfra.com" ~info_url:ecad
-    ; Node.create "Idiazabalnet-ECAD-Labs" ~network:`Idiazabalnet
-        "https://idiazabalnet.ecadinfra.com" ~info_url:ecad
       (* ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
           ~network:`Mainnet ~info_url:giga *)
     ; Node.create "Flextesabox-node" "http://127.0.0.1:20000" ~network:`Sandbox

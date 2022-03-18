@@ -8,16 +8,13 @@ let go_action ctxt ~wip =
   let token_id = State.token_id ctxt |> Reactive.peek in
   let address = State.token_address ctxt |> Reactive.peek in
   let protocol = Url.Current.protocol in
-  let slashes = if String.equal protocol "file:" then "//" else "/" in
   let host = Url.Current.host in
   let port =
     match Url.Current.port with Some p -> Int.to_string p ^ ":" | None -> ""
   in
-  let host_port =
-    if String.equal (host ^ port) "" then "" else host ^ port ^ "/" in
   let path_string = Url.Current.path_string in
   let path = Fmt.str "token/%s/%s" address token_id in
-  let tv_uri = protocol ^ slashes ^ host_port ^ path_string ^ "#/" ^ path in
+  let tv_uri = protocol ^ "//" ^ host ^ port ^ path_string ^ "#/" ^ path in
   let _ = Reactive.set copy_src_var tv_uri in
   let _logh msg = Async_work.log wip msg in
   let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
@@ -41,6 +38,10 @@ let go_action ctxt ~wip =
         Contract_metadata.Token.token_fetch ctxt ~address ~id ~log:logm
         >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) ;
   ()
+
+let retry_go_action ctxt ~wip =
+  let _ = Ipfs_gateways.try_next ctxt in
+  go_action ctxt ~wip
 
 let twitter_icon =
   {|data:image/x-icon;base64,
@@ -274,7 +275,9 @@ let show_multimedia :
                     ( match mm.format with
                     | `Image, "svg+xml" -> "Vector Graphics"
                     | `Image, _ -> "Image"
-                    | `Video, _ -> "Video" )
+                    | `Video, _ -> "Video"
+                    | `Appx, _ -> "Embedded Web Page"
+                    | `Html, _ -> "HTML" )
               | false -> t "Hide Multimedia" )
             f in
       let wrap_mm c =
@@ -310,7 +313,16 @@ let show_multimedia :
           | `Image, _ ->
               wrap_mm
                 (link ~target:mm.converted_uri
-                   (H5.img ~a:[style mm_style]
+                   (H5.img
+                      ~a:
+                        [ style mm_style
+                        ; H5.a_onerror
+                            (Tyxml_lwd.Lwdom.attr (fun _ ->
+                                 dbgf
+                                   "MLN: Token_viewer.show_multimedia - Error \
+                                    in `Image display - %S"
+                                   mm.converted_uri ;
+                                 false ) ) ]
                       ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
                       ~src:(Lwd.pure mm.converted_uri)
                       () ) )
@@ -319,7 +331,18 @@ let show_multimedia :
                 (H5.video
                    ~a:[H5.a_controls (); style mm_style]
                    ~src:(Lwd.pure mm.converted_uri)
-                   [] ) )
+                   [] )
+          | `Appx, _ | `Html, _ ->
+              wrap_mm
+                (H5.iframe
+                   ~a:
+                     [ style mm_style
+                     ; H5.a_onerror
+                         (Tyxml_lwd.Lwdom.attr (fun _ ->
+                              let _ = Ipfs_gateways.try_next ctxt in
+                              false ) )
+                     ; H5.a_src (Lwd.pure mm.converted_uri) ]
+                   [H5.txt (Lwd.pure "This should be an iframe")] ) )
 
 let show_token ctxt
     Contract_metadata.Token.
@@ -454,7 +477,9 @@ let show_token ctxt
         ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
         (Async_work.render tok_wip ~f:(show_multimedia ctxt)
            ~show_error:
-             (error_try_again (fun () -> go_action ctxt ~wip:tok_wip) err_str) )
+             (error_try_again
+                (fun () -> retry_go_action ctxt ~wip:tok_wip)
+                err_str ) )
     % Bootstrap.p_lead metadescription
     % div creators % div tags
     % ( match special_knowledge with
@@ -541,6 +566,9 @@ let render ctxt =
       && is_address_valid (Reactive.peek token_address)
       && not (Async_work.peek_busy result)
     then go_action ctxt ~wip:result in
+  let retry_enter_action ctxt =
+    let _ = Ipfs_gateways.try_next ctxt in
+    enter_action in
   let _once_in_tab = enter_action () in
   let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
@@ -651,4 +679,4 @@ let render ctxt =
   % div
       ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
       (Async_work.render result ~f:(show_token ctxt)
-         ~show_error:(error_try_again enter_action gateway_err_str) )
+         ~show_error:(error_try_again (retry_enter_action ctxt) gateway_err_str) )

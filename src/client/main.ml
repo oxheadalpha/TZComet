@@ -22,6 +22,7 @@ let lwd_onload _ =
         let fragment = Js_of_ocaml.Url.Current.get_fragment () in
         let sys, gui = State.Fragment.parse fragment in
         let nodes = Query_nodes.create () in
+        let ipfs_gateways = Ipfs_gateways.create () in
         let fetcher = Contract_metadata.Uri.Fetcher.create () in
         let storage = Local_storage.create () in
         let window = Browser_window.create () in
@@ -29,6 +30,7 @@ let lwd_onload _ =
           method system = sys
           method gui = gui
           method nodes = nodes
+          method ipfs_gateways = ipfs_gateways
           method fetcher = fetcher
           method storage = storage
           method window = window
@@ -48,6 +50,22 @@ let lwd_onload _ =
         (Lwd_seq.to_list (Lwd.quick_sample root) : _ node list :> raw_node list) ;
       Lwt.return_unit) ;
   Js._false
+
+let gen_eight_byte_mults n =
+  let eight = "AF00DFED" in
+  let rec loop acc n = if n > 0 then loop (eight ^ acc) (n - 1) else acc in
+  "0x" ^ loop "" n
+
+(* TODO: run this as a test *)
+let _parse_test () =
+  let the_bytes = gen_eight_byte_mults 1000 in
+  let test_json : string =
+    let before = " {\"prim\": \"Pair\", \"args\": [{\"bytes\": \"" in
+    let after = "\"}, {\"int\": \"40462\"}]}" in
+    before ^ the_bytes ^ after in
+  Stdlib.output_string Stdlib.stdout (test_json ^ "\n") ;
+  let _z_value = Ezjsonm.value_from_string test_json in
+  Stdlib.output_string Stdlib.stdout ("Done." ^ "\n")
 
 let _ =
   dbgf "Hello Main!" ;

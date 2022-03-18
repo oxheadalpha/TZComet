@@ -1,4 +1,5 @@
 open Import
+module Z_set = Caml.Set.Make (Z)
 
 module Block_explorer = struct
   type vendor = Smartpy | Bcd
@@ -207,6 +208,8 @@ let protocol s =
   let known name url =
     span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
   match s with
+  | "Psithaca2MLRFYargivpo7YvUr7wUDqyxrdhC5CQq78mRvimz6A" ->
+      known "Ithaca" "http://tezos.gitlab.io/protocols/012_ithaca.html"
   | "PtHangz2aRngywmSRGGvrcTyMbbdpWdpFKuS4uMWxg2RaH9i1qx" ->
       known "Hangzhou" "http://tezos.gitlab.io/protocols/011_hangzhou.html"
   | "PtGRANADsDU8R9daYKAgWnQYAJ64omN1o3KMGVCykShA97vQbvV" ->
@@ -239,18 +242,12 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
     match uri with
     | Web u -> t "Web URL:" %% url ct u
     | Ipfs {cid; path} ->
-        let gatewayed =
-          Contract_metadata.Uri.to_ipfs_gateway ~alt_gateway:false ctxt ~cid
-            ~path in
-        let gatewayed_alt =
-          Contract_metadata.Uri.to_ipfs_gateway ~alt_gateway:true ctxt ~cid
-            ~path in
+        let gatewayed = Contract_metadata.Uri.to_ipfs_gateway ctxt ~cid ~path in
         field_head "IPFS URI"
         % itemize
             [ field "CID" (ct cid)
             ; field "Path" (ct path)
-            ; t "(Try " %% url ct gatewayed % t "  "
-            ; t "or " %% url ct gatewayed_alt % t ")" ]
+            ; t "(Try " %% url ct gatewayed % t ")" ]
     | Storage {network; address; key} ->
         field_head "In-Contract-Storage"
         % itemize
@@ -539,6 +536,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
             ~exn_to_html:(Errors_html.exception_html ctxt)
             Lwt.Infix.(
               fun ~mkexn () ->
+                (* TODO: MLN - is this getting validated twice and should uri be passed to fetch instead of uri16? *)
                 match Contract_metadata.Uri.validate uri with
                 | Ok uri16, _ ->
                     Lwt.catch
@@ -553,6 +551,8 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                     let content_type =
                       match format with
                       | Some ((`Image, _) as f) -> Blob.Format.to_mime f
+                      | Some ((`Appx, _) as f) -> Blob.Format.to_mime f
+                      | Some ((`Html, _) as f) -> Blob.Format.to_mime f
                       | _ ->
                           Async_work.log result
                             (bt "WARNING: Cannot guess content type …") ;
@@ -570,18 +570,50 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                                 %% ct content_type % t "." )
                           | Some _ -> i (t "Guessed format" %% bt content_type)
                           )
-                      %% link ~target:src
-                           (H5.img
-                              ~a:[H5.a_style (Lwd.pure "max-height: 500px")]
-                              ~src:(Lwd.pure src)
-                              ~alt:(Fmt.kstr Lwd.pure "Image: %s" title)
-                              () ) ) ;
+                      %% div
+                           ( match content_type with
+                           | image when String.is_prefix image ~prefix:"image/"
+                             ->
+                               H5.img
+                                 ~a:[H5.a_style (Lwd.pure "max-height: 500px")]
+                                 ~src:(Lwd.pure src)
+                                 ~alt:(Fmt.kstr Lwd.pure "Image: %s" title)
+                                 ()
+                           | vid when String.is_prefix vid ~prefix:"video/" ->
+                               H5.video
+                                 ~a:[H5.a_controls (); style "max-width: 100%"]
+                                 ~src:(Lwd.pure src) []
+                           | app_x
+                             when String.is_prefix app_x ~prefix:"application/"
+                             ->
+                               H5.iframe
+                                 ~a:
+                                   [ H5.a_src (Lwd.pure src)
+                                   ; H5.a_style (Lwd.pure "max-width: 100%") ]
+                                 [H5.txt (Lwd.pure "This should be an iframe")]
+                           | html when String.equal html "text/html" ->
+                               H5.iframe
+                                 ~a:
+                                   [ H5.a_src (Lwd.pure src)
+                                   ; H5.a_style (Lwd.pure "max-width: 100%") ]
+                                 [H5.txt (Lwd.pure "This should be an iframe")]
+                           | other ->
+                               raise (mkexn (t "Unexpected content type")) ) ) ;
                     Lwt.return ()
                 | Error error, _ -> raise (mkexn (error_trace ctxt error))) )
     in
     let show_button ~web ~mime () =
+      let open Contract_metadata in
       button (Fmt.kstr t "Show Content") ~action:(fun () ->
           Reactive.set show true ;
+          let ipfs_uri uri =
+            let prefix = "ipfs://" in
+            let pre_len = String.length prefix in
+            let suffix =
+              if String.is_prefix ~prefix uri then
+                String.sub uri pre_len (String.length uri - pre_len)
+              else uri in
+            Ipfs_gateways.current_gateway ctxt ^ suffix in
           let content =
             match mime with
             | image when String.is_prefix image ~prefix:"image/" ->
@@ -593,6 +625,17 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                 H5.video
                   ~a:[H5.a_controls (); style "max-width: 100%"]
                   ~src:(Lwd.pure web) []
+            | app_x when String.equal app_x "application/x-directory" ->
+                let converted_uri = ipfs_uri uri in
+                H5.iframe
+                  ~a:
+                    [ H5.a_src (Lwd.pure converted_uri)
+                    ; H5.a_style (Lwd.pure "max-width: 100%") ]
+                  [H5.txt (Lwd.pure "This should be an iframe")]
+            | html when String.equal html "text/html" ->
+                H5.iframe
+                  ~a:[H5.a_src (Lwd.pure uri); style "max-width: 100%"]
+                  [H5.txt (Lwd.pure "This should be an iframe")]
             | _ ->
                 Bootstrap.alert ~kind:`Danger
                   (bt "Unknown MIME-Type:" %% ct mime)
@@ -631,11 +674,11 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
     %% content )
 
 module Printer_dsl = struct
-  type t = [`Open_right_range of int | `Page of int | `Range of int * int] list
+  type t = [`Open_right_range of Z.t | `Page of Z.t | `Range of Z.t * Z.t] list
 
-  let parse _ctxt iter_input =
-    let toint s =
-      try Int.of_string s
+  let parse ctxt iter_input =
+    let to_z s =
+      try Z.of_string s
       with _ -> Fmt.failwith "The string %S is not an integer." s in
     match
       List.concat_map (String.split ~on:',' iter_input) ~f:(fun item ->
@@ -643,12 +686,12 @@ module Printer_dsl = struct
           | "" -> []
           | item -> (
             match String.split item ~on:'-' with
-            | [one] -> [`Page (toint one)]
-            | [one; ""] -> [`Open_right_range (toint one)]
-            | [one; two] -> [`Range (toint one, toint two)]
+            | [one] -> [`Page (to_z one)]
+            | [one; ""] -> [`Open_right_range (to_z one)]
+            | [one; two] -> [`Range (to_z one, to_z two)]
             | _ -> Fmt.failwith "Cannot parse component: %S." item ) )
     with
-    | [] -> Ok (`Printer_spec [`Open_right_range 0])
+    | [] -> Ok (`Printer_spec [`Open_right_range Z.zero])
     | more -> Ok (`Printer_spec more)
     | exception Failure s ->
         Error Message.(t "Wrong format:" %% ct iter_input % t ":" %% t s)
@@ -913,18 +956,18 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
           | `Printer_spec (spec : _ list) ->
               let open Printer_dsl in
               Lwt.return (fun f ->
-                  let already_seen = ref (Set.empty (module Int)) in
+                  let already_seen = ref Z_set.empty in
                   let failures = ref 0 in
                   let max_failures = 3 in
                   let rec go : t -> unit Lwt.t =
                     let run_f n next =
-                      if Set.mem !already_seen n then Lwt.return_unit
+                      if Z_set.mem n !already_seen then Lwt.return_unit
                       else
                         Lwt.catch
                           (fun () ->
-                            f (Z.of_int n)
+                            f n
                             >>= fun () ->
-                            already_seen := Set.add !already_seen n ;
+                            already_seen := Z_set.add n !already_seen ;
                             go next )
                           (fun _exn -> Int.incr failures ; go next) in
                     function
@@ -932,12 +975,12 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                     | _ :: _ when !failures > max_failures -> Lwt.return_unit
                     | `Page n :: more -> run_f n more
                     | `Open_right_range n :: more ->
-                        let next = `Open_right_range (n + 1) :: more in
+                        let next = `Open_right_range (Z.succ n) :: more in
                         run_f n next
                     | `Range (l, r) :: more ->
                         let next =
-                          if l >= r then more else `Range (l + 1, r) :: more
-                        in
+                          if Z.geq l r then more
+                          else `Range (Z.succ l, r) :: more in
                         run_f l next in
                   go spec >>= fun () -> Lwt.return_nil ) in
         let explore_token id =
@@ -1368,16 +1411,18 @@ let metadata_substandards ?token_metadata_big_map
                                              %% list
                                                   (oxfordize_list l
                                                      ~map:(function
-                                                       | `Page n ->
-                                                           Fmt.kstr t "page %d"
-                                                             n
+                                                       | `Page (n : Z.t) ->
+                                                           Fmt.kstr t "page %a"
+                                                             Z.pp_print n
                                                        | `Open_right_range n ->
-                                                           Fmt.kstr it
-                                                             "pages [%d, ∞)" n
+                                                           Fmt.kstr t
+                                                             "pages [%a, ∞)"
+                                                             Z.pp_print n
                                                        | `Range (l, r) ->
-                                                           Fmt.kstr it
-                                                             "pages [%d, %d]" l
-                                                             r )
+                                                           Fmt.kstr t
+                                                             "pages [%a, %a]"
+                                                             Z.pp_print l
+                                                             Z.pp_print r )
                                                      ~sep:(fun () -> t ", ")
                                                      ~last_sep:(fun () ->
                                                        t ", and " ) )
