@@ -5,7 +5,7 @@ type t = {gateways: string list Reactive.var; current_index: int Reactive.var}
 let default_gateways : string list =
   [ "https://gateway.ipfs.io/ipfs/"
   ; "https://dweb.link/ipfs/"
-  ; "https://cloudflare-ipfs.com" ]
+  ; "https://cloudflare-ipfs.com/" ]
 
 let create () =
   {gateways= Reactive.var default_gateways; current_index= Reactive.var 0}
