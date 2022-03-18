@@ -321,7 +321,7 @@ let show_multimedia :
                             (Tyxml_lwd.Lwdom.attr (fun _ ->
                                  dbgf
                                    "MLN: Token_viewer.show_multimedia - Error \
-                                    in `Appx or `Html display - %S"
+                                    in `Image display - %S"
                                    mm.converted_uri ;
                                  false ) ) ]
                       ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
