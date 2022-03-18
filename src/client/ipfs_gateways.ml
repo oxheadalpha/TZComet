@@ -19,6 +19,8 @@ let current_gateway t =
   let idx = Reactive.peek (get t).current_index in
   List.nth_exn the_list idx
 
+exception Bad_gateway_index of string
+
 let try_next ctxt =
   let ipfs = get ctxt in
   let old_gw = current_gateway ctxt in
@@ -27,7 +29,12 @@ let try_next ctxt =
   let count = List.length the_list in
   let new_idx = if phys_equal idx (count - 1) then 0 else idx + 1 in
   Reactive.set (current_index ctxt) new_idx ;
-  let new_gw = List.nth_exn the_list new_idx in
+  let error_str =
+    Printf.sprintf "Trying to use index %d on a list of gateways of size %d" idx
+      count in
+  let new_gw =
+    try List.nth_exn the_list new_idx
+    with Invalid_argument _ -> raise (Bad_gateway_index error_str) in
   dbgf "Ipfs_gateways.try_next - rotating IPFS gateways: %S ----> %S" old_gw
     new_gw ;
   new_gw
