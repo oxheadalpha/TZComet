@@ -1,3 +1,16 @@
+(rule
+ (target index.html)
+ (deps
+  (package lwd-bootstrap-generator)
+  (:loading ../../data/loading.gif)
+  ;;(:js ../client/main.bc.js)
+  )
+ (action
+  (with-stdout-to
+   index.html
+   (progn
+    (run lwd-bootstrap-generator index TZComet %{loading})))))
+
 (executable
  (name main)
  (modes js)
