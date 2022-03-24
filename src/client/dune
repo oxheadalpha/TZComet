@@ -1,7 +1,6 @@
 (rule
  (target index.html)
  (deps
-  (package lwd-bootstrap-generator)
   (:loading ../../data/loading.gif)
   ;;(:js ../client/main.bc.js)
   )
@@ -14,8 +13,7 @@
 (executable
  (name main)
  (modes js)
- (js_of_ocaml
-  (flags --no-inline))
+ ;;(js_of_ocaml (flags --no-inline))
  (preprocess
   (pps js_of_ocaml-ppx))
  (libraries zarith_stubs_js fmt base js_of_ocaml-lwt re.posix tezai-michelson

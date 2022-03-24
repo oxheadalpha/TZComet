@@ -111,10 +111,8 @@ module Browser_window = struct
 
   let create ?(threshold = 992) () =
     let find_out () =
-      match Js.Optdef.to_option Dom_html.window##.innerWidth with
-      | Some s when s >= threshold -> Some `Wide
-      | Some _ -> Some `Thin
-      | None -> None in
+      let w = Dom_html.window##.innerWidth in
+      if w >= threshold then Some `Wide else Some `Thin in
     let width = Reactive.var (find_out ()) in
     Dom_html.window##.onresize :=
       Dom_html.handler (fun _ ->

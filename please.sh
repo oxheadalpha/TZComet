@@ -13,82 +13,35 @@ say () {
     printf "please.sh: %s\n" "$*" >&2
 }
 
-ensure_vendors () {
-    say "Ensuring vendors"
-    # We use the following pointer to the main repo's master branch:
-    tezos_branch=smondet-contract-metadata
-    tezos_remote=https://gitlab.com/smondet/tezos.git
-    tezos_commit="8d3aa42b9628e4d3440556c85b4fd0f75298bcd2"
-    say "Vendoring tezos @ %10s" "$tezos_branch"
-    if [ -f "local-vendor/tezos/README.md" ] ; then
-        say "Tezos already cloned"
-    else
-        mkdir -p local-vendor/
-        git clone "$tezos_remote" -b "$tezos_branch" \
-            local-vendor/tezos
-    fi
-    (
-        cd local-vendor/tezos/
-        git checkout "$tezos_branch"
-        git pull
-        git checkout "$tezos_commit"
-        git log --oneline -n 5
-        #echo "(data_only_dirs flextesa-lib) ;; Unvendored flextesa" > vendors/dune
-    )
-    say "Vendoring Vbmithr's base58 library"
-    if [ -f "local-vendor/ocaml-base58/base58.opam" ] ; then
-        say "Already cloned"
-    else
-        git clone --depth 10 https://github.com/vbmithr/ocaml-base58.git \
-            local-vendor/ocaml-base58
-    fi
-    (
-        cd local-vendor/ocaml-base58
-        git pull
-        git checkout src/base58.mli
-        # We need to expose this for the Ledger-like hash:
-        echo 'val raw_encode : ?alphabet:Alphabet.t -> string -> string' >> src/base58.mli
-    )
-    say "Vendoring Lwd++"
-    lwd_commit="3bfeca4d37560f8778610c51d60d2d1aedfa519d"
-    if [ -f "local-vendor/lwd/lwd.opam" ] ; then
-        say "Already cloned"
-    else
-        git clone --depth 30 https://github.com/let-def/lwd.git \
-            local-vendor/lwd
-    fi
-    (
-        cd local-vendor/lwd
-        git pull
-        git pull
-        git checkout "$lwd_commit"
-        git log --oneline -n 5
-    )
-}
 
 ocamlformat_version=0.19.0
 ensure_setup () {
-    if [ "$global_switch" = "true" ] ; then
-        say "Assuming Global Opam Switch is set"
+    if [ "$global_switch" = "true" ] || [ -d _opam ] ; then
+        say 'Opam switch already there'
     else
-        if ! [ -d _opam/ ] ; then
-            opam switch create . ocaml-base-compiler.4.09.1
-        fi
+        opam switch create tzcomet-413-test \
+             --formula='"ocaml-base-compiler" {>= "4.13" & < "4.14"}'
+        opam switch link tzcomet-413-test .
     fi
     eval $(opam env)
     opam pin add -n digestif 0.9.0
     opam pin add -n ocamlformat "$ocamlformat_version"
-    opam pin add -n tyxml 4.5.0
+    #opam pin remove tyxml
     opam pin add -n zarith 1.11 # zarith_stubs_js fails with 1.12
-    opam pin add -n js_of_ocaml-lwt 3.11.0
+    opam pin add -n zarith_stubs_js v0.14.1
+    # The older compiler does not work with recent dune:
+    opam pin add -n js_of_ocaml-compiler 4.0.0
+    tezais="lwd-bootstrap lwd-bootstrap-generator tezai-base58-digest tezai-michelson tezai-contract-metadata tezai-contract-metadata-manipulation"
+    for tezai in $tezais ; do
+        opam pin add -n $tezai https://gitlab.com/oxheadalpha/$tezai.git
+    done
     # see https://github.com/janestreet/zarith_stubs_js/pull/8
-    opam install --deps-only \
-         local-vendor/tezos/src/lib_contract_metadata/tezos-contract-metadata.opam
     opam install -y base fmt uri cmdliner ezjsonm \
          ocamlformat uri merlin ppx_deriving angstrom \
          ppx_inline_test lwt-canceler.0.3 zarith_stubs_js \
-         digestif tyxml \
+         digestif tyxml tyxml-lwd \
          js_of_ocaml-compiler js_of_ocaml-lwt
+    opam install -y $tezais
 }
 
 
