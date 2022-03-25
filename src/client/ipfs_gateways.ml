@@ -50,7 +50,7 @@ let add ctxt gateway =
 let remove_gateway ctxt ~uri =
   let ipfs = get ctxt in
   let gws = Reactive.peek ipfs.gateways in
-  let new_list = List.filter gws (fun u -> not (String.equal u uri)) in
+  let new_list = List.filter gws ~f:(fun u -> not (String.equal u uri)) in
   let new_len = List.length new_list in
   if phys_equal new_len 0 then false (* tried to remove them all *)
   else

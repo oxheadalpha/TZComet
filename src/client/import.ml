@@ -23,72 +23,7 @@ let bytes_summary ?(threshold = 25) ?(left = 10) ?(right = 10) bytes =
         (String.sub bytes ~pos:(m - right) ~len:right)
 
 module Context = struct type 'a t = 'a constraint 'a = < .. > end
-
-module Reactive = struct
-  include Lwd
-
-  let ( ** ) = pair
-  let split_var v = (get v, set v)
-  let bind_var : 'a var -> f:('a -> 'b t) -> 'b t = fun v ~f -> bind ~f (get v)
-
-  module Bidirectional = struct
-    type 'a t = {lwd: 'a Lwd.t; set: 'a -> unit}
-
-    let make lwd set = {lwd; set}
-    let of_var v = make (Lwd.get v) (Lwd.set v)
-    let get v = v.lwd
-    let set v x = v.set x
-    let convert {lwd; set} f t = {lwd= map lwd ~f; set= (fun x -> set (t x))}
-  end
-
-  module Table = struct
-    include Lwd_table
-
-    let append = append'
-
-    let concat_map ~map table =
-      Lwd.join (Lwd_table.map_reduce map Lwd_seq.lwd_monoid table)
-
-    let fold t ~init ~f =
-      let rec go acc = function
-        | None -> acc
-        | Some row -> (
-          match get row with None -> acc | Some x -> go (f acc x) (next row) )
-      in
-      go init (first t)
-
-    let iter_rows t ~f =
-      let rec go = function
-        | None -> ()
-        | Some s ->
-            let prepare_next = next s in
-            f s ; go prepare_next in
-      go (first t)
-
-    module Lwt = struct
-      open Lwt.Infix
-
-      let find_map (type a) t ~f =
-        let exception Found of a in
-        Lwt.catch
-          (fun () ->
-            fold t ~init:Lwt.return_none ~f:(fun pnone x ->
-                pnone
-                >>= fun none ->
-                f x
-                >>= function
-                | Some x -> Lwt.fail (Found x) | None -> Lwt.return none ) )
-          (function Found x -> Lwt.return_some x | e -> Lwt.fail e)
-
-      let find x ~f =
-        find_map x ~f:(fun x ->
-            f x
-            >>= function true -> Lwt.return_some x | false -> Lwt.return_none )
-    end
-  end
-
-  module Sequence = Lwd_seq
-end
+module Reactive = Lwd_bootstrap.Reactive
 
 module Message = struct
   type t =
@@ -176,10 +111,8 @@ module Browser_window = struct
 
   let create ?(threshold = 992) () =
     let find_out () =
-      match Js.Optdef.to_option Dom_html.window##.innerWidth with
-      | Some s when s >= threshold -> Some `Wide
-      | Some _ -> Some `Thin
-      | None -> None in
+      let w = Dom_html.window##.innerWidth in
+      if w >= threshold then Some `Wide else Some `Thin in
     let width = Reactive.var (find_out ()) in
     Dom_html.window##.onresize :=
       Dom_html.handler (fun _ ->
@@ -285,7 +218,7 @@ module Ezjsonm = struct
           | `In_object (Some n, l) :: more ->
               stack := `In_object (None, (n, v) :: l) :: more
           | [] -> stack := [(v :> Stack_type.t)]
-          | other -> fail_stack "wrong stack" in
+          | _other -> fail_stack "wrong stack" in
         let pop () =
           match !stack with
           | _ :: more -> stack := more
@@ -294,16 +227,16 @@ module Ezjsonm = struct
         | `Os -> stack := `In_object (None, []) :: !stack
         | `Oe -> (
           match !stack with
-          | `In_object (Some n, l) :: more -> fail_stack "name not none"
-          | `In_object (None, l) :: more ->
+          | `In_object (Some _, _) :: _more -> fail_stack "name not none"
+          | `In_object (None, l) :: _more ->
               pop () ;
               stack_value (`O (List.rev l))
-          | other ->
+          | _other ->
               fail_stack "wrong stack, expecting in-object to close object" )
         | `As -> stack := `In_array [] :: !stack
         | `Ae -> (
           match !stack with
-          | `In_array l :: more ->
+          | `In_array l :: _more ->
               pop () ;
               stack_value (`A (List.rev l))
           | _ -> fail_stack "array end not in array" )
@@ -311,7 +244,7 @@ module Ezjsonm = struct
           match !stack with
           | `In_object (None, l) :: more ->
               stack := `In_object (Some n, l) :: more
-          | other ->
+          | _other ->
               fail_stack "wrong stack, expecting in-object for field-name" )
         | (`Bool _ | `Null | `Float _ | `String _) as v -> stack_value v ) ;
         match !stack with

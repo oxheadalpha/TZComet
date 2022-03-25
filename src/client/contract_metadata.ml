@@ -2,11 +2,11 @@ open Import
 
 module Uri = struct
   let validate uri_code =
-    let open Tezos_contract_metadata.Metadata_uri in
+    let open Tezai_contract_metadata.Metadata_uri in
     let errors = ref [] in
     let error w src e = errors := (w, src, e) :: !errors in
     let validate_kt1_address s =
-      ( try ignore (B58_hashes.check_b58_kt1_hash s) with
+      ( try Tezai_base58_digest.Identifier.Kt1_address.check s with
       | Failure f -> error `Address s f
       | e -> Fmt.kstr (error `Address s) "%a" Exn.pp e ) ;
       Ok () in
@@ -14,7 +14,7 @@ module Uri = struct
       | "mainnet" | "carthagenet" | "delphinet" | "dalphanet" | "zeronet" ->
           Ok ()
       | s ->
-          ( try ignore (B58_hashes.check_b58_chain_id_hash s) with
+          ( try Tezai_base58_digest.Identifier.Chain_id.check s with
           | Failure f -> error `Network s f
           | e -> Fmt.kstr (error `Network s) "%a" Exn.pp e ) ;
           Ok () in
@@ -38,7 +38,7 @@ module Uri = struct
   end
 
   let rec needs_context_address =
-    let open Tezos_contract_metadata.Metadata_uri in
+    let open Tezai_contract_metadata.Metadata_uri in
     function
     | Storage {address= None; _} -> true
     | Web _ | Storage _ | Ipfs _ -> false
@@ -54,8 +54,8 @@ module Uri = struct
     else
       let f (isNext, result) sub_s =
         match (isNext, result) with
-        | b, s when String.equal sub_s "ipfs" -> (true, s)
-        | b, s when Bool.equal b true -> (false, sub_s)
+        | _, s when String.equal sub_s "ipfs" -> (true, s)
+        | b, _ when Bool.equal b true -> (false, sub_s)
         | b, s -> (b, s) in
       let splitz = String.split_on_chars ~on:['/'] uri in
       match List.fold ~f ~init:(false, "") splitz with
@@ -63,11 +63,11 @@ module Uri = struct
       | _, result -> Some result
 
   let to_web_address ctxt =
-    let open Tezos_contract_metadata.Metadata_uri in
+    let open Tezai_contract_metadata.Metadata_uri in
     function
     | Web http -> Some http
     | Ipfs {cid; path} -> Some (to_ipfs_gateway ctxt ~cid ~path)
-    | Hash {kind; value; target= Web http} -> Some http
+    | Hash {kind= _; value= _; target= Web http} -> Some http
     | _ -> None
 
   let fetch ?limit_bytes ?(log = dbgf "Uri.fetch.log: %s") ctxt uri =
@@ -78,7 +78,7 @@ module Uri = struct
     System.slow_step ctxt
     >>= fun () ->
     let rec resolve =
-      let open Tezos_contract_metadata.Metadata_uri in
+      let open Tezai_contract_metadata.Metadata_uri in
       function
       | Web http ->
           logf "HTTP %S (may fail because of origin policy)" http ;
@@ -113,7 +113,7 @@ module Uri = struct
           let gatewayed = to_ipfs_gateway ctxt ~cid ~path in
           Lwt.catch
             (fun () -> resolve (Web gatewayed))
-            (fun e ->
+            (fun _ ->
               dbgf "Trying alternate IPFS gateway..." ;
               let gatewayed_alt = to_ipfs_gateway ctxt ~cid ~path in
               resolve (Web gatewayed_alt) )
@@ -180,7 +180,7 @@ module Content = struct
         fix j in
       let contents =
         Json_encoding.destruct
-          Tezos_contract_metadata.Metadata_contents.encoding jsonm in
+          Tezai_contract_metadata.Metadata_contents.encoding jsonm in
       Ok (!warnings, contents)
     with e -> Tezos_error_monad.Error_monad.error_exn e
 
@@ -240,7 +240,9 @@ module Content = struct
       with e -> Tezos_error_monad.Error_monad.error_exn e
   end
 
-  open Tezos_contract_metadata
+  module Q = Query_nodes
+  open Tezai_contract_metadata
+  module Query_nodes = Q
 
   type metadata = Metadata_contents.t
   type view = Metadata_contents.View.t
@@ -335,8 +337,8 @@ module Content = struct
     | None -> Missing
     | Some (`No_michelson_implementation x) -> No_michelson_implementation x
     | Some (`Found (view, impl)) -> (
-        let ( ((param_ok, param) as parameter_status)
-            , ((result_ok, result) as return_status) ) =
+        let ( ((param_ok, _) as parameter_status)
+            , ((result_ok, _) as return_status) ) =
           check_implementation_types impl ?check_parameter ~check_return in
         match (param_ok, result_ok) with
         | `Ok, `Ok -> Valid (view, impl)
@@ -353,9 +355,8 @@ module Content = struct
         Decorate_error.raise
           Message.(
             t "Wrong %token_metadata annotation:"
-            %% kpp ct
-                 Tezos_contract_metadata.Micheline_helpers
-                 .pp_arbitrary_micheline node) in
+            %% kpp ct Tezai_michelson.Untyped.pp
+                 (Tezai_michelson.Untyped.of_micheline_node node)) in
     match (storage_node, type_node) with
     | Prim (_, "Pair", [l; r], ans), Prim (_, "pair", [lt; rt], ant) ->
         check_annots ans storage_node ;
@@ -390,7 +391,7 @@ module Content = struct
         []
     | Seq (_, _l), _t -> []
 
-  let token_metadata_value ctxt ~address ~key ~(log : string -> unit) =
+  let token_metadata_value ctxt ~address ~key:_ ~(log : string -> unit) =
     let open Lwt in
     let open Query_nodes in
     let logf f = Fmt.kstr log f in
@@ -415,9 +416,8 @@ module Content = struct
       ~log =
     let open Lwt.Infix in
     let parameter =
-      let open Michelson in
-      parse_micheline_exn ~check_indentation:false parameter_string
-        ~check_primitives:false in
+      Tezai_michelson.Concrete_syntax.parse_exn ~check_indentation:false
+        parameter_string ~check_primitives:false in
     Query_nodes.call_off_chain_view ctxt ~log ~address ~view ~parameter
     >>= function
     | Ok (result, _) -> Lwt.return (Ok result) | Error s -> Lwt.return (Error s)
@@ -538,8 +538,8 @@ module Content = struct
 
   module Tzip_021 = struct
     let claim metadata =
-      List.find metadata.Tezos_contract_metadata.Metadata_contents.interfaces
-        ~f:(fun claim -> String.is_prefix claim "TZIP-021")
+      List.find metadata.Tezai_contract_metadata.Metadata_contents.interfaces
+        ~f:(fun claim -> String.is_prefix claim ~prefix:"TZIP-021")
 
     type uri_format =
       { uri: string option
@@ -607,7 +607,7 @@ module Content = struct
         |> Option.bind ~f:(function
              | "true" -> Some true
              | "false" -> Some false
-             | other ->
+             | _ ->
                  warn
                    Message.(
                      t "Key" %% ct key
@@ -774,7 +774,7 @@ module Token = struct
     ; total_supply: Z.t option
     ; tzip21: Content.Tzip_021.t
     ; main_multimedia: (string * Multimedia.t, exn) Result.t Option.t
-    ; metadata: Tezos_contract_metadata.Metadata_contents.t
+    ; metadata: Tezai_contract_metadata.Metadata_contents.t
     ; special_knowledge: [`Hic_et_nunc of Z.t] list
     ; warnings: (string * warning) list }
 
@@ -795,7 +795,7 @@ module Token = struct
     ; tzip21 }
 
   let piece_of_metadata ?(json_type = `String) ~warn ~key ~metadata_map
-      ~metadata_json =
+      ~metadata_json () =
     let in_json =
       match metadata_json with
       | None -> None
@@ -878,7 +878,7 @@ module Token = struct
     >>= fun token_metadata_big_map ->
     Query_nodes.metadata_value ctxt ~address ~key:"" ~log:(logs "Getting URI")
     >>= (fun metadata_uri ->
-          let open Tezos_contract_metadata.Metadata_contents in
+          let open Tezai_contract_metadata.Metadata_contents in
           let empty () = Lwt.return (make []) in
           match Uri.validate metadata_uri with
           | Ok uri, _ -> (
@@ -903,7 +903,7 @@ module Token = struct
     >>= fun metadata_contents ->
     let total_supply_validation, token_metadata_validation =
       match Content.classify ?token_metadata_big_map metadata_contents with
-      | Tzip_16 t ->
+      | Tzip_16 _ ->
           log
             Message.(
               t "This is not a TZIP-012 token at all. See interfaces claimed:"
@@ -914,21 +914,23 @@ module Token = struct
                       metadata_contents.interfaces )) ;
           Content.(Missing, Missing)
       | Tzip_12
-          { metadata
-          ; interface_claim
-          ; get_balance
-          ; total_supply
-          ; all_tokens
-          ; is_operator
+          { (* metadata
+               ; interface_claim
+               ; get_balance *)
+            total_supply
+            (* ; all_tokens
+               ; permissions_descriptor
+                    ; is_operator*)
           ; token_metadata
-          ; permissions_descriptor } ->
+          ; _ } ->
           (total_supply, token_metadata) in
     let get_token_metadata_map_with_view () =
       Content.maybe_call_view ctxt token_metadata_validation
-        ~parameter_string:(Z.to_string id) ~address ~log:logs in
+        ~parameter_string:(Z.to_string id) ~address ~log:(logs "Call View")
+    in
     let get_total_supply_with_view () =
       Content.maybe_call_view ctxt total_supply_validation
-        ~parameter_string:(Z.to_string id) ~address ~log:logs
+        ~parameter_string:(Z.to_string id) ~address ~log:(logs "Call View")
       >>= function
       | Some (Ok (Tezos_micheline.Micheline.Int (_, z))) -> Lwt.return_some z
       | _ -> Lwt.return_none in
@@ -950,7 +952,8 @@ module Token = struct
         | Some big_map_id, _ ->
             get_token_metadata_map_with_big_map ~log:meta_log ~node big_map_id
       end
-      >>= function
+      >>= fun mich ->
+      match mich with
       | Prim (_, "Pair", [_; full_map], _) -> (
           let key_values =
             Michelson.Partial_type.micheline_string_bytes_map_exn full_map in
@@ -987,9 +990,9 @@ module Token = struct
             piece_of_metadata ?json_type
               ~warn:(fun k m -> warn k (`Getting_metadata_field m))
               ~key ~metadata_map:key_values ~metadata_json in
-          let symbol = piece_of_metadata "symbol" in
+          let symbol = piece_of_metadata "symbol" () in
           let name =
-            match piece_of_metadata "name" with
+            match piece_of_metadata "name" () with
             | Some "" ->
                 warn "name-is-empty"
                   (`Getting_metadata_field
@@ -997,7 +1000,7 @@ module Token = struct
                       t "The" %% ct "name" %% t "field is the empty string.") ) ;
                 None
             | o -> o in
-          let decimals = piece_of_metadata ~json_type:`Int "decimals" in
+          let decimals = piece_of_metadata ~json_type:`Int "decimals" () in
           let tzip21, _ =
             Content.Tzip_021.from_extras
               ( List.map key_values ~f:Result.return
@@ -1047,7 +1050,7 @@ module Token = struct
                 [`Hic_et_nunc id]
             | _ -> [] in
           match main_multimedia with
-          | Some (Error exn) ->
+          | Some (Error _) ->
               let _ = Ipfs_gateways.try_next ctxt in
               failm Message.(Fmt.kstr t "Error with the multimedia.")
           | _ ->

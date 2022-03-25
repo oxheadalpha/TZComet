@@ -46,7 +46,7 @@ let tzip_021_url =
 
 let uri_parsing_error err =
   let open Meta_html in
-  let open Tezos_contract_metadata.Metadata_uri.Parsing_error in
+  let open Tezai_contract_metadata.Metadata_uri.Parsing_error in
   let details =
     let sha256_host_advice =
       t "The host should look like:"
@@ -83,7 +83,9 @@ let uri_parsing_error err =
     | Wrong_hex_format_for_hash {hash= `Sha256; host; message} ->
         t "Failed to parse the “host” "
         %% ct host % t " in this " %% ct "sha256://" % t " URI: " % t message
-        % t " → " %% sha256_host_advice in
+        % t " → " %% sha256_host_advice
+    | Bad_b58 (l, r) -> Fmt.kstr t "Bad Base58: %s %s" l r
+    | Wrong_network (l, r) -> Fmt.kstr t "Wrong Network: %s %s" l r in
   let exploded_uri =
     let u = Uri.of_string err.input in
     let item name opt =
@@ -154,7 +156,7 @@ let single_error ctxt =
   | Exn other_exn ->
       Errors_html.exception_html ctxt other_exn
         ~handlers:[json_encoding_error; simple_exns_handler]
-  | Tezos_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
+  | Tezai_contract_metadata.Metadata_uri.Contract_metadata_uri_parsing
       parsing_error ->
       uri_parsing_error parsing_error
   | other ->
@@ -234,7 +236,7 @@ let tzip16_uri_short ctxt s =
   %% open_in_editor ctxt s ~and_explorer:true
 
 let metadata_uri ?(open_in_editor_link = true) ctxt uri =
-  let open Tezos_contract_metadata.Metadata_uri in
+  let open Tezai_contract_metadata.Metadata_uri in
   let ct = monot in
   let rec go uri =
     match uri with
@@ -266,16 +268,18 @@ let metadata_uri ?(open_in_editor_link = true) ctxt uri =
   ( if open_in_editor_link then
     div
       (open_in_editor ctxt
-         (Tezos_contract_metadata.Metadata_uri.to_string_uri uri) )
+         (Tezai_contract_metadata.Metadata_uri.to_string_uri uri) )
   else empty () )
   % div (go uri)
 
-let mich (Tezos_contract_metadata.Metadata_contents.Michelson_blob.Micheline m)
+let mich
+    (Tezai_contract_metadata.Metadata_contents.Michelson_blob.Michelson_blob m)
     =
-  Michelson.micheline_canonical_to_string m
+  Tezai_michelson.Concrete_syntax.to_string
+    (Tezai_michelson.Untyped.of_canonical_micheline m)
 
 let view_result ctxt ~result ~storage ~address ~view ~parameter =
-  let open Tezos_contract_metadata.Metadata_contents in
+  let open Tezai_contract_metadata.Metadata_contents in
   let open View in
   let open Implementation in
   let open Michelson_storage in
@@ -309,7 +313,7 @@ let view_result ctxt ~result ~storage ~address ~view ~parameter =
          ; ("Current storage", mich_node storage) ] )
 
 let michelson_view ctxt ~view =
-  let open Tezos_contract_metadata.Metadata_contents in
+  let open Tezai_contract_metadata.Metadata_contents in
   let open View in
   let open Implementation in
   let open Michelson_storage in
@@ -368,16 +372,16 @@ let michelson_view ctxt ~view =
             Async_work.async_catch wip
               ~exn_to_html:(Errors_html.exception_html ctxt)
               Lwt.Infix.(
-                fun ~mkexn () ->
+                fun ~mkexn:_ () ->
                   let parameter =
-                    let open Michelson in
                     match parameter_input with
                     | Some mf ->
                         Michelson.Partial_type.peek mf
-                        |> parse_micheline_exn ~check_indentation:false
-                             ~check_primitives:false
+                        |> Tezai_michelson.Concrete_syntax.parse_exn
+                             ~check_indentation:false ~check_primitives:false
                     | None ->
-                        parse_micheline_exn ~check_indentation:false "Unit"
+                        Tezai_michelson.Concrete_syntax.parse_exn
+                          ~check_indentation:false "Unit"
                           ~check_primitives:false in
                   Query_nodes.call_off_chain_view ctxt ~log
                     ~address:(Reactive.peek address) ~view ~parameter
@@ -398,8 +402,11 @@ let michelson_view ctxt ~view =
                  | true ->
                      let open Bootstrap.Form in
                      let validate_address input_value =
-                       match B58_hashes.check_b58_kt1_hash input_value with
-                       | _ -> true
+                       match
+                         Tezai_base58_digest.Identifier.Kt1_address.check
+                           input_value
+                       with
+                       | () -> true
                        | exception _ -> false in
                      let input_valid =
                        Reactive.(
@@ -453,8 +460,10 @@ let michelson_view ctxt ~view =
 let michelson_instruction s =
   link (t s) ~target:(Fmt.str "https://michelson.nomadic-labs.com/#instr-%s" s)
 
-let metadata_validation_error ctxt =
-  let open Tezos_contract_metadata.Metadata_contents in
+let metadata_validation_error _ctxt =
+  let module Validation =
+    Tezai_contract_metadata_manipulation.Content_validation
+  in
   let open Validation.Error in
   let the_off_chain_view view = t "The off-chain-view “" % ct view % t "”" in
   function
@@ -480,8 +489,10 @@ let metadata_validation_error ctxt =
       % ct "PsDELPH1Kxsxt8f9eWbxQeRxkjfbxoqM52jvs5Y5fBxWWh4ifpo"
       % t "."
 
-let metadata_validation_warning ctxt =
-  let open Tezos_contract_metadata.Metadata_contents in
+let metadata_validation_warning _ctxt =
+  let module Validation =
+    Tezai_contract_metadata_manipulation.Content_validation
+  in
   let open Validation.Warning in
   function
   | Wrong_author_format author ->
@@ -586,13 +597,12 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
                                    [ H5.a_src (Lwd.pure src)
                                    ; H5.a_style (Lwd.pure "max-width: 100%") ]
                                  [H5.txt (Lwd.pure "This should be an iframe")]
-                           | other ->
+                           | _other ->
                                raise (mkexn (t "Unexpected content type")) ) ) ;
                     Lwt.return ()
                 | Error error, _ -> raise (mkexn (error_trace ctxt error))) )
     in
     let show_button ~web ~mime () =
-      let open Contract_metadata in
       button (Fmt.kstr t "Show Content") ~action:(fun () ->
           Reactive.set show true ;
           let ipfs_uri uri =
@@ -600,7 +610,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
             let pre_len = String.length prefix in
             let suffix =
               if String.is_prefix ~prefix uri then
-                String.sub uri pre_len (String.length uri - pre_len)
+                String.sub uri ~pos:pre_len ~len:(String.length uri - pre_len)
               else uri in
             Ipfs_gateways.current_gateway ctxt ^ suffix in
           let content =
@@ -665,7 +675,7 @@ let multimedia_from_tzip16_uri ?(mime_types = []) ctxt ~title ~uri =
 module Printer_dsl = struct
   type t = [`Open_right_range of Z.t | `Page of Z.t | `Range of Z.t * Z.t] list
 
-  let parse ctxt iter_input =
+  let parse _ctxt iter_input =
     let to_z s =
       try Z.of_string s
       with _ -> Fmt.failwith "The string %S is not an integer." s in
@@ -687,10 +697,10 @@ module Printer_dsl = struct
 end
 
 let show_micheline_result = function
-  | Ok node -> ct (Michelson.micheline_node_to_string node)
+  | Ok node -> ct (Tezai_michelson.Concrete_syntax.to_string node)
   | Error s -> Bootstrap.color `Danger (t s)
 
-let show_total_supply (ctxt : _ Context.t) ?decimals z =
+let show_total_supply (_ctxt : _ Context.t) ?decimals z =
   match Option.map ~f:Int.of_string decimals with
   | Some decimals ->
       let dec = Float.(Z.to_float z / (10. ** of_int decimals)) in
@@ -699,7 +709,8 @@ let show_total_supply (ctxt : _ Context.t) ?decimals z =
         Z.pp_print z
   | None | (exception _) -> Fmt.kstr t "%a Units (no decimals)" Z.pp_print z
 
-let show_total_supply_result ctxt ?decimals = function
+let show_total_supply_result ctxt ?decimals ts =
+  match ts with
   | Ok (Tezos_micheline.Micheline.Int (_, z)) ->
       show_total_supply ctxt ?decimals z
   | other -> ct "Error: " %% show_micheline_result other
@@ -748,8 +759,8 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                 ~last_sep:(fun () -> t " | ") )
         %% t "]" in
   let validate_address input_value =
-    match B58_hashes.check_b58_kt1_hash input_value with
-    | _ -> Some input_value
+    match Tezai_base58_digest.Identifier.Kt1_address.check input_value with
+    | () -> Some input_value
     | exception _ -> None in
   let token_viewer_link ctxt =
     let input_value = State.explorer_input_value ctxt in
@@ -922,7 +933,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
               >>= fun tokens_mich ->
               let tokens =
                 match tokens_mich with
-                | Seq (_, nodes) ->
+                | Seq (_, nodes) as seq_node ->
                     List.map nodes ~f:(function
                       | Int (_, n) -> n
                       | _ ->
@@ -930,14 +941,13 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                             (mkexn
                                ( t "Wrong Micheline structure for result:"
                                %% ct
-                                    (Michelson.micheline_node_to_string
-                                       tokens_mich ) ) ) )
-                | _ ->
+                                    (Michelson.micheline_node_to_string seq_node)
+                               ) ) )
+                | n ->
                     raise
                       (mkexn
                          ( t "Wrong Micheline structure for result:"
-                         %% ct (Michelson.micheline_node_to_string tokens_mich)
-                         ) ) in
+                         %% ct (Michelson.micheline_node_to_string n) ) ) in
               Fmt.kstr log "Got list of tokens %a"
                 Fmt.(Dump.list Z.pp_print)
                 tokens ;
@@ -958,7 +968,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                             >>= fun () ->
                             already_seen := Z_set.add n !already_seen ;
                             go next )
-                          (fun exn -> Int.incr failures ; go next) in
+                          (fun _exn -> Int.incr failures ; go next) in
                     function
                     | [] -> Lwt.return_unit
                     | _ :: _ when !failures > max_failures -> Lwt.return_unit
@@ -1016,7 +1026,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                 in
                 Ok ok
               with
-              | Decorate_error.E {message} -> Error message
+              | Decorate_error.E {message; _} -> Error message
               | e -> Error Message.(t "Exception:" %% ct (Exn.to_string e))
             in
             let piece_of_metadata_map k =
@@ -1038,7 +1048,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                   | Ok uri, _ ->
                       Lwt.catch
                         (fun () ->
-                          Contract_metadata.Uri.fetch ctxt uri ~log:(fun s ->
+                          Contract_metadata.Uri.fetch ctxt uri ~log:(fun _ ->
                               Fmt.kstr log "Fetching %s" u )
                           >>= fun s ->
                           Lwt.return_some (u, Ezjsonm.value_from_string s) )
@@ -1060,15 +1070,15 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                 Contract_metadata.Token.piece_of_metadata ?json_type
                   ~warn:(fun k m -> warn k (Message_html.render ctxt m))
                   ~key ~metadata_map ~metadata_json:extra_contents in
-              let symbol = piece_of_metadata "symbol" in
+              let symbol = piece_of_metadata "symbol" () in
               let name =
-                match piece_of_metadata "name" with
+                match piece_of_metadata "name" () with
                 | Some "" ->
                     warn "name-is-empty"
                       (t "The" %% ct "name" %% t "field is the empty string.") ;
                     None
                 | o -> o in
-              let decimals = piece_of_metadata ~json_type:`Int "decimals" in
+              let decimals = piece_of_metadata ~json_type:`Int "decimals" () in
               let extras =
                 let make_ok_list l ~f =
                   List.filter_map l ~f:(fun (k, v) ->
@@ -1093,7 +1103,7 @@ let explore_tokens_action ?token_metadata_big_map ctxt ~token_metadata_view ~how
                         | `Bool b -> Bool.to_string b
                         | other -> Ezjsonm.value_to_string other in
                       make_ok_list l ~f
-                  | Some (u, other) ->
+                  | Some (_, _other) ->
                       [ (* Error already reported above:
                            Message.(
                              t "URI" %% ct u %% t "does not point at a JSON object.") *) ]
@@ -1135,7 +1145,8 @@ let metadata_substandards ?token_metadata_big_map
         ; all_tokens
         ; is_operator
         ; token_metadata
-        ; permissions_descriptor } as t12 ->
+        ; permissions_descriptor
+        ; _ } as t12 ->
         let is_tzip21 = Option.is_some (Tzip_021.claim metadata) in
         let tzip_12_block =
           let errorify c = Bootstrap.color `Danger c in
@@ -1176,8 +1187,10 @@ let metadata_substandards ?token_metadata_big_map
                            errorify
                              ( t "is wrong:"
                              %% ct
-                                  (Michelson.micheline_canonical_to_string
-                                     pt.original ) )
+                                  Tezai_michelson.(
+                                    Concrete_syntax.to_string
+                                      (Untyped.of_canonical_micheline
+                                         pt.original )) )
                        | `Unchecked_Parameter, None ->
                            errorify (t "is expectedly not defined.")
                        | `Unchecked_Parameter, Some _ ->
@@ -1194,8 +1207,10 @@ let metadata_substandards ?token_metadata_big_map
                            errorify
                              ( t "is wrong:"
                              %% ct
-                                  (Michelson.micheline_canonical_to_string
-                                     pt.original ) ) ) ]
+                                  Tezai_michelson.(
+                                    Concrete_syntax.to_string
+                                      (Untyped.of_canonical_micheline
+                                         pt.original )) ) ) ]
             | Valid (_, _) -> t "View" %% ct name %% t "is valid" in
           let show_permissions_descriptor pd =
             match pd with
@@ -1283,7 +1298,7 @@ let metadata_substandards ?token_metadata_big_map
                         let use_all_tokens =
                           Reactive.var
                             ( match all_tokens with
-                            | Valid (_, view) -> true
+                            | Valid (_, _view) -> true
                             | _ -> false ) in
                         let compute_method ~use_all_tokens ~iter_input =
                           match use_all_tokens with
@@ -1315,7 +1330,7 @@ let metadata_substandards ?token_metadata_big_map
                                 ~iter_input:(Reactive.peek iter_input)
                             with
                             | Ok o -> o
-                            | Error e ->
+                            | Error _ ->
                                 Fmt.failwith
                                   "You found a bug or bypassed form \
                                    validation! %s"
@@ -1377,7 +1392,7 @@ let metadata_substandards ?token_metadata_big_map
                                                   ~iter_input:s
                                               with
                                               | Ok _ -> empty ()
-                                              | Error err ->
+                                              | Error _err ->
                                                   Bootstrap.color `Danger
                                                     (t "WRONG !") ) )
                                      (Reactive.Bidirectional.of_var iter_input)
@@ -1468,7 +1483,7 @@ let author ~namet s =
 
 let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
     ?open_in_editor_link ctxt =
-  let open Tezos_contract_metadata.Metadata_contents in
+  let open Tezai_contract_metadata.Metadata_contents in
   fun (*  as *) metadata ->
     let ct = monot in
     let license_elt l =
@@ -1527,8 +1542,8 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                      @ normal_field "Path" (ct raq.path)
                      @ normal_field "Method"
                          (Fmt.kstr ct "%s"
-                            (Cohttp.Code.string_of_method raq.meth) ) ) ) ) )
-      in
+                            (Rest_api_query.string_of_cohttp_compatible_meth
+                               raq.meth ) ) ) ) ) ) in
       let maybe_collapse content =
         if collapsing then
           let open Bootstrap.Collapse in
@@ -1612,7 +1627,7 @@ let metadata_contents ?token_metadata_big_map ~add_explore_tokens_button
                   (let sep () = t "|" in
                    oxfordize_list more ~map:ct ~sep ~last_sep:sep )
               % t "]" ) in
-      let expand (Michelson_blob.Micheline m as mm) =
+      let expand (Michelson_blob.Michelson_blob m as mm) =
         let open Tezos_micheline.Micheline in
         let qit s =
           abbreviation
@@ -1682,13 +1697,16 @@ let big_answer level content =
 let show_metadata_full_validation ?token_metadata_big_map ctxt
     ~add_explore_tokens_button ~add_open_in_editor_button
     ~show_validation_big_answer inpo =
-  let open Tezos_contract_metadata.Metadata_contents in
+  (* let open Tezos_contract_metadata.Contract_metadata.Content in *)
+  let module Validation =
+    Tezai_contract_metadata_manipulation.Content_validation
+  in
   match Contract_metadata.Content.of_json inpo with
   | Ok (legacy_warnings, m) ->
       let errs, warns =
         Validation.validate m ~protocol_hash_is_valid:(fun s ->
             try
-              let _ = B58_hashes.check_b58_protocol_hash s in
+              let () = Tezai_base58_digest.Identifier.Protocol_hash.check s in
               true
             with e ->
               dbgf "Protocol hash problem: %a" Exn.pp e ;

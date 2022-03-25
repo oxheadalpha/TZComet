@@ -127,7 +127,6 @@ let nodes_form ctxt =
 
 let render ctxt =
   let open Meta_html in
-  let open State in
   let timeout_valid_and_changed = Reactive.var None in
   let timeout =
     Reactive.Bidirectional.make

@@ -22,7 +22,6 @@ jobs:
       uses: ocaml/setup-ocaml@v2
       with:
         ocaml-compiler: ${{ matrix.ocaml-compiler }}
-    - run: ./please.sh ensure vendors
     - run: global_switch=true ./please.sh  ensure setup
     - run: opam exec -- dune --version
     - run: ./please.sh ensure linting

@@ -2,7 +2,7 @@
    Copyright (c) 2012 The jsonm programmers. All rights reserved.
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
-
+[@@@warning "-6-39-32-27"]
 (* Braced non-terminals in comments refer to RFC 4627 non-terminals. *)
 
 let io_buffer_size = 65536 (* IO_BUFFER_SIZE 4.0.0 *)

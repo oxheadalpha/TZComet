@@ -7,14 +7,17 @@
 
 … currently running at <https://tzcomet.io> …
 
+
+Part of the development happens in a *“monorepo”*:
+[oxheadalpha/flextesa-tzcomet-monorepo](https://gitlab.com/oxheadalpha/flextesa-tzcomet-monorepo/-/tree/main).
+
 ## Build
 
-    ./please.sh ensure vendors  # Clones a branch of some deps (incl. Tezos)
-    ./please.sh ensure setup    # Creates a local opam switch
+    ./please.sh ensure setup    # Creates an opam switch
     ./please.sh build all
 
 ⬑ if all goes well, last command should print out a link to open the app, like
-`file://$PWD/_build/default/website/index.html`. l
+`file://$PWD/_build/default/website/index.html`.
 
 
 ## Note

@@ -109,7 +109,7 @@ module Fragment = struct
     let explorer_input =
       match in_query "explorer-input" with Some [one] -> one | _ -> "" in
     let editor_mode =
-      Option.bind (in_query "editor-mode") (function
+      Option.bind (in_query "editor-mode") ~f:(function
         | [] -> None
         | one :: _ ->
             List.find Editor_mode.all ~f:(fun mode ->
@@ -192,7 +192,7 @@ let explorer_input_bidirectional state =
 
 let save_editor_content ctxt =
   Local_storage.write_file ctxt local_storage_filename
-    (Reactive.peek (get ctxt).editor_content)
+    ~content:(Reactive.peek (get ctxt).editor_content)
 
 let set_editor_content state v = Reactive.set (get state).editor_content v
 let set_current_network state v = Reactive.set (get state).current_network v
@@ -395,7 +395,7 @@ module Examples = struct
     |> Reactive.map ~f:(fun dev ->
            let kt1, kt1_dev, kt1_all = aggl ~dev () in
            let uri, uri_dev, uri_all = aggl ~dev () in
-           let mtb, mtb_dev, mtb_all = aggl ~dev () in
+           let mtb, _mtb_dev, mtb_all = aggl ~dev () in
            let mby, mby_dev, mby_all = aggl ~dev () in
            let tzc, tzc_dev, tzc_all = aggl ~dev () in
            kt1 alchememist_blockchain_adventures
@@ -456,15 +456,15 @@ module Examples = struct
            mtb "{}" "Empty, but valid, Metadata" ;
            mtb {json|{"description": "This is just a description."}|json}
              "Metadata with just a description." ;
-           let all_mtb_from_lib =
-             let open Tezos_contract_metadata.Metadata_contents in
-             let rec go n =
-               try (n, Example.build n) :: go (n + 1) with _ -> [] in
-             go 0 in
-           List.iter all_mtb_from_lib ~f:(fun (ith, v) ->
-               mtb_dev
-                 (Tezos_contract_metadata.Metadata_contents.to_json v)
-                 (Fmt.str "Meaningless example #%d" ith) ) ;
+           (* let all_mtb_from_lib =
+                let open Tezos_contract_metadata.Metadata_contents in
+                let rec go n =
+                  try (n, Example.build n) :: go (n + 1) with _ -> [] in
+                go 0 in
+              List.iter all_mtb_from_lib ~f:(fun (ith, v) ->
+                  mtb_dev
+                    (Tezos_contract_metadata.Metadata_contents.to_json v)
+                    (Fmt.str "Meaningless example #%d" ith) ) ; *)
            mby "0x05030b" "The Unit value, PACKed." ;
            mby
              "050707010000000c486\n\
@@ -539,7 +539,7 @@ module Metadata_metadata = struct
 
   let static_sfw_multimedia : (Blob.Format.t * string) list = jpegs
 
-  let sfw_multimedia (ctxt : _ Context.t) uri =
+  let sfw_multimedia (_ctxt : _ Context.t) uri =
     Lwt.return
       (List.find_map static_sfw_multimedia ~f:(function
         | fmt, k when String.equal k uri -> Some fmt

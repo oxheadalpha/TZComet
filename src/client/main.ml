@@ -11,7 +11,6 @@ let get_version () =
 
 let lwd_onload _ =
   let open Tyxml_lwd in
-  let open Lwdom in
   let open Js_of_ocaml in
   let base_div = Dom_html.getElementById "attach-ui" in
   base_div##.innerHTML := Js.string "" ;

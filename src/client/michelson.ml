@@ -1,11 +1,4 @@
 open! Import
-open Tezos_micheline
-
-let micheline_of_ezjsonm json =
-  let enc =
-    Micheline.canonical_encoding ~variant:"custom" Data_encoding.string in
-  let mich = Data_encoding.Json.destruct enc json in
-  Micheline.root mich
 
 let micheline_of_json s =
   dbgf "micheline_of_json : %d bytes" (String.length s) ;
@@ -14,51 +7,11 @@ let micheline_of_json s =
     | `O (("code", code) :: _) -> code
     | other -> other in
   dbgf "micheline_of_json: done parsing" ;
-  micheline_of_ezjsonm json
-
-let micheline_to_ezjsonm mich =
-  let enc =
-    Micheline.canonical_encoding ~variant:"custom" Data_encoding.string in
-  let json = Data_encoding.Json.construct enc (Micheline.strip_locations mich) in
-  json
-
-let parse_micheline ~check_indentation ~check_primitives m =
-  let rec primitive_check =
-    let open Tezos_micheline.Micheline in
-    function
-    | Prim (_, s, args, _) ->
-        ( match
-            List.find Michelson_bytes.primitives ~f:(fun (p, _) ->
-                String.equal p s )
-          with
-        | Some _ -> ()
-        | None -> Fmt.failwith "Unknown primitive: %S" s ) ;
-        List.iter args ~f:primitive_check
-    | _ -> () in
-  match Micheline_parser.tokenize m with
-  | tokens, [] -> (
-    match Micheline_parser.parse_expression ~check:check_indentation tokens with
-    | node, [] -> (
-      try
-        if check_primitives then primitive_check node ;
-        Ok node
-      with e -> Error [Tezos_error_monad.Error_monad.Exn e] )
-    | _, errs -> Error errs )
-  | _, errs -> Error errs
-
-let parse_micheline_exn ~check_indentation ~check_primitives m =
-  match parse_micheline ~check_indentation ~check_primitives m with
-  | Ok o -> o
-  | Error e ->
-      Fmt.failwith "parse_micheline: %a"
-        Tezos_error_monad.Error_monad.pp_print_error e
-
-let micheline_canonical_to_string c =
-  Fmt.str "%a" Micheline_printer.print_expr
-    (Micheline_printer.printable Base.Fn.id c)
+  Tezai_michelson.Untyped.of_json json
 
 let micheline_node_to_string node =
-  micheline_canonical_to_string (Micheline.strip_locations node)
+  Tezai_michelson.Untyped.of_micheline_node node
+  |> Tezai_michelson.Concrete_syntax.to_string
 
 module Partial_type = struct
   module Structure = struct
@@ -89,14 +42,14 @@ module Partial_type = struct
     ; structure: Structure.t }
 
   open Structure
-  open Tezos_contract_metadata.Metadata_contents.View.Implementation
-  open Tezos_contract_metadata.Metadata_contents.Michelson_blob
+  open! Tezai_contract_metadata.Metadata_contents.View.Implementation
+  open! Tezai_contract_metadata.Metadata_contents.Michelson_blob
 
-  let of_type ?(annotations = []) (Micheline m) =
+  let of_type ?(annotations = []) (Michelson_blob m) =
     let view_annots = annotations in
     let open Tezos_micheline.Micheline in
     let describe annot =
-      List.find view_annots ~f:(fun (k, v) ->
+      List.find view_annots ~f:(fun (k, _) ->
           List.mem annot k ~equal:String.equal ) in
     let rec go tp =
       let raw = strip_locations tp in
@@ -120,12 +73,14 @@ module Partial_type = struct
           , annot ) ->
           leaf (Map (String, Bytes)) ~annot
       | Prim (_, _, _, annot) -> leaf Any ~annot
-      | tp -> leaf Any in
+      | _ -> leaf Any in
     {original= m; structure= go (root m)}
 
   let rec fill_structure_with_value mf node =
     let open Tezos_micheline.Micheline in
-    let mich_node = micheline_node_to_string in
+    let mich_node nod =
+      Tezai_michelson.(
+        Concrete_syntax.to_string (Untyped.of_micheline_node nod)) in
     match (mf, node) with
     | Leaf leaf, nn -> Reactive.set leaf.v (mich_node nn)
     | Pair {left; right}, Prim (_, "Pair", [l; r], _) ->
@@ -146,9 +101,12 @@ module Partial_type = struct
     pk m.structure
 
   let validate_micheline m =
-    match parse_micheline ~check_indentation:false ~check_primitives:true m with
-    | Ok _ -> true
-    | Error _ -> false
+    match
+      Tezai_michelson.Concrete_syntax.parse_exn ~check_indentation:false
+        ~check_primitives:true m
+    with
+    | (_ : Tezai_michelson.Untyped.t) -> true
+    | exception _ -> false
 
   let rec validate_structure = function
     | Leaf {kind= Nat | Mutez; v; _} ->
@@ -179,7 +137,7 @@ module Partial_type = struct
 
   open Meta_html
 
-  let rec validity_error = function
+  let validity_error = function
     | Nat -> t "Invalid natural number."
     | Mutez -> t "Invalid μꜩ value."
     | Bytes -> t "Invalid bytes value."
@@ -191,7 +149,11 @@ module Partial_type = struct
   let to_form_items mf =
     let open Meta_html in
     let open Bootstrap.Form in
-    let type_expr m = Fmt.kstr ct "%s" (micheline_canonical_to_string m) in
+    let type_expr m =
+      Fmt.kstr ct "%s"
+        Tezai_michelson.(
+          Concrete_syntax.to_string (Untyped.of_canonical_micheline m))
+      (*         micheline_canonical_to_string m)  *) in
     let rec go = function
       | Pair {left; right} -> go left @ go right
       | Leaf leaf as leaf_structure ->
@@ -357,13 +319,13 @@ module Partial_type = struct
           let content = Reactive.peek leaf.v in
           show_bytes_result ~tzip16_uri (`Zero_x content)
             ?description:leaf.description
-      | Leaf {kind= Map (String, Bytes); v; description} -> (
+      | Leaf {kind= Map (String, Bytes); v; description; _} -> (
           let content = Reactive.peek v in
           match
-            parse_micheline ~check_primitives:false ~check_indentation:false
-              content
+            Tezai_michelson.Concrete_syntax.parse_exn ~check_primitives:false
+              ~check_indentation:false content
           with
-          | Ok node -> (
+          | node -> (
             try
               let map = micheline_string_bytes_map_exn node in
               [ t "Map"
@@ -375,7 +337,7 @@ module Partial_type = struct
                          % list (show_bytes_result ~tzip16_uri (`Raw_string v)) )
                     ) ]
             with _ -> default content description )
-          | Error el -> default content description )
+          | exception _ -> default content description )
       | Leaf leaf -> default (Reactive.peek leaf.v) leaf.description
       | Pair {left; right} -> structure left @ structure right in
     structure mf.structure
