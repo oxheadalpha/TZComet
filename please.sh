@@ -19,15 +19,15 @@ ensure_setup () {
     if [ "$global_switch" = "true" ] || [ -d _opam ] ; then
         say 'Opam switch already there'
     else
-        opam switch create tzcomet-413-test \
+        opam switch create tzcomet-413 \
              --formula='"ocaml-base-compiler" {>= "4.13" & < "4.14"}'
-        opam switch link tzcomet-413-test .
+        opam switch link tzcomet-413 .
     fi
     eval $(opam env)
     opam pin add -n digestif 0.9.0
     opam pin add -n ocamlformat "$ocamlformat_version"
-    #opam pin remove tyxml
-    opam pin add -n zarith 1.11 # zarith_stubs_js fails with 1.12
+    # zarith_stubs_js fails with later version of those 2:
+    opam pin add -n zarith 1.11
     opam pin add -n zarith_stubs_js v0.14.1
     # The older compiler does not work with recent dune:
     opam pin add -n js_of_ocaml-compiler 4.0.0
