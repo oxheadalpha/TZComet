@@ -209,11 +209,11 @@ let protocol s =
     span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
   match s with
   | "Psithaca2MLRFYargivpo7YvUr7wUDqyxrdhC5CQq78mRvimz6A" ->
-      known "Ithaca" "http://tezos.gitlab.io/protocols/012_ithaca.html"
+      known "Ithaca" "https://tezos.gitlab.io/protocols/012_ithaca.html"
   | "PtHangz2aRngywmSRGGvrcTyMbbdpWdpFKuS4uMWxg2RaH9i1qx" ->
-      known "Hangzhou" "http://tezos.gitlab.io/protocols/011_hangzhou.html"
-  | "PtGRANADsDU8R9daYKAgWnQYAJ64omN1o3KMGVCykShA97vQbvV" ->
-      known "Granada" "http://tezos.gitlab.io/protocols/010_granada.html"
+      known "Hangzhou" "https://tezos.gitlab.io/protocols/011_hangzhou.html"
+  | "PtJakart2xVj7pYXJBXrqHgd82rdkLey5ZeeGwDgPp9rhQUbSqY" ->
+      known "Jakarta" "https://tezos.gitlab.io/protocols/013_jakarta.html"
   | s -> proto s
 
 let open_in_editor ?(and_explorer = false) ctxt text =
