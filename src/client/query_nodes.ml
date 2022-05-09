@@ -305,6 +305,8 @@ let default_nodes : Node.t list =
   List.rev
     [ Node.create "Ithacanet-Teztnets" ~network:`Ithacanet
         "https://rpc.ithacanet.teztnets.xyz/" ~info_url:teztnets
+    ; Node.create "Jakartanet-Teztnets" ~network:`Jakartanet
+        "https://rpc.jakartanet.teztnets.xyz/" ~info_url:teztnets
     ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
         ~network:`Mainnet ~info_url:smartpy
     ; Node.create "Hangzhounet-SmartPy" ~network:`Hangzhounet
@@ -317,7 +319,7 @@ let default_nodes : Node.t list =
         "https://mainnet.api.tez.ie" ~info_url:ecad
     ; Node.create "Mainnet-Blockscale" ~network:`Mainnet
         "https://rpc.tzbeta.net/" ~info_url:ecad
-    ; Node.create "Testnet-Blockscale" ~network:`Ithacanet
+    ; Node.create "Testnet-Blockscale" ~network:`Jakartanet
         "https://rpczero.tzbeta.net/" ~info_url:ecad
     ; Node.create "Hangzhounet-ECAD-Labs" ~network:`Hangzhounet
         "https://hangzhounet.api.tez.ie" ~info_url:ecad
