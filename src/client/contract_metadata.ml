@@ -401,6 +401,9 @@ module Content = struct
     Node.metadata_big_map ctxt node ~address ~log
     >>= fun metacontract ->
     let Node.Contract.{storage_node; type_node; _} = metacontract in
+    let module Help = Tezai_contract_metadata_manipulation.Micheline_helpers in
+    let type_node = Help.normalize_combs ~primitive:"pair" type_node in
+    let storage_node = Help.normalize_combs ~primitive:"Pair" storage_node in
     let tmbm_id =
       match find_token_metadata_big_map ~storage_node ~type_node with
       | [one] -> one
