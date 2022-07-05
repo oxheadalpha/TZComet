@@ -176,9 +176,11 @@ module Node = struct
     System.slow_step state_handle
     >>= fun () ->
     let bgs =
-      Tezai_contract_metadata_manipulation.Micheline_helpers
-      .find_metadata_big_maps ~storage_node:mich_storage
-        ~type_node:mich_storage_type in
+      let module Help = Tezai_contract_metadata_manipulation.Micheline_helpers
+      in
+      let type_node = Help.normalize_combs ~primitive:"pair" mich_storage_type in
+      let storage_node = Help.normalize_combs ~primitive:"Pair" mich_storage in
+      Help.find_metadata_big_maps ~storage_node ~type_node in
     match bgs with
     | [] -> Fmt.failwith "Contract has no valid %%metadata big-map!"
     | _ :: _ :: _ ->

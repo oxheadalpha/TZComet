@@ -592,13 +592,7 @@ let render ctxt =
       ~ok_action:(fun () -> link_to_clipboard ctxt copy_src_id)
       () in
   let launch_clipboard_modal_btn _ctxt modal_id =
-    H5.(
-      button
-        ~a:
-          [ classes ["btn"; "btn-outline-primary"]
-          ; a_user_data "toggle" (Lwd.pure "modal")
-          ; a_user_data "target" (Lwd.pure ("#" ^ modal_id)) ]
-        [t "Share 📋"]) in
+    Bootstrap.Modal.toggle_button ~outline:true (t "Share 📋") ~modal_id in
   let modal_id = "clipboard_modal_id" in
   let top_form =
     Browser_window.width ctxt
