@@ -122,6 +122,8 @@ module Fragment = struct
     let always_show_multimedia = true_in_query "always-show-multimedia" in
     let editor_input =
       match in_query "editor-input" with Some [one] -> one | _ -> "" in
+    let extra_nodes =
+      List.concat_map query ~f:(function "add-node", l -> l | _ -> []) in
     let page, (token_address, token_id) =
       let path_split =
         Uri.path uri
@@ -147,6 +149,7 @@ module Fragment = struct
       | ["token"; addr; id] -> (Token_viewer, (addr, id))
       | _ -> (Explorer, token_in_query ()) in
     ( System.create ~dev_mode ()
+    , `Extra_node_prefixes extra_nodes
     , { page= Reactive.var (`Page page)
       ; explorer_input= Reactive.var explorer_input
       ; explorer_go= Reactive.var explorer_go
