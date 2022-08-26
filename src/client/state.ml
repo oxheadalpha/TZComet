@@ -53,6 +53,7 @@ type t =
   ; token_id: string Reactive.var
   ; check_micheline_indentation: bool Reactive.var
   ; always_show_multimedia: bool Reactive.var
+  ; show_token_details: bool Reactive.var
   ; current_network: Network.t Reactive.var }
 
 let get (state : < gui: t ; .. > Context.t) = state#gui
@@ -65,7 +66,7 @@ module Fragment = struct
 
   let make ~page ~dev_mode ~editor_input ~explorer_input ~explorer_go
       ~editor_mode ~token_address ~token_id ~check_micheline_indentation
-      ~editor_load ~always_show_multimedia =
+      ~editor_load ~always_show_multimedia ~show_token_details =
     let query =
       match explorer_input with "" -> [] | more -> [("explorer-input", [more])]
     in
@@ -87,6 +88,9 @@ module Fragment = struct
     let query =
       if always_show_multimedia then
         ("always-show-multimedia", ["true"]) :: query
+      else query in
+    let query =
+      if show_token_details then ("show-token-details", ["true"]) :: query
       else query in
     let path, query =
       match (page, token_address, token_id) with
@@ -120,8 +124,11 @@ module Fragment = struct
     let explorer_go = true_in_query "go" in
     let editor_load = true_in_query "load-storage" in
     let always_show_multimedia = true_in_query "always-show-multimedia" in
+    let show_token_details = true_in_query "show-token-details" in
     let editor_input =
       match in_query "editor-input" with Some [one] -> one | _ -> "" in
+    let extra_nodes =
+      List.concat_map query ~f:(function "add-node", l -> l | _ -> []) in
     let page, (token_address, token_id) =
       let path_split =
         Uri.path uri
@@ -147,6 +154,7 @@ module Fragment = struct
       | ["token"; addr; id] -> (Token_viewer, (addr, id))
       | _ -> (Explorer, token_in_query ()) in
     ( System.create ~dev_mode ()
+    , `Extra_node_prefixes extra_nodes
     , { page= Reactive.var (`Page page)
       ; explorer_input= Reactive.var explorer_input
       ; explorer_go= Reactive.var explorer_go
@@ -164,6 +172,7 @@ module Fragment = struct
       ; token_id= Reactive.var token_id
       ; check_micheline_indentation= Reactive.var mich_indent
       ; always_show_multimedia= Reactive.var always_show_multimedia
+      ; show_token_details= Reactive.var show_token_details
       ; current_network= Reactive.var `Mainnet } )
 end
 
@@ -241,6 +250,8 @@ let always_show_multimedia ctxt =
 let get_always_show_multimedia ctxt =
   Reactive.get (get ctxt).always_show_multimedia
 
+let get_show_token_details ctxt = Reactive.get (get ctxt).show_token_details
+
 let always_show_multimedia_bidirectional ctxt =
   Reactive.Bidirectional.of_var (get ctxt).always_show_multimedia
 
@@ -264,7 +275,8 @@ let make_fragment ?(side_effects = true) ctxt =
     ** get state.editor_mode ** get state.token_address ** get state.token_id
     ** get state.check_micheline_indentation
     ** get state.editor_load
-    ** get state.always_show_multimedia)
+    ** get state.always_show_multimedia
+    ** get state.show_token_details)
   |> Reactive.map
        ~f:(fun
             ( dev_mode
@@ -276,8 +288,9 @@ let make_fragment ?(side_effects = true) ctxt =
                       , ( token_address
                         , ( token_id
                           , ( check_micheline_indentation
-                            , (editor_load, always_show_multimedia) ) ) ) ) ) )
-                ) ) )
+                            , ( editor_load
+                              , (always_show_multimedia, show_token_details) )
+                            ) ) ) ) ) ) ) ) )
           ->
          let now =
            Fragment.(
@@ -286,7 +299,8 @@ let make_fragment ?(side_effects = true) ctxt =
              in
              make ~page ~dev_mode ~explorer_input ~explorer_go ~editor_input
                ~token_address ~token_id ~editor_mode ~always_show_multimedia
-               ~check_micheline_indentation ~editor_load) in
+               ~show_token_details ~check_micheline_indentation ~editor_load)
+         in
          if side_effects then (
            let current = Js_of_ocaml.Url.Current.get_fragment () in
            dbgf "Updating fragment %S → %a" current Fragment.pp now ;

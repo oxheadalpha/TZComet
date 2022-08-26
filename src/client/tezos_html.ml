@@ -210,8 +210,8 @@ let protocol s =
   match s with
   | "Psithaca2MLRFYargivpo7YvUr7wUDqyxrdhC5CQq78mRvimz6A" ->
       known "Ithaca" "https://tezos.gitlab.io/protocols/012_ithaca.html"
-  | "PtHangz2aRngywmSRGGvrcTyMbbdpWdpFKuS4uMWxg2RaH9i1qx" ->
-      known "Hangzhou" "https://tezos.gitlab.io/protocols/011_hangzhou.html"
+  | "PtKathmankSpLLDALzWw7CGD2j2MtyveTwboEYokqUCP4a1LxMg" ->
+      known "Kathmandu" "https://tezos.gitlab.io/protocols/014_kathmandu.html"
   | "PtJakart2xVj7pYXJBXrqHgd82rdkLey5ZeeGwDgPp9rhQUbSqY" ->
       known "Jakarta" "https://tezos.gitlab.io/protocols/013_jakarta.html"
   | s -> proto s
@@ -866,6 +866,24 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                                        t "+"
                                        %% ct Ezjsonm.(value_to_string (`O more)) )
                               ) ) )
+                %% or_empty tzip21.attributes (fun l ->
+                       itembox
+                         ( bt "Attributes"
+                         %% itemize
+                              (List.map l ~f:(fun attr ->
+                                   let or_missing n f = function
+                                     | None ->
+                                         Bootstrap.color `Danger
+                                           (Fmt.kstr it "Missing %s!" n)
+                                     | Some s -> f s in
+                                   or_missing "name" bt attr.name
+                                   % t ":"
+                                   %% or_missing "value" ct attr.v
+                                   %%
+                                   match attr.t with
+                                   | None -> empty ()
+                                   | Some (`Custom s) ->
+                                       parens (t "Type:" %% ct s) ) ) ) )
                 %%
                 match tzip21.warnings with
                 | [] -> empty ()

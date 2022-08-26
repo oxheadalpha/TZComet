@@ -18,14 +18,15 @@ let lwd_onload _ =
     Lwt.Infix.(
       get_version ()
       >>= fun version_string ->
+      let fragment = Js_of_ocaml.Url.Current.get_fragment () in
+      let sys, `Extra_node_prefixes more_nodes, gui =
+        State.Fragment.parse fragment in
+      let nodes = Query_nodes.create () in
+      let ipfs_gateways = Ipfs_gateways.create () in
+      let fetcher = Contract_metadata.Uri.Fetcher.create () in
+      let storage = Local_storage.create () in
+      let window = Browser_window.create () in
       let state =
-        let fragment = Js_of_ocaml.Url.Current.get_fragment () in
-        let sys, gui = State.Fragment.parse fragment in
-        let nodes = Query_nodes.create () in
-        let ipfs_gateways = Ipfs_gateways.create () in
-        let fetcher = Contract_metadata.Uri.Fetcher.create () in
-        let storage = Local_storage.create () in
-        let window = Browser_window.create () in
         object
           method system = sys
           method gui = gui
@@ -37,6 +38,9 @@ let lwd_onload _ =
           method version_string = version_string
         end in
       Query_nodes.add_default_nodes state ;
+      List.iter more_nodes ~f:(fun prefix ->
+          Query_nodes.add_node state
+            (Query_nodes.Node.create ~network:`Sandbox prefix prefix) ) ;
       let doc = Gui.root_document state in
       let root = Lwd.observe doc in
       Lwd.set_on_invalidate root (fun _ ->
