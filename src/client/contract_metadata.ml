@@ -549,6 +549,9 @@ module Content = struct
       ; mime_type: string option
       ; other: (string * Ezjsonm.value) list }
 
+    type attribute =
+      {name: string option; v: string option; t: [`Custom of string] option}
+
     type t =
       { description: string option
       ; creators: string list option
@@ -560,6 +563,7 @@ module Content = struct
       ; display: string option
       ; artifact: string option
       ; formats: uri_format list option
+      ; attributes: attribute list option
       ; warnings: Message.t list }
 
     let is_empty = function
@@ -573,6 +577,7 @@ module Content = struct
         ; display= None
         ; artifact= None
         ; formats= None
+        ; attributes= None
         ; warnings= [] } ->
           true
       | _ -> false
@@ -642,6 +647,22 @@ module Content = struct
       let artifact = find_remove_extr "artifactUri" in
       let creators = find_remove_extr_string_list "creators" in
       let tags = find_remove_extr_string_list "tags" in
+      let get_string_field ~parent_name obj key =
+        List.find_map obj ~f:(function
+          | k, `String s when String.equal key k -> Some s
+          | k, other when String.equal key k ->
+              warn
+                Message.(
+                  t "In the"
+                  %% Fmt.kstr ct "\"%s\"" parent_name
+                  %% t "field, the object"
+                  %% ct Ezjsonm.(value_to_string ~minify:true (`O obj))
+                  %% t "at key" %% Fmt.kstr ct "%S" key
+                  %% t "should have a string, not"
+                  %% ct Ezjsonm.(value_to_string ~minify:true other)
+                  %% t ".") ;
+              None
+          | _ -> None ) in
       let formats =
         find_remove_extr_json "formats"
           ~parse_json:
@@ -650,20 +671,7 @@ module Content = struct
                 let parse_one j =
                   let d = get_dict j in
                   let get_string_field key =
-                    List.find_map d ~f:(function
-                      | k, `String s when String.equal key k -> Some s
-                      | k, other when String.equal key k ->
-                          warn
-                            Message.(
-                              t "In the" %% ct "\"formats\""
-                              %% t "field, the object"
-                              %% ct Ezjsonm.(value_to_string ~minify:true j)
-                              %% t "at key" %% Fmt.kstr ct "%S" key
-                              %% t "should have a string, not"
-                              %% ct Ezjsonm.(value_to_string ~minify:true other)
-                              %% t ".") ;
-                          None
-                      | _ -> None ) in
+                    get_string_field ~parent_name:"formats" d key in
                   let uri = get_string_field "uri" in
                   let mime_type = get_string_field "mimeType" in
                   let other =
@@ -671,6 +679,33 @@ module Content = struct
                         not (List.mem ["uri"; "mimeType"] ~equal:String.equal k) )
                   in
                   {uri; mime_type; other} in
+                get_list parse_one j)
+          ~expected:"an array of objects" in
+      let attributes =
+        find_remove_extr_json "attributes"
+          ~parse_json:
+            Ezjsonm.(
+              fun j ->
+                let parse_one j =
+                  let d = get_dict j in
+                  let get_string_field key =
+                    get_string_field ~parent_name:"attributes" d key in
+                  let name = get_string_field "name" in
+                  let v = get_string_field "value" in
+                  let t =
+                    get_string_field "type"
+                    |> Option.map ~f:(fun s -> `Custom s) in
+                  match (name, v) with
+                  | Some _, Some _ -> {name; v; t}
+                  | _, _ ->
+                      warn
+                        Message.(
+                          let field s = Fmt.kstr ct "%S" s in
+                          t "In the" %% field "attributes" % t "field, in"
+                          %% ct Ezjsonm.(value_to_string ~minify:true j)
+                          %% t "both sub-fields" %% field "name" %% t "and"
+                          %% field "value" %% t "are mandatory.") ;
+                      {name; v; t} in
                 get_list parse_one j)
           ~expected:"an array of objects" in
       let tzip21 =
@@ -685,6 +720,7 @@ module Content = struct
         ; display
         ; artifact
         ; formats
+        ; attributes
         ; warnings= !warnings } in
       (tzip21, List.map !extr ~f:Result.return @ trash)
   end

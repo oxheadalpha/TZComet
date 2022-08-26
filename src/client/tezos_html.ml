@@ -866,6 +866,22 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                                        t "+"
                                        %% ct Ezjsonm.(value_to_string (`O more)) )
                               ) ) )
+                %% or_empty tzip21.attributes (fun l ->
+                       itembox
+                         ( bt "Attributes"
+                         %% itemize
+                              (List.map l ~f:(fun attr ->
+                                   let or_missing f = function
+                                     | None ->
+                                         Bootstrap.color `Danger (it "MISSING!")
+                                     | Some s -> f s in
+                                   t "Name:" %% or_missing ct attr.name
+                                   %% t ", Value:" %% or_missing ct attr.v
+                                   %%
+                                   match attr.t with
+                                   | None -> empty ()
+                                   | Some (`Custom s) ->
+                                       parens (t "Type:" %% ct s) ) ) ) )
                 %%
                 match tzip21.warnings with
                 | [] -> empty ()
