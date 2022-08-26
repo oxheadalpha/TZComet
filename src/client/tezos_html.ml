@@ -210,8 +210,8 @@ let protocol s =
   match s with
   | "Psithaca2MLRFYargivpo7YvUr7wUDqyxrdhC5CQq78mRvimz6A" ->
       known "Ithaca" "https://tezos.gitlab.io/protocols/012_ithaca.html"
-  | "PtHangz2aRngywmSRGGvrcTyMbbdpWdpFKuS4uMWxg2RaH9i1qx" ->
-      known "Hangzhou" "https://tezos.gitlab.io/protocols/011_hangzhou.html"
+  | "PtKathmankSpLLDALzWw7CGD2j2MtyveTwboEYokqUCP4a1LxMg" ->
+      known "Kathmandu" "https://tezos.gitlab.io/protocols/014_kathmandu.html"
   | "PtJakart2xVj7pYXJBXrqHgd82rdkLey5ZeeGwDgPp9rhQUbSqY" ->
       known "Jakarta" "https://tezos.gitlab.io/protocols/013_jakarta.html"
   | s -> proto s

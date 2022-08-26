@@ -305,28 +305,26 @@ let default_nodes : Node.t list =
   let ecad = "https://tezostaquito.io/docs/rpc_nodes" in
   (* let giga = "https://giganode.io/" in *)
   List.rev
-    [ Node.create "Ithacanet-Teztnets" ~network:`Ithacanet
-        "https://rpc.ithacanet.teztnets.xyz/" ~info_url:teztnets
+    [ Node.create "Ghostnet-Teztnets" ~network:`Ithacanet
+        "https://rpc.ghostnet.teztnets.xyz/" ~info_url:teztnets
     ; Node.create "Jakartanet-Teztnets" ~network:`Jakartanet
         "https://rpc.jakartanet.teztnets.xyz/" ~info_url:teztnets
+    ; Node.create "Kathmandunet-Teztnets" ~network:`Kathmandunet
+        "https://rpc.kathmandunet.teztnets.xyz/" ~info_url:teztnets
     ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
         ~network:`Mainnet ~info_url:smartpy
-    ; Node.create "Hangzhounet-SmartPy" ~network:`Hangzhounet
-        "https://hangzhounet.smartpy.io" ~info_url:smartpy
-    ; Node.create "Ithacanet-SmartPy" ~network:`Ithacanet
-        "https://ithacanet.smartpy.io" ~info_url:smartpy
-    ; Node.create "Mainnet-Letzbake" ~network:`Mainnet
-        "https://teznode.letzbake.com/" ~info_url:ecad
+    ; Node.create "Ghostnet-SmartPy" ~network:`Ithacanet
+        "https://ghostnet.smartpy.io" ~info_url:smartpy
+    ; Node.create "Jakartanet-SmartPy" ~network:`Ithacanet
+        "https://jakartanet.smartpy.io" ~info_url:smartpy
     ; Node.create "Mainnet-ECAD-Labs" ~network:`Mainnet
         "https://mainnet.api.tez.ie" ~info_url:ecad
     ; Node.create "Mainnet-Blockscale" ~network:`Mainnet
         "https://rpc.tzbeta.net/" ~info_url:ecad
     ; Node.create "Testnet-Blockscale" ~network:`Jakartanet
         "https://rpczero.tzbeta.net/" ~info_url:ecad
-    ; Node.create "Hangzhounet-ECAD-Labs" ~network:`Hangzhounet
-        "https://hangzhounet.api.tez.ie" ~info_url:ecad
-    ; Node.create "Ithacanet-ECAD-Labs" ~network:`Ithacanet
-        "https://ithacanet.ecadinfra.com" ~info_url:ecad
+    ; Node.create "Ghostnet-ECAD-Labs" ~network:`Ithacanet
+        "https://ghostnet.ecadinfra.com" ~info_url:ecad
       (* ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
           ~network:`Mainnet ~info_url:giga *)
     ; Node.create "Flextesabox-node" "http://127.0.0.1:20000" ~network:`Sandbox
