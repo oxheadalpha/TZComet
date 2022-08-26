@@ -871,12 +871,14 @@ let show_one_token ?symbol ?name ?decimals ?total_supply ?extras
                          ( bt "Attributes"
                          %% itemize
                               (List.map l ~f:(fun attr ->
-                                   let or_missing f = function
+                                   let or_missing n f = function
                                      | None ->
-                                         Bootstrap.color `Danger (it "MISSING!")
+                                         Bootstrap.color `Danger
+                                           (Fmt.kstr it "Missing %s!" n)
                                      | Some s -> f s in
-                                   t "Name:" %% or_missing ct attr.name
-                                   %% t ", Value:" %% or_missing ct attr.v
+                                   or_missing "name" bt attr.name
+                                   % t ":"
+                                   %% or_missing "value" ct attr.v
                                    %%
                                    match attr.t with
                                    | None -> empty ()
