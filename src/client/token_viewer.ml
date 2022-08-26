@@ -497,14 +497,19 @@ let show_token ctxt
       [ Fmt.kstr style "padding: 1em; border: solid 3px #aaa; max-width: %s"
           token_ui_max_width ]
     main_content
-  % Bootstrap.Collapse.(
-      fixed_width_reactive_button_with_div_below (make ()) ~kind:`Secondary
-        ~width:(* Same as async_work *) "12em")
-      ~button:(function
-        | true -> t "Show token details" | false -> t "Hide details" )
-      (fun () ->
-        Tezos_html.show_one_token ctxt ?symbol ?name ?decimals ~tzip_021:tzip21
-          ~id ~warnings )
+  %% Reactive.bind (State.get_show_token_details ctxt) ~f:(function
+       | true ->
+           Tezos_html.show_one_token ctxt ?symbol ?name ?decimals
+             ~tzip_021:tzip21 ~id ~warnings
+       | false ->
+           Bootstrap.Collapse.(
+             fixed_width_reactive_button_with_div_below (make ())
+               ~kind:`Secondary ~width:(* Same as async_work *) "12em")
+             ~button:(function
+               | true -> t "Show token details" | false -> t "Hide details" )
+             (fun () ->
+               Tezos_html.show_one_token ctxt ?symbol ?name ?decimals
+                 ~tzip_021:tzip21 ~id ~warnings ) )
 
 let link_to_clipboard _ctxt src_id =
   let open Dom_html in
