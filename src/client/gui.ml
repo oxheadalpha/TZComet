@@ -380,8 +380,8 @@ module Editor = struct
       let ldgr bytes =
         hash "Ledger-BLAKE2B-Base58"
           Tezai_base58_digest.(
-            Crypto_hash.String.blake2b ~size:32 bytes |> Raw.String.to_base58)
-        (* (Base58.raw_encode (B58_hashes.blake2b bytes)) *) in
+            Crypto_hash.String.blake2b ~size:32 bytes
+            |> Raw.String.No_checksum.to_base58) in
       let blake2b bytes =
         hash "BLAKE2B-Hex"
           (hex (Tezai_base58_digest.Crypto_hash.String.blake2b ~size:32 bytes))
