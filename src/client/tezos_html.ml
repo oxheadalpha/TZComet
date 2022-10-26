@@ -208,8 +208,8 @@ let protocol s =
   let known name url =
     span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
   match s with
-  | "Psithaca2MLRFYargivpo7YvUr7wUDqyxrdhC5CQq78mRvimz6A" ->
-      known "Ithaca" "https://tezos.gitlab.io/protocols/012_ithaca.html"
+  | "PtLimaPtLMwfNinJi9rCfDPWea8dFgTZ1MeJ9f1m2SRic6ayiwW" ->
+      known "Lima" "https://tezos.gitlab.io/protocols/015_lima.html"
   | "PtKathmankSpLLDALzWw7CGD2j2MtyveTwboEYokqUCP4a1LxMg" ->
       known "Kathmandu" "https://tezos.gitlab.io/protocols/014_kathmandu.html"
   | "PtJakart2xVj7pYXJBXrqHgd82rdkLey5ZeeGwDgPp9rhQUbSqY" ->
