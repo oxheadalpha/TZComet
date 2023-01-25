@@ -204,16 +204,24 @@ let list_field name field f =
 let network (net : Network.t) = it (Network.to_string net)
 
 let protocol s =
-  let proto s = abbreviation s (ct (String.prefix s 12)) in
+  let proto s =
+    let state = Reactive.var true in
+    let clickable v c =
+      span
+        ~a:
+          [ H5.a_onclick
+              (Tyxml_lwd.Lwdom.attr (fun _ -> Reactive.set state v ; false)) ]
+        c in
+    Reactive.bind_var state ~f:(function
+      | true -> clickable false (abbreviation s (ct (String.prefix s 12)))
+      | false -> clickable true (ct s) ) in
   let known name url =
     span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
   match s with
   | "PtLimaPtLMwfNinJi9rCfDPWea8dFgTZ1MeJ9f1m2SRic6ayiwW" ->
       known "Lima" "https://tezos.gitlab.io/protocols/015_lima.html"
-  | "PtKathmankSpLLDALzWw7CGD2j2MtyveTwboEYokqUCP4a1LxMg" ->
-      known "Kathmandu" "https://tezos.gitlab.io/protocols/014_kathmandu.html"
-  | "PtJakart2xVj7pYXJBXrqHgd82rdkLey5ZeeGwDgPp9rhQUbSqY" ->
-      known "Jakarta" "https://tezos.gitlab.io/protocols/013_jakarta.html"
+  | "PtMumbaiiFFEGbew1rRjzSPyzRbA51Tm3RVZL5suHPxSZYDhCEc" ->
+      known "Mumbai" "https://tezos.gitlab.io/protocols/016_mumbai.html"
   | s -> proto s
 
 let open_in_editor ?(and_explorer = false) ctxt text =
