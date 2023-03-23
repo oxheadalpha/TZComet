@@ -220,8 +220,8 @@ let protocol s =
   match s with
   | "PtLimaPtLMwfNinJi9rCfDPWea8dFgTZ1MeJ9f1m2SRic6ayiwW" ->
       known "Lima" "https://tezos.gitlab.io/protocols/015_lima.html"
-  | "PtMumbaiiFFEGbew1rRjzSPyzRbA51Tm3RVZL5suHPxSZYDhCEc" ->
-      known "Mumbai" "https://tezos.gitlab.io/protocols/016_mumbai.html"
+  | "PtMumbai2TmsJHNGRkD8v8YDbtao7BLUC3wjASn1inAKLFCjaH1" ->
+      known "Mumbai2" "https://tezos.gitlab.io/protocols/016_mumbai.html"
   | s -> proto s
 
 let open_in_editor ?(and_explorer = false) ctxt text =
