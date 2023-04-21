@@ -308,8 +308,8 @@ let default_nodes : Node.t list =
   List.rev
     [ Node.create "Ghostnet-Teztnets" ~network:`Ghostnet
         "https://rpc.ghostnet.teztnets.xyz/" ~info_url:teztnets
-    ; Node.create "Limanet-Teztnets" ~network:`Limanet
-        "https://rpc.limanet.teztnets.xyz/" ~info_url:teztnets
+    ; Node.create "Nairobinet-Teztnets" ~network:`Nairobinet
+        "https://rpc.nairobinet.teztnets.xyz/" ~info_url:teztnets
     ; Node.create "Mumbainet-Teztnets" ~network:`Mumbainet
         "https://rpc.mumbainet.teztnets.xyz/" ~info_url:teztnets
     ; Node.create "Mumbainet-Marigold" ~network:`Mumbainet
@@ -324,8 +324,8 @@ let default_nodes : Node.t list =
         "https://rpc.tzbeta.net/" ~info_url:ecad
     ; Node.create "Ghostnet-ECAD-Labs" ~network:`Ghostnet
         "https://ghostnet.ecadinfra.com" ~info_url:ecad
-    ; Node.create "Limanet-ECAD-Labs" ~network:`Limanet
-        "https://limanet.ecadinfra.com" ~info_url:ecad
+    ; Node.create "Nairobinet-ECAD-Labs" ~network:`Nairobinet
+        "https://nairobinet.ecadinfra.com" ~info_url:ecad
       (* ; Node.create "Mainnet-GigaNode" "https://mainnet-tezos.giganode.io"
           ~network:`Mainnet ~info_url:giga *)
     ; Node.create "Flextesabox-node" "http://127.0.0.1:20000" ~network:`Sandbox
