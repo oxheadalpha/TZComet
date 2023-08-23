@@ -303,17 +303,17 @@ let default_nodes : Node.t list =
   let teztnets = "https://teztnets.xyz" in
   let smartpy = "https://smartpy.io/nodes" in
   let ecad = "https://tezostaquito.io/docs/rpc_nodes" in
-  let marigold = "https://status.marigold.dev/" in
+  let _marigold = "https://status.marigold.dev/" in
   (* let giga = "https://giganode.io/" in *)
   List.rev
     [ Node.create "Ghostnet-Teztnets" ~network:`Ghostnet
         "https://rpc.ghostnet.teztnets.xyz/" ~info_url:teztnets
     ; Node.create "Nairobinet-Teztnets" ~network:`Nairobinet
         "https://rpc.nairobinet.teztnets.xyz/" ~info_url:teztnets
-    ; Node.create "Mumbainet-Teztnets" ~network:`Mumbainet
-        "https://rpc.mumbainet.teztnets.xyz/" ~info_url:teztnets
-    ; Node.create "Mumbainet-Marigold" ~network:`Mumbainet
-        "https://mumbainet.tezos.marigold.dev/" ~info_url:marigold
+    ; Node.create "Oxfordnet-Teztnets" ~network:`Oxfordnet
+        "https://rpc.oxfordnet.teztnets.xyz/" ~info_url:teztnets
+      (* ; Node.create "Oxfordnet-Marigold" ~network:`Oxfordnet
+          "https://oxfordnet.tezos.marigold.dev/" ~info_url:marigold *)
     ; Node.create "Mainnet-SmartPy" "https://mainnet.smartpy.io"
         ~network:`Mainnet ~info_url:smartpy
     ; Node.create "Ghostnet-SmartPy" ~network:`Ghostnet

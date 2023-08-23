@@ -1,19 +1,19 @@
 open! Import
 
-type t = [`Mainnet | `Mumbainet | `Nairobinet | `Ghostnet | `Sandbox]
+type t = [`Mainnet | `Oxfordnet | `Nairobinet | `Ghostnet | `Sandbox]
 
 let to_string : t -> string = function
   | `Mainnet -> "Mainnet"
   | `Nairobinet -> "Nairobinet"
-  | `Mumbainet -> "Mumbainet"
+  | `Oxfordnet -> "Oxfordnet"
   | `Ghostnet -> "Ghostnet"
   | `Sandbox -> "Sandbox"
 
 let better_call_dev_path : t -> string option = function
   | `Mainnet -> Some "mainnet"
   | `Nairobinet -> Some "nairobinet"
-  | `Mumbainet -> Some "mumbainet"
+  | `Oxfordnet -> Some "oxfordnet"
   | `Ghostnet -> Some "ghostnet"
   | `Sandbox -> None
 
-let all : t list = [`Mainnet; `Nairobinet; `Mumbainet; `Ghostnet; `Sandbox]
+let all : t list = [`Mainnet; `Nairobinet; `Oxfordnet; `Ghostnet; `Sandbox]
