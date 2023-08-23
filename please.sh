@@ -55,9 +55,7 @@ build_all () {
     dune build @check
     mkdir -p _build/website/
     dune build --profile "$dune_profile" $root_path/src/client/main.bc.js
-    cp _build/default/$root_path/src/client/main.bc.js _build/website/main-client.js
-    cp $root_path/data/loading.gif _build/website/
-    dune build $root_path/src/client/index.html
+    dune build --profile "$dune_profile" $root_path/src/client/index.html
     cp _build/default/$root_path/src/client/index.html _build/website/
     chmod 600 _build/website/*
     echo "Done: file://$PWD/_build/website/index.html"
