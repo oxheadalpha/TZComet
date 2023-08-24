@@ -218,10 +218,10 @@ let protocol s =
   let known name url =
     span (link ~target:url (it name)) %% t "(" % proto s % t ")" in
   match s with
-  | "PtMumbai2TmsJHNGRkD8v8YDbtao7BLUC3wjASn1inAKLFCjaH1" ->
-      known "Mumbai2" "https://tezos.gitlab.io/protocols/016_mumbai.html"
   | "PtNairobiyssHuh87hEhfVBGCVrK3WnS8Z2FT4ymB5tAa4r1nQf" ->
       known "Nairobi" "https://tezos.gitlab.io/protocols/017_nairobi.html"
+  | "ProxfordSW2S7fvchT1Zgj2avb5UES194neRyYVXoaDGvF9egt8" ->
+      known "Oxford" "https://tezos.gitlab.io/protocols/018_oxford.html"
   | s -> proto s
 
 let open_in_editor ?(and_explorer = false) ctxt text =
