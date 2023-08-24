@@ -304,7 +304,7 @@ let all ?(dry_run = false) ?(print = true) ?only ~logfile () =
     let code =
       [prim "DROP" []; prim "PUSH" [prim "bytes" []; michbytes value]] in
     view_with_code name code
-      ~return_type:(prim "bytes" [] (* ~annotations:["%returnedBytes"] *))
+      ~return_type:(prim "bytes" [] ~annotations:["%returnedBytes"])
       ~annotations:[("%returnedBytes", "A bytes constant.")] in
   let basics_and_views l = Ezjsonm.(basics @ [("views", list Fn.id l)]) in
   let many () =
