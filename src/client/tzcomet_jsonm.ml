@@ -6,7 +6,6 @@
 (* Braced non-terminals in comments refer to RFC 4627 non-terminals. *)
 
 let io_buffer_size = 65536 (* IO_BUFFER_SIZE 4.0.0 *)
-
 let pp = Format.fprintf
 
 (* Unsafe string and bytes manipulations. If you don't believe the authors's
@@ -23,37 +22,21 @@ let unsafe_set_byte s j byte = Bytes.unsafe_set s j (Char.unsafe_chr byte)
 (* Characters and their classes *)
 
 let ux_eoi = max_int (* End of input, outside unicode range. *)
-
 let ux_soi = max_int - 1 (* Start of input, outside unicode range. *)
-
 let u_nl = 0x0A (* \n *)
-
 let u_sp = 0x20 (*   *)
-
 let u_quot = 0x22 (* '' *)
-
 let u_lbrack = 0x5B (* [ *)
-
 let u_rbrack = 0x5D (* ] *)
-
 let u_lbrace = 0x7B (* { *)
-
 let u_rbrace = 0x7D (* } *)
-
 let u_colon = 0x3A (* : *)
-
 let u_dot = 0x2E (* . *)
-
 let u_comma = 0x2C (* , *)
-
 let u_minus = 0x2D (* - *)
-
 let u_slash = 0x2F (* / *)
-
 let u_bslash = 0x5C (* \ *)
-
 let u_times = 0x2A (* * *)
-
 let u_rep = Uchar.to_int Uutf.u_rep
 let must_escape u = u <= 0x1F || u = 0x22 || u = 0x5C
 let is_digit u = 0x30 <= u && u <= 0x39
@@ -111,7 +94,7 @@ type error =
   | `Illegal_bytes of string
   | `Illegal_literal of string
   | `Illegal_number of string
-  | `Unclosed of [`As | `Os | `String | `Comment]
+  | `Unclosed of [ `As | `Os | `String | `Comment ]
   | `Expected of
     [ `Comment
     | `Value
@@ -153,41 +136,41 @@ let pp_uchar ppf u =
     pp_cp ppf (Uchar.to_int u)
   else
     let b = Buffer.create 4 in
-    Uutf.Buffer.add_utf_8 b u ;
+    Uutf.Buffer.add_utf_8 b u;
     pp ppf "'%s' (%a)" (Buffer.contents b) pp_cp (Uchar.to_int u)
 
 let pp_error ppf = function
   | `Illegal_BOM -> pp ppf "@[illegal@ initial@ BOM@ in@ character@ stream@]"
   | `Illegal_escape r -> (
-      pp ppf "@[illegal@ escape,@ " ;
+      pp ppf "@[illegal@ escape,@ ";
       match r with
       | `Not_hex_uchar u -> pp ppf "%a@ not@ a@ hex@ digit@]" pp_uchar u
       | `Not_esc_uchar u ->
           pp ppf "%a@ not@ an@ escaped@ character@]" pp_uchar u
       | `Lone_lo_surrogate p -> pp ppf "%a@ lone@ low@ surrogate@]" pp_cp p
       | `Lone_hi_surrogate p -> pp ppf "%a@ lone@ high@ surrogate@]" pp_cp p
-      | `Not_lo_surrogate p -> pp ppf "%a@ not@ a@ low@ surrogate@]" pp_cp p )
+      | `Not_lo_surrogate p -> pp ppf "%a@ not@ a@ low@ surrogate@]" pp_cp p)
   | `Illegal_string_uchar u ->
       pp ppf "@[illegal@ character@ in@ JSON@ string@ (%a)@]" pp_uchar u
   | `Illegal_bytes bs ->
       let l = String.length bs in
-      pp ppf "@[illegal@ bytes@ in@ character@ stream@ (" ;
-      if l > 0 then pp ppf "%02X" (Char.code bs.[0]) ;
+      pp ppf "@[illegal@ bytes@ in@ character@ stream@ (";
+      if l > 0 then pp ppf "%02X" (Char.code bs.[0]);
       for i = 1 to l - 1 do
         pp ppf " %02X" (Char.code bs.[i])
-      done ;
+      done;
       pp ppf ")@]"
   | `Illegal_number n -> pp ppf "@[illegal@ number@ (%s)@]" n
   | `Illegal_literal l -> pp ppf "@[illegal@ literal@ (%s)@]" l
   | `Unclosed r -> (
-      pp ppf "@[unclosed@ " ;
+      pp ppf "@[unclosed@ ";
       match r with
       | `As -> pp ppf "array@]"
       | `Os -> pp ppf "object@]"
       | `String -> pp ppf "string@]"
-      | `Comment -> pp ppf "comment@]" )
+      | `Comment -> pp ppf "comment@]")
   | `Expected r -> (
-      pp ppf "@[expected@ " ;
+      pp ppf "@[expected@ ";
       match r with
       | `Comment -> pp ppf "JavaScript@ comment@]"
       | `Value -> pp ppf "JSON@ value@]"
@@ -200,7 +183,7 @@ let pp_error ppf = function
       | `Omem false ->
           pp ppf "value@ separator@ or@ object@ end@ (','@ or@ '}')@]"
       | `Json -> pp ppf "JSON@ text (JSON value)@]"
-      | `Eoi -> pp ppf "end@ of@ input@]" )
+      | `Eoi -> pp ppf "end@ of@ input@]")
 
 module Depth : sig
   type t
@@ -221,10 +204,10 @@ end = struct
 end
 
 type pos = int * int
-type encoding = [`UTF_8 | `UTF_16 | `UTF_16BE | `UTF_16LE]
-type src = [`Channel of in_channel | `String of string | `Manual]
-type decode = [`Await | `End | `Lexeme of lexeme | `Error of error]
-type uncut = [`Comment of [`M | `S] * string | `White of string]
+type encoding = [ `UTF_8 | `UTF_16 | `UTF_16BE | `UTF_16LE ]
+type src = [ `Channel of in_channel | `String of string | `Manual ]
+type decode = [ `Await | `End | `Lexeme of lexeme | `Error of error ]
+type uncut = [ `Comment of [ `M | `S ] * string | `White of string ]
 
 let pp_decode ppf = function
   | `Lexeme l -> pp ppf "@[`Lexeme @[(%a)@]@]" pp_lexeme l
@@ -236,153 +219,159 @@ let pp_decode ppf = function
       let pr_style ppf = function `M -> pp ppf "`M" | `S -> pp ppf "`S" in
       pp ppf "@[`Comment @[(%a, %S)@]@]" pr_style style s
 
-type decoder =
-  { u: Uutf.decoder
-  ; (* Unicode character decoder. *)
-    buf: Buffer.t
-  ; (* string accumulation buffer. *)
-    mutable uncut: bool
-  ; (* [true] to bufferize comments and white space. *)
-    mutable s_line: int
-  ; (* last saved start line. *)
-    mutable s_col: int
-  ; (* last saved start column. *)
-    mutable e_line: int
-  ; (* last saved end line. *)
-    mutable e_col: int
-  ; (* last saved end column. *)
-    mutable c: int
-  ; (* character lookahead. *)
-    mutable stack:
-      (* stack of open arrays and objects. *)
-      [`As of pos | `Os of pos] list
-  ; mutable next_name: bool
-  ; (* [true] if next decode should be [`Name]. *)
-    mutable last_start: bool
-  ; (* [true] if last lexeme was `As or `Os. *)
-    mutable k:
-         (* decoder continuation. *)
-         Depth.t
-      -> decoder
-      -> [decode | uncut | `Continue] }
+type decoder = {
+  u : Uutf.decoder;
+  (* Unicode character decoder. *)
+  buf : Buffer.t;
+  (* string accumulation buffer. *)
+  mutable uncut : bool;
+  (* [true] to bufferize comments and white space. *)
+  mutable s_line : int;
+  (* last saved start line. *)
+  mutable s_col : int;
+  (* last saved start column. *)
+  mutable e_line : int;
+  (* last saved end line. *)
+  mutable e_col : int;
+  (* last saved end column. *)
+  mutable c : int;
+  (* character lookahead. *)
+  mutable stack :
+    (* stack of open arrays and objects. *)
+    [ `As of pos | `Os of pos ] list;
+  mutable next_name : bool;
+  (* [true] if next decode should be [`Name]. *)
+  mutable last_start : bool;
+  (* [true] if last lexeme was `As or `Os. *)
+  mutable k :
+    (* decoder continuation. *)
+    Depth.t ->
+    decoder ->
+    [ decode | uncut | `Continue ];
+}
 
 let baddc d c = Uutf.Buffer.add_utf_8 d.buf (Uchar.unsafe_of_int c)
 let badd d = Uutf.Buffer.add_utf_8 d.buf (Uchar.unsafe_of_int d.c)
 
 let buf d =
   let t = Buffer.contents d.buf in
-  Buffer.clear d.buf ; t
+  Buffer.clear d.buf;
+  t
 
 let dpos d = (Uutf.decoder_line d.u, Uutf.decoder_col d.u)
 
 let spos d =
-  d.s_line <- Uutf.decoder_line d.u ;
+  d.s_line <- Uutf.decoder_line d.u;
   d.s_col <- Uutf.decoder_col d.u
 
 let epos d =
-  d.e_line <- Uutf.decoder_line d.u ;
+  d.e_line <- Uutf.decoder_line d.u;
   d.e_col <- Uutf.decoder_col d.u
 
 let stack_range d =
   match d.stack with
   | [] -> assert false
   | `As (l, c) :: _ | `Os (l, c) :: _ ->
-      d.s_line <- l ;
-      d.s_col <- c ;
+      d.s_line <- l;
+      d.s_col <- c;
       epos d
 
 let dpop d =
-  match spos d ; epos d ; d.stack with
+  match
+    spos d;
+    epos d;
+    d.stack
+  with
   | _ :: (`Os _ :: _ as ss) ->
-      d.next_name <- true ;
+      d.next_name <- true;
       d.stack <- ss
   | _ :: (`As _ :: _ as ss) ->
-      d.next_name <- false ;
+      d.next_name <- false;
       d.stack <- ss
-  | [_] ->
-      d.next_name <- false ;
+  | [ _ ] ->
+      d.next_name <- false;
       d.stack <- []
   | [] -> assert false
 
 let r_cont k (depth : Depth.t) d =
   if Depth.allow_direct_call depth then k (Depth.succ depth) d
   else (
-    d.k <- k ;
-    `Continue )
+    d.k <- k;
+    `Continue)
 
 let ret_eoi _depth d = `End
 
-let ret (v : [< decode | uncut | `Continue]) k _depth d =
-  d.k <- k ;
+let ret (v : [< decode | uncut | `Continue ]) k _depth d =
+  d.k <- k;
   v
 
 let rec readc k depth d =
   match Uutf.decode d.u with
   | `Uchar u ->
-      d.c <- Uchar.to_int u ;
+      d.c <- Uchar.to_int u;
       r_cont k depth d
   | `End ->
-      d.c <- ux_eoi ;
+      d.c <- ux_eoi;
       r_cont k depth d
   | `Await -> ret `Await (readc k) depth d
   | `Malformed bs ->
-      d.c <- u_rep ;
-      epos d ;
+      d.c <- u_rep;
+      epos d;
       ret (err_bytes bs) k depth d
 
 let rec r_scomment k depth d =
   (* single line comment. // was eaten. *)
   if d.c <> u_nl && d.c <> ux_eoi then (
-    badd d ;
-    readc (r_scomment k) depth d )
+    badd d;
+    readc (r_scomment k) depth d)
   else (
-    epos d ;
-    ret (`Comment (`S, buf d)) (readc k) depth d )
+    epos d;
+    ret (`Comment (`S, buf d)) (readc k) depth d)
 
 let rec r_mcomment closing k depth d =
   (* multiline comment. /* was eaten. *)
   if d.c = ux_eoi then (
-    epos d ;
-    ret err_unclosed_comment ret_eoi depth d )
+    epos d;
+    ret err_unclosed_comment ret_eoi depth d)
   else if closing then
     if d.c = u_slash then (
-      epos d ;
-      ret (`Comment (`M, buf d)) (readc k) depth d )
+      epos d;
+      ret (`Comment (`M, buf d)) (readc k) depth d)
     else if d.c = u_times then (
-      badd d ;
-      readc (r_mcomment true k) depth d )
+      badd d;
+      readc (r_mcomment true k) depth d)
     else (
-      baddc d u_times ;
-      badd d ;
-      readc (r_mcomment false k) depth d )
+      baddc d u_times;
+      badd d;
+      readc (r_mcomment false k) depth d)
   else if d.c = u_times then readc (r_mcomment true k) depth d
   else (
-    badd d ;
-    readc (r_mcomment false k) depth d )
+    badd d;
+    readc (r_mcomment false k) depth d)
 
 let r_comment k depth d =
   (* comment, / was eaten. *)
   if d.c = u_slash then readc (r_scomment k) depth d
   else if d.c = u_times then readc (r_mcomment false k) depth d
   else (
-    epos d ;
-    ret err_exp_comment k depth d )
+    epos d;
+    ret err_exp_comment k depth d)
 
 let rec r_ws_uncut k depth d =
   if is_white d.c then (
-    epos d ;
-    badd d ;
-    readc (r_ws_uncut k) depth d )
+    epos d;
+    badd d;
+    readc (r_ws_uncut k) depth d)
   else ret (`White (buf d)) k depth d
 
 let rec r_white_uncut k depth d =
   (* {ws} / comment *)
   if is_white d.c then (
-    spos d ;
-    r_ws_uncut (r_white_uncut k) depth d )
+    spos d;
+    r_ws_uncut (r_white_uncut k) depth d)
   else if d.c = u_slash then (
-    spos d ;
-    readc (r_comment (r_white_uncut k)) depth d )
+    spos d;
+    readc (r_comment (r_white_uncut k)) depth d)
   else r_cont k depth d
 
 let rec r_ws k depth d =
@@ -394,20 +383,24 @@ let r_white k depth d =
 
 let rec r_u_escape hi u count k depth d =
   (* unicode escapes. *)
-  let error err k depth d = baddc d u_rep ; ret err k depth d in
+  let error err k depth d =
+    baddc d u_rep;
+    ret err k depth d
+  in
   if count > 0 then (
     if not (is_hex_digit d.c) then (
-      epos d ;
-      error (err_not_hex d.c) (readc k) depth d )
+      epos d;
+      error (err_not_hex d.c) (readc k) depth d)
     else
       let u =
         (u * 16)
         +
         if d.c <= 0x39 (* 9 *) then d.c - 0x30
         else if d.c <= 0x46 (* F *) then d.c - 0x37
-        else d.c - 0x57 in
-      epos d ;
-      readc (r_u_escape hi u (count - 1) k) depth d )
+        else d.c - 0x57
+      in
+      epos d;
+      readc (r_u_escape hi u (count - 1) k) depth d)
   else
     match hi with
     | Some hi ->
@@ -415,9 +408,12 @@ let rec r_u_escape hi u count k depth d =
         if u < 0xDC00 || u > 0xDFFF then error (err_not_lo u) k depth d
         else
           let u = (((hi land 0x3FF) lsl 10) lor (u land 0x3FF)) + 0x10000 in
-          baddc d u ; r_cont k depth d
+          baddc d u;
+          r_cont k depth d
     | None ->
-        if u < 0xD800 || u > 0xDFFF then (baddc d u ; r_cont k depth d)
+        if u < 0xD800 || u > 0xDFFF then (
+          baddc d u;
+          r_cont k depth d)
         else if u > 0xDBFF then error (err_lone_lo u) k depth d
         else if d.c <> u_bslash then error (err_lone_hi u) k depth d
         else
@@ -425,46 +421,64 @@ let rec r_u_escape hi u count k depth d =
             (fun depth d ->
               if d.c <> 0x75 (* u *) then
                 error (err_lone_hi u) (r_escape k) depth d
-              else readc (r_u_escape (Some u) 0 4 k) depth d )
+              else readc (r_u_escape (Some u) 0 4 k) depth d)
             depth d
 
 and r_escape k depth d =
   match d.c with
-  | 0x22 (* '' *) -> baddc d u_quot ; readc k depth d
-  | 0x5C (* \ *) -> baddc d u_bslash ; readc k depth d
-  | 0x2F (* / *) -> baddc d u_slash ; readc k depth d
-  | 0x62 (* b *) -> baddc d 0x08 ; readc k depth d
-  | 0x66 (* f *) -> baddc d 0x0C ; readc k depth d
-  | 0x6E (* n *) -> baddc d u_nl ; readc k depth d
-  | 0x72 (* r *) -> baddc d 0x0D ; readc k depth d
-  | 0x74 (* t *) -> baddc d 0x09 ; readc k depth d
+  | 0x22 (* '' *) ->
+      baddc d u_quot;
+      readc k depth d
+  | 0x5C (* \ *) ->
+      baddc d u_bslash;
+      readc k depth d
+  | 0x2F (* / *) ->
+      baddc d u_slash;
+      readc k depth d
+  | 0x62 (* b *) ->
+      baddc d 0x08;
+      readc k depth d
+  | 0x66 (* f *) ->
+      baddc d 0x0C;
+      readc k depth d
+  | 0x6E (* n *) ->
+      baddc d u_nl;
+      readc k depth d
+  | 0x72 (* r *) ->
+      baddc d 0x0D;
+      readc k depth d
+  | 0x74 (* t *) ->
+      baddc d 0x09;
+      readc k depth d
   | 0x75 (* u *) -> readc (r_u_escape None 0 4 k) depth d
   | c ->
-      epos d ;
-      baddc d u_rep ;
+      epos d;
+      baddc d u_rep;
       ret (err_not_esc c) (readc k) depth d
 
 let rec r_string k depth d =
   (* {string}, '' eaten. *)
   if d.c = ux_eoi then (
-    epos d ;
-    ret err_unclosed_string ret_eoi depth d )
+    epos d;
+    ret err_unclosed_string ret_eoi depth d)
   else if not (must_escape d.c) then (
-    badd d ;
-    readc (r_string k) depth d )
-  else if d.c = u_quot then (epos d ; readc k depth d)
+    badd d;
+    readc (r_string k) depth d)
+  else if d.c = u_quot then (
+    epos d;
+    readc k depth d)
   else if d.c = u_bslash then readc (r_escape (r_string k)) depth d
   else (
-    epos d ;
-    baddc d u_rep ;
-    ret (err_str_char d.c) (readc (r_string k)) depth d )
+    epos d;
+    baddc d u_rep;
+    ret (err_str_char d.c) (readc (r_string k)) depth d)
 
 let rec r_float k depth d =
   (* {number} *)
   if (not (is_val_sep d.c)) && d.c <> ux_eoi then (
-    epos d ;
-    badd d ;
-    readc (r_float k) depth d )
+    epos d;
+    badd d;
+    readc (r_float k) depth d)
   else
     let s = buf d in
     try ret (`Lexeme (`Float (float_of_string s))) k depth d
@@ -473,9 +487,9 @@ let rec r_float k depth d =
 let rec r_literal k depth d =
   (* {true} / {false} / {null} *)
   if (not (is_val_sep d.c)) && d.c <> ux_eoi then (
-    epos d ;
-    badd d ;
-    readc (r_literal k) depth d )
+    epos d;
+    badd d;
+    readc (r_literal k) depth d)
   else
     match buf d with
     | "true" -> ret (`Lexeme (`Bool true)) k depth d
@@ -488,59 +502,64 @@ let rec r_value err k depth d =
   (* {value} *)
   | 0x5B (* [ *) ->
       (* {begin-array} *)
-      spos d ;
-      epos d ;
-      d.last_start <- true ;
-      d.stack <- `As (dpos d) :: d.stack ;
+      spos d;
+      epos d;
+      d.last_start <- true;
+      d.stack <- `As (dpos d) :: d.stack;
       ret (`Lexeme `As) (readc k) depth d
   | 0x7B (* { *) ->
       (* {begin-object} *)
-      spos d ;
-      epos d ;
-      d.last_start <- true ;
-      d.next_name <- true ;
-      d.stack <- `Os (dpos d) :: d.stack ;
+      spos d;
+      epos d;
+      d.last_start <- true;
+      d.next_name <- true;
+      d.stack <- `Os (dpos d) :: d.stack;
       ret (`Lexeme `Os) (readc k) depth d
   | 0x22 (* '' *) ->
       let lstring k depth d = ret (`Lexeme (`String (buf d))) k depth d in
-      spos d ;
+      spos d;
       readc (r_string (lstring k)) depth d
-  | 0x66 (* f *) | 0x6E (* n *) | 0x74 (* t *) -> spos d ; r_literal k depth d
-  | u when is_digit u || u = u_minus -> spos d ; r_float k depth d
+  | 0x66 (* f *) | 0x6E (* n *) | 0x74 (* t *) ->
+      spos d;
+      r_literal k depth d
+  | u when is_digit u || u = u_minus ->
+      spos d;
+      r_float k depth d
   | u -> err k depth d
 
 let rec discard_to c1 c2 err k depth d =
   if d.c = c1 || d.c = c2 || d.c = ux_eoi then ret err k depth d
   else (
-    epos d ;
-    readc (discard_to c1 c2 err k) depth d )
+    epos d;
+    readc (discard_to c1 c2 err k) depth d)
 
 let r_arr_val k depth d =
   (* [{value-separator}] {value} / {end-array} *)
   let nxval err k depth d =
-    spos d ;
-    discard_to u_comma u_rbrack err k depth d in
+    spos d;
+    discard_to u_comma u_rbrack err k depth d
+  in
   let last_start = d.last_start in
-  d.last_start <- false ;
+  d.last_start <- false;
   if d.c = ux_eoi then (
-    stack_range d ;
-    ret err_unclosed_arr ret_eoi depth d )
+    stack_range d;
+    ret err_unclosed_arr ret_eoi depth d)
   else if d.c = u_rbrack then (
-    dpop d ;
-    ret (`Lexeme `Ae) (readc k) depth d )
+    dpop d;
+    ret (`Lexeme `Ae) (readc k) depth d)
   else if last_start then r_value (nxval err_exp_arr_fst) k depth d
   else if d.c = u_comma then
     readc (r_white (r_value (nxval err_exp_value) k)) depth d
   else nxval err_exp_arr_nxt k depth d
 
 let nxmem err k depth d =
-  spos d ;
-  d.next_name <- true ;
+  spos d;
+  d.next_name <- true;
   discard_to u_comma u_rbrace err k depth d
 
 let r_obj_value k depth d =
   (* {name-separator} {value} *)
-  d.next_name <- true ;
+  d.next_name <- true;
   if d.c = u_colon then
     readc (r_white (r_value (nxmem err_exp_value) k)) depth d
   else nxmem err_exp_nsep k depth d
@@ -551,17 +570,18 @@ let r_obj_name k depth d =
     let ln k depth d = ret (`Lexeme (`Name (buf d))) k depth d in
     if d.c <> u_quot then nxmem err k depth d
     else (
-      spos d ;
-      readc (r_string (ln k)) depth d ) in
+      spos d;
+      readc (r_string (ln k)) depth d)
+  in
   let last_start = d.last_start in
-  d.last_start <- false ;
-  d.next_name <- false ;
+  d.last_start <- false;
+  d.next_name <- false;
   if d.c = ux_eoi then (
-    stack_range d ;
-    ret err_unclosed_obj ret_eoi depth d )
+    stack_range d;
+    ret err_unclosed_obj ret_eoi depth d)
   else if d.c = u_rbrace then (
-    dpop d ;
-    ret (`Lexeme `Oe) (readc k) depth d )
+    dpop d;
+    ret (`Lexeme `Oe) (readc k) depth d)
   else if last_start then r_name err_exp_obj_fst k depth d
   else if d.c = u_comma then readc (r_white (r_name err_exp_name k)) depth d
   else nxmem err_exp_obj_nxt k depth d
@@ -571,8 +591,9 @@ let r_end k depth d =
   if d.c = ux_eoi then ret `End ret_eoi depth d
   else
     let drain k depth d =
-      spos d ;
-      discard_to ux_eoi ux_eoi err_exp_eoi k depth d in
+      spos d;
+      discard_to ux_eoi ux_eoi err_exp_eoi k depth d
+    in
     drain ret_eoi depth d
 
 let rec r_lexeme depth d =
@@ -586,55 +607,60 @@ let rec r_lexeme depth d =
 let rec discard_to_white err k depth d =
   if is_white d.c || d.c = ux_eoi then ret err k depth d
   else (
-    epos d ;
-    readc (discard_to_white err k) depth d )
+    epos d;
+    readc (discard_to_white err k) depth d)
 
 let rec r_json k depth d =
   (* {value} *)
   let err k depth d =
-    spos d ;
-    discard_to_white err_exp_json (r_white (r_json k)) depth d in
+    spos d;
+    discard_to_white err_exp_json (r_white (r_json k)) depth d
+  in
   if d.c <> ux_eoi then r_value err k depth d else ret err_exp_json k depth d
 
 let r_start d =
   (* start of input *)
   let bom k depth d =
     if Uutf.decoder_removed_bom d.u then ret err_bom k depth d
-    else r_cont k depth d in
+    else r_cont k depth d
+  in
   readc (bom (r_white (r_json r_lexeme))) d
 
 let nln = `ASCII (Uchar.unsafe_of_int 0x000A)
 
 let decoder ?encoding src =
   let u = Uutf.decoder ?encoding ~nln src in
-  { u
-  ; buf= Buffer.create 1024
-  ; uncut= false
-  ; s_line= 1
-  ; s_col= 0
-  ; e_line= 1
-  ; e_col= 0
-  ; c= ux_soi
-  ; next_name= false
-  ; last_start= false
-  ; stack= []
-  ; k= r_start }
+  {
+    u;
+    buf = Buffer.create 1024;
+    uncut = false;
+    s_line = 1;
+    s_col = 0;
+    e_line = 1;
+    e_col = 0;
+    c = ux_soi;
+    next_name = false;
+    last_start = false;
+    stack = [];
+    k = r_start;
+  }
 
 let decode_uncut d =
-  d.uncut <- true ;
+  d.uncut <- true;
   let rec loop d =
     match d.k Depth.zero d with
-    | #decode as v -> (v :> [> decode])
-    | #uncut as v -> (v :> [> uncut])
-    | `Continue -> loop d in
+    | #decode as v -> (v :> [> decode ])
+    | #uncut as v -> (v :> [> uncut ])
+    | `Continue -> loop d
+  in
   loop d
 
 let rec decode d =
   match
-    d.uncut <- false ;
+    d.uncut <- false;
     d.k Depth.zero d
   with
-  | #decode as v -> (v :> [> decode])
+  | #decode as v -> (v :> [> decode ])
   | `Continue -> decode d
   | `Comment _ | `White _ -> assert false
 
@@ -653,8 +679,9 @@ let invalid_arg fmt =
   (* for thread safety. *)
   let ppf = Format.formatter_of_buffer b in
   let k ppf =
-    Format.pp_print_flush ppf () ;
-    invalid_arg (Buffer.contents b) in
+    Format.pp_print_flush ppf ();
+    invalid_arg (Buffer.contents b)
+  in
   Format.kfprintf k ppf fmt
 
 let invalid_bounds j l = invalid_arg "invalid bounds (index %d, length %d)" j l
@@ -671,44 +698,45 @@ let expect_json v =
 let expect_lend lstart v =
   expect (if lstart = `As then "`Lexeme `Ae" else "`Lexeme `Oe") v
 
-type dst = [`Channel of out_channel | `Buffer of Buffer.t | `Manual]
-type encode = [`Await | `End | `Lexeme of lexeme]
+type dst = [ `Channel of out_channel | `Buffer of Buffer.t | `Manual ]
+type encode = [ `Await | `End | `Lexeme of lexeme ]
 
-type encoder =
-  { dst: dst
-  ; (* output destination. *)
-    minify: bool
-  ; (* [true] for compact output. *)
-    mutable o: Bytes.t
-  ; (* current output chunk. *)
-    mutable o_pos: int
-  ; (* next output position to write. *)
-    mutable o_max: int
-  ; (* maximal output position to write. *)
-    buf: Buffer.t
-  ; (* buffer to format floats. *)
-    mutable stack: [`As | `Os] list
-  ; (* stack of open arrays and objects. *)
-    mutable nest: int
-  ; (* nesting level (String.length stack). *)
-    mutable next_name: bool
-  ; (* [true] if next encode should `Name. *)
-    mutable last_start: bool
-  ; (* [true] if last encode was [`As | `Os]. *)
-    mutable k:
-         (* decoder continuation. *)
-         Depth.t
-      -> encoder
-      -> [encode | uncut]
-      -> [`Ok | `Partial | `Continue] }
+type encoder = {
+  dst : dst;
+  (* output destination. *)
+  minify : bool;
+  (* [true] for compact output. *)
+  mutable o : Bytes.t;
+  (* current output chunk. *)
+  mutable o_pos : int;
+  (* next output position to write. *)
+  mutable o_max : int;
+  (* maximal output position to write. *)
+  buf : Buffer.t;
+  (* buffer to format floats. *)
+  mutable stack : [ `As | `Os ] list;
+  (* stack of open arrays and objects. *)
+  mutable nest : int;
+  (* nesting level (String.length stack). *)
+  mutable next_name : bool;
+  (* [true] if next encode should `Name. *)
+  mutable last_start : bool;
+  (* [true] if last encode was [`As | `Os]. *)
+  mutable k :
+    (* decoder continuation. *)
+    Depth.t ->
+    encoder ->
+    [ encode | uncut ] ->
+    [ `Ok | `Partial | `Continue ];
+}
 
 let o_rem e = e.o_max - e.o_pos + 1 (* remaining bytes to write in [e.o]. *)
 
 let dst e s j l =
   (* set [e.o] with [s]. *)
-  if j < 0 || l < 0 || j + l > Bytes.length s then invalid_bounds j l ;
-  e.o <- s ;
-  e.o_pos <- j ;
+  if j < 0 || l < 0 || j + l > Bytes.length s then invalid_bounds j l;
+  e.o <- s;
+  e.o_pos <- j;
   e.o_max <- j + l - 1
 
 let partial k depth e = function
@@ -718,43 +746,43 @@ let partial k depth e = function
 let w_cont k (depth : Depth.t) e =
   if Depth.allow_direct_call depth then k (Depth.succ depth) e
   else (
-    e.k <- partial k ;
-    `Continue )
+    e.k <- partial k;
+    `Continue)
 
 let flush k depth e =
   match e.dst with
   (* get free space in [d.o] and [k]ontinue. *)
   | `Manual ->
-      e.k <- partial k ;
+      e.k <- partial k;
       `Partial
   | `Channel oc ->
-      output oc e.o 0 e.o_pos ;
-      e.o_pos <- 0 ;
+      output oc e.o 0 e.o_pos;
+      e.o_pos <- 0;
       w_cont k depth e
   | `Buffer b ->
       let o = Bytes.unsafe_to_string e.o in
-      Buffer.add_substring b o 0 e.o_pos ;
-      e.o_pos <- 0 ;
+      Buffer.add_substring b o 0 e.o_pos;
+      e.o_pos <- 0;
       w_cont k depth e
 
 let rec writeb b k depth e =
   (* write byte [b] and [k]ontinue. *)
   if e.o_pos > e.o_max then flush (writeb b k) depth e
   else (
-    unsafe_set_byte e.o e.o_pos b ;
-    e.o_pos <- e.o_pos + 1 ;
-    w_cont k depth e )
+    unsafe_set_byte e.o e.o_pos b;
+    e.o_pos <- e.o_pos + 1;
+    w_cont k depth e)
 
 let rec writes s j l k depth e =
   (* write [l] bytes from [s] starting at [j]. *)
   let rem = o_rem e in
   if rem >= l then (
-    unsafe_blit s j e.o e.o_pos l ;
-    e.o_pos <- e.o_pos + l ;
-    w_cont k depth e )
+    unsafe_blit s j e.o e.o_pos l;
+    e.o_pos <- e.o_pos + l;
+    w_cont k depth e)
   else begin
-    unsafe_blit s j e.o e.o_pos rem ;
-    e.o_pos <- e.o_pos + rem ;
+    unsafe_blit s j e.o e.o_pos rem;
+    e.o_pos <- e.o_pos + rem;
     flush (writes s (j + rem) (l - rem) k) depth e
   end
 
@@ -762,12 +790,12 @@ let rec writebuf j l k depth e =
   (* write [l] bytes from [e.buf] starting at [j]. *)
   let rem = o_rem e in
   if rem >= l then (
-    Buffer.blit e.buf j e.o e.o_pos l ;
-    e.o_pos <- e.o_pos + l ;
-    w_cont k depth e )
+    Buffer.blit e.buf j e.o e.o_pos l;
+    e.o_pos <- e.o_pos + l;
+    w_cont k depth e)
   else begin
-    Buffer.blit e.buf j e.o e.o_pos rem ;
-    e.o_pos <- e.o_pos + rem ;
+    Buffer.blit e.buf j e.o e.o_pos rem;
+    e.o_pos <- e.o_pos + rem;
     flush (writebuf (j + rem) (l - rem) k) depth e
   end
 
@@ -777,13 +805,17 @@ let w_indent k depth e =
       let max = e.o_pos + indent - 1 in
       for j = e.o_pos to max do
         unsafe_set_byte e.o j u_sp
-      done ;
-      e.o_pos <- max + 1 in
+      done;
+      e.o_pos <- max + 1
+    in
     let rem = o_rem e in
     if rem < indent then (
-      spaces e rem ;
-      flush (loop (indent - rem) k) depth e )
-    else (spaces e indent ; w_cont k depth e) in
+      spaces e rem;
+      flush (loop (indent - rem) k) depth e)
+    else (
+      spaces e indent;
+      w_cont k depth e)
+  in
   loop (e.nest * 2) k depth e
 
 let w_json_string s k depth e =
@@ -807,59 +839,61 @@ let w_json_string s k depth e =
             (writes "\\u00" 0 4
                (writeb
                   (hex (c lsr 4))
-                  (writeb (hex (c land 0xF)) (loop s next next max k)) ) )
+                  (writeb (hex (c land 0xF)) (loop s next next max k))))
             depth e
-      | c -> loop s j next max k depth e in
+      | c -> loop s j next max k depth e
+  in
   writeb u_quot (loop s 0 0 (String.length s - 1) (writeb u_quot k)) depth e
 
 let w_name n k depth e =
-  e.last_start <- false ;
-  e.next_name <- false ;
+  e.last_start <- false;
+  e.next_name <- false;
   w_json_string n (writeb u_colon k) depth e
 
 let w_value ~in_obj l k depth e =
   match l with
   | `String s ->
-      e.last_start <- false ;
-      e.next_name <- in_obj ;
+      e.last_start <- false;
+      e.next_name <- in_obj;
       w_json_string s k depth e
   | `Bool b ->
-      e.last_start <- false ;
-      e.next_name <- in_obj ;
+      e.last_start <- false;
+      e.next_name <- in_obj;
       if b then writes "true" 0 4 k depth e else writes "false" 0 5 k depth e
   | `Float f ->
-      e.last_start <- false ;
-      e.next_name <- in_obj ;
-      Buffer.clear e.buf ;
-      Printf.bprintf e.buf "%.16g" f ;
+      e.last_start <- false;
+      e.next_name <- in_obj;
+      Buffer.clear e.buf;
+      Printf.bprintf e.buf "%.16g" f;
       writebuf 0 (Buffer.length e.buf) k depth e
   | `Os ->
-      e.last_start <- true ;
-      e.next_name <- true ;
-      e.nest <- e.nest + 1 ;
-      e.stack <- `Os :: e.stack ;
+      e.last_start <- true;
+      e.next_name <- true;
+      e.nest <- e.nest + 1;
+      e.stack <- `Os :: e.stack;
       writeb u_lbrace k depth e
   | `As ->
-      e.last_start <- true ;
-      e.next_name <- false ;
-      e.nest <- e.nest + 1 ;
-      e.stack <- `As :: e.stack ;
+      e.last_start <- true;
+      e.next_name <- false;
+      e.nest <- e.nest + 1;
+      e.stack <- `As :: e.stack;
       writeb u_lbrack k depth e
   | `Null ->
-      e.last_start <- false ;
-      e.next_name <- in_obj ;
+      e.last_start <- false;
+      e.next_name <- in_obj;
       writes "null" 0 4 k depth e
   | (`Oe | `Ae | `Name _) as l ->
       if in_obj then expect_mem_value l else expect_arr_value_ae l
 
 let w_lexeme k depth e l =
   let epop e =
-    e.last_start <- false ;
-    e.nest <- e.nest - 1 ;
-    e.stack <- List.tl e.stack ;
+    e.last_start <- false;
+    e.nest <- e.nest - 1;
+    e.stack <- List.tl e.stack;
     match e.stack with
     | `Os :: _ -> e.next_name <- true
-    | _ -> e.next_name <- false in
+    | _ -> e.next_name <- false
+  in
   match List.hd e.stack with
   | `Os -> (
       if (* inside object. *)
@@ -875,26 +909,30 @@ let w_lexeme k depth e l =
             else writeb u_comma (name n k) depth e
         | `Oe ->
             if e.minify || e.last_start then (
-              epop e ; writeb u_rbrace k depth e )
+              epop e;
+              writeb u_rbrace k depth e)
             else (
-              epop e ;
-              writeb u_nl (w_indent (writeb u_rbrace k)) depth e )
-        | v -> expect_name_or_oe l )
+              epop e;
+              writeb u_nl (w_indent (writeb u_rbrace k)) depth e)
+        | v -> expect_name_or_oe l)
   | `As -> begin
-    (* inside array. *)
-    match l with
-    | `Ae ->
-        if e.minify || e.last_start then (epop e ; writeb u_rbrack k depth e)
-        else (
-          epop e ;
-          writeb u_nl (w_indent (writeb u_rbrack k)) depth e )
-    | l ->
-        let value l k depth e =
-          if e.minify then w_value ~in_obj:false l k depth e
-          else writeb u_nl (w_indent (w_value ~in_obj:false l k)) depth e in
-        if e.last_start then value l k depth e
-        else writeb u_comma (value l k) depth e
-  end
+      (* inside array. *)
+      match l with
+      | `Ae ->
+          if e.minify || e.last_start then (
+            epop e;
+            writeb u_rbrack k depth e)
+          else (
+            epop e;
+            writeb u_nl (w_indent (writeb u_rbrack k)) depth e)
+      | l ->
+          let value l k depth e =
+            if e.minify then w_value ~in_obj:false l k depth e
+            else writeb u_nl (w_indent (w_value ~in_obj:false l k)) depth e
+          in
+          if e.last_start then value l k depth e
+          else writeb u_comma (value l k) depth e
+    end
 
 let rec encode_ k depth e = function
   | `Lexeme l -> if e.stack = [] then expect_end l else w_lexeme k depth e l
@@ -908,7 +946,7 @@ let rec encode_ k depth e = function
   | `Await -> `Ok
 
 let rec encode_loop _depth e =
-  e.k <- encode_ encode_loop ;
+  e.k <- encode_ encode_loop;
   `Ok
 
 let rec encode_json depth e = function
@@ -919,8 +957,8 @@ let rec encode_json depth e = function
   | (`White _ | `Comment _) as v ->
       encode_
         (fun _depth e ->
-          e.k <- encode_json ;
-          `Ok )
+          e.k <- encode_json;
+          `Ok)
         depth e v
   | `Await -> `Ok
 
@@ -929,25 +967,29 @@ let encoder ?(minify = true) dst =
     match dst with
     | `Manual -> (Bytes.empty, 1, 0) (* implies [o_rem e = 0]. *)
     | `Buffer _ | `Channel _ ->
-        (Bytes.create io_buffer_size, 0, io_buffer_size - 1) in
-  { dst= (dst :> dst)
-  ; minify
-  ; o
-  ; o_pos
-  ; o_max
-  ; buf= Buffer.create 30
-  ; stack= []
-  ; nest= 0
-  ; next_name= false
-  ; last_start= false
-  ; k= encode_json }
+        (Bytes.create io_buffer_size, 0, io_buffer_size - 1)
+  in
+  {
+    dst = (dst :> dst);
+    minify;
+    o;
+    o_pos;
+    o_max;
+    buf = Buffer.create 30;
+    stack = [];
+    nest = 0;
+    next_name = false;
+    last_start = false;
+    k = encode_json;
+  }
 
-let encode e v : [`Ok | `Partial] =
+let encode e v : [ `Ok | `Partial ] =
   let rec loop e v =
     match e.k Depth.zero e v with
     | (`Ok | `Partial) as x -> x
-    | `Continue -> loop e `Await in
-  loop e (v :> [encode | uncut])
+    | `Continue -> loop e `Await
+  in
+  loop e (v :> [ encode | uncut ])
 
 let encoder_dst e = e.dst
 let encoder_minify e = e.minify
@@ -955,7 +997,9 @@ let encoder_minify e = e.minify
 (* Manual *)
 
 module Manual = struct
-  let src d = Uutf.Manual.src d.u let dst = dst let dst_rem = o_rem
+  let src d = Uutf.Manual.src d.u
+  let dst = dst
+  let dst_rem = o_rem
 end
 
 (* Uncut *)
@@ -968,8 +1012,9 @@ module Uncut = struct
     let rec loop e v =
       match e.k Depth.zero e v with
       | (`Ok | `Partial) as x -> x
-      | `Continue -> loop e `Await in
-    loop e (v :> [encode | uncut])
+      | `Continue -> loop e `Await
+    in
+    loop e (v :> [ encode | uncut ])
 end
 
 (*---------------------------------------------------------------------------

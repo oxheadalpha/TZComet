@@ -4,21 +4,28 @@ let code_mirror = "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.39.2"
 
 type status = Non_initialized | Initialized
 
-type t =
-  { id: string
-  ; language: string
-  ; code: string Reactive.Bidirectional.t
-  ; status: status Reactive.var
-  ; mutable text_area: Html_types.div Meta_html.t option }
+type t = {
+  id : string;
+  language : string;
+  code : string Reactive.Bidirectional.t;
+  status : status Reactive.var;
+  mutable text_area : Html_types.div Meta_html.t option;
+}
 
 let create ?(language = "mllike") id ~code =
-  {id; language; code; text_area= None; status= Reactive.var Non_initialized}
+  {
+    id;
+    language;
+    code;
+    text_area = None;
+    status = Reactive.var Non_initialized;
+  }
 
 let ensure te =
   match Reactive.peek te.status with
   | Initialized -> ()
   | Non_initialized ->
-      dbgf "Initializing %S" te.id ;
+      dbgf "Initializing %S" te.id;
       let (_ : unit) =
         Fmt.kstr Js_of_ocaml.Js.Unsafe.eval_string
           {js|
@@ -69,7 +76,8 @@ lang_script.onload = function () {
 }};
 |js}
           code_mirror code_mirror code_mirror te.language te.language te.id
-          te.language te.id te.id te.id in
+          te.language te.id te.id te.id
+      in
       Reactive.set te.status Initialized
 
 let text_area te =
@@ -130,11 +138,12 @@ let editor_command_button te ~text command_name =
 
  *)
 let set_code te ~code =
-  Reactive.Bidirectional.set te.code code ;
+  Reactive.Bidirectional.set te.code code;
   let _ =
     let open Js_of_ocaml in
     Js.Unsafe.meth_call
       (Js.Unsafe.get Dom_html.window (Js.string te.id))
       "setValue"
-      [|Js.string code |> Js.Unsafe.inject|] in
+      [| Js.string code |> Js.Unsafe.inject |]
+  in
   ()

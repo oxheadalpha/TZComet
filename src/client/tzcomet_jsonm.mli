@@ -22,6 +22,16 @@
 
 (** {1:datamodel JSON data model} *)
 
+type lexeme =
+  [ `Null
+  | `Bool of bool
+  | `String of string
+  | `Float of float
+  | `Name of string
+  | `As
+  | `Ae
+  | `Os
+  | `Oe ]
 (** The type for JSON lexemes. [`As] and [`Ae] start and end arrays and [`Os]
     and [`Oe] start and end objects. [`Name] is for the member names of objects.
 
@@ -51,18 +61,8 @@
     module. In these strings, the delimiter characters [U+0022] and [U+005C]
     (['"'], ['\']) aswell as the control characters [U+0000-U+001F] are
     automatically escaped by the encoders, as mandated by the standard. *)
-type lexeme =
-  [ `Null
-  | `Bool of bool
-  | `String of string
-  | `Float of float
-  | `Name of string
-  | `As
-  | `Ae
-  | `Os
-  | `Oe ]
 
-val pp_lexeme : Format.formatter -> [< lexeme] -> unit
+val pp_lexeme : Format.formatter -> [< lexeme ] -> unit
 (** [pp_lexeme ppf l] prints a unspecified non-JSON representation of [l] on
     [ppf]. *)
 
@@ -80,7 +80,7 @@ type error =
   | `Illegal_bytes of string
   | `Illegal_literal of string
   | `Illegal_number of string
-  | `Unclosed of [`As | `Os | `String | `Comment]
+  | `Unclosed of [ `As | `Os | `String | `Comment ]
   | `Expected of
     [ `Comment
     | `Value
@@ -93,26 +93,26 @@ type error =
 
 (** The type for decoding errors. *)
 
-val pp_error : Format.formatter -> [< error] -> unit
+val pp_error : Format.formatter -> [< error ] -> unit
 (** [pp_error e] prints an unspecified UTF-8 representation of [e] on [ppf]. *)
 
+type encoding = [ `UTF_8 | `UTF_16 | `UTF_16BE | `UTF_16LE ]
 (** The type for Unicode encoding schemes. *)
-type encoding = [`UTF_8 | `UTF_16 | `UTF_16BE | `UTF_16LE]
 
+type src = [ `Channel of in_channel | `String of string | `Manual ]
 (** The type for input sources. With a [`Manual] source the client must provide
     input with {!Manual.src}. *)
-type src = [`Channel of in_channel | `String of string | `Manual]
 
-(** The type for JSON decoders. *)
 type decoder
+(** The type for JSON decoders. *)
 
-val decoder : ?encoding:[< encoding] -> [< src] -> decoder
+val decoder : ?encoding:[< encoding ] -> [< src ] -> decoder
 (** [decoder encoding src] is a JSON decoder that inputs from [src]. [encoding]
     specifies the character encoding of the data. If unspecified the encoding is
     guessed as {{:http://tools.ietf.org/html/rfc4627#section-3} suggested} by
     the old RFC4627 standard. *)
 
-val decode : decoder -> [> `Await | `Lexeme of lexeme | `End | `Error of error]
+val decode : decoder -> [> `Await | `Lexeme of lexeme | `End | `Error of error ]
 (** [decode d] is:
 
     - [`Await] if [d] has a [`Manual] source and awaits for more input. The
@@ -145,20 +145,21 @@ val decoder_src : decoder -> src
 
 (** {1:encode Encode} *)
 
+type dst = [ `Channel of out_channel | `Buffer of Buffer.t | `Manual ]
 (** The type for output destinations. With a [`Manual] destination the client
     must provide output storage with {!Manual.dst}. *)
-type dst = [`Channel of out_channel | `Buffer of Buffer.t | `Manual]
 
-(** The type for JSON encoders. *)
 type encoder
+(** The type for JSON encoders. *)
 
-val encoder : ?minify:bool -> [< dst] -> encoder
+val encoder : ?minify:bool -> [< dst ] -> encoder
 (** [encoder minify dst] is an encoder that outputs to [dst]. If [minify] is
     [true] (default) the output is made as compact as possible, otherwise the
     output is indented. If you want better control on whitespace use
     [minify = true] and {!Uncut.encode}. *)
 
-val encode : encoder -> [< `Await | `End | `Lexeme of lexeme] -> [`Ok | `Partial]
+val encode :
+  encoder -> [< `Await | `End | `Lexeme of lexeme ] -> [ `Ok | `Partial ]
 (** [encode e v] is:
 
     - [`Partial] iff [e] has a [`Manual] destination and needs more output
@@ -245,37 +246,37 @@ module Uncut : sig
   (** {1 Decode} *)
 
   val decode :
-       decoder
-    -> [ `Await
-       | `Lexeme of lexeme
-       | `White of string
-       | `Comment of [`S | `M] * string
-       | `End
-       | `Error of error ]
+    decoder ->
+    [ `Await
+    | `Lexeme of lexeme
+    | `White of string
+    | `Comment of [ `S | `M ] * string
+    | `End
+    | `Error of error ]
   (** [decode d] is like {!Jsonm.decode} but for the {{!uncutdatamodel} uncut
       data model}. *)
 
   val pp_decode :
-       Format.formatter
-    -> [< `Await
-       | `Lexeme of lexeme
-       | `White of string
-       | `Comment of [`S | `M] * string
-       | `End
-       | `Error of error ]
-    -> unit
+    Format.formatter ->
+    [< `Await
+    | `Lexeme of lexeme
+    | `White of string
+    | `Comment of [ `S | `M ] * string
+    | `End
+    | `Error of error ] ->
+    unit
   (** [pp_decode ppf v] prints an unspecified representation of [v] on [ppf]. *)
 
   (** {1 Encode} *)
 
   val encode :
-       encoder
-    -> [< `Await
-       | `Lexeme of lexeme
-       | `White of string
-       | `Comment of [`S | `M] * string
-       | `End ]
-    -> [`Ok | `Partial]
+    encoder ->
+    [< `Await
+    | `Lexeme of lexeme
+    | `White of string
+    | `Comment of [ `S | `M ] * string
+    | `End ] ->
+    [ `Ok | `Partial ]
   (** [encode] is like {!Jsonm.encode} but for the {{!uncutdatamodel} uncut data
       model}.
 
@@ -354,18 +355,19 @@ end
 
     {[
       let trip ?encoding ?minify
-          (src : [`Channel of in_channel | `String of string])
-          (dst : [`Channel of out_channel | `Buffer of Buffer.t]) =
+          (src : [ `Channel of in_channel | `String of string ])
+          (dst : [ `Channel of out_channel | `Buffer of Buffer.t ]) =
         let rec loop d e =
           match Jsonm.decode d with
           | `Lexeme _ as v ->
-              ignore (Jsonm.encode e v) ;
+              ignore (Jsonm.encode e v);
               loop d e
           | `End ->
-              ignore (Jsonm.encode e `End) ;
+              ignore (Jsonm.encode e `End);
               `Ok
           | `Error err -> `Error (Jsonm.decoded_range d, err)
-          | `Await -> assert false in
+          | `Await -> assert false
+        in
         let d = Jsonm.decoder ?encoding src in
         let e = Jsonm.encoder ?minify dst in
         loop d e
@@ -387,15 +389,19 @@ end
                   with Unix.Unix_error (Unix.EINTR, _, _) -> write fd s j l
                 in
                 let wc = write fd s j l in
-                if wc < l then unix_write fd s (j + wc) (l - wc) else () in
-              unix_write fd s 0 (Bytes.length s - Jsonm.Manual.dst_rem e) ;
-              Jsonm.Manual.dst e s 0 (Bytes.length s) ;
-              encode fd s e `Await in
+                if wc < l then unix_write fd s (j + wc) (l - wc) else ()
+              in
+              unix_write fd s 0 (Bytes.length s - Jsonm.Manual.dst_rem e);
+              Jsonm.Manual.dst e s 0 (Bytes.length s);
+              encode fd s e `Await
+        in
         let rec loop fdi fdo ds es d e =
           match Jsonm.decode d with
-          | `Lexeme _ as v -> encode fdo es e v ; loop fdi fdo ds es d e
+          | `Lexeme _ as v ->
+              encode fdo es e v;
+              loop fdi fdo ds es d e
           | `End ->
-              encode fdo es e `End ;
+              encode fdo es e `End;
               `Ok
           | `Error err -> `Error (Jsonm.decoded_range d, err)
           | `Await ->
@@ -404,12 +410,14 @@ end
                 with Unix.Unix_error (Unix.EINTR, _, _) -> unix_read fd s j l
               in
               let rc = unix_read fdi ds 0 (Bytes.length ds) in
-              Jsonm.Manual.src d ds 0 rc ; loop fdi fdo ds es d e in
+              Jsonm.Manual.src d ds 0 rc;
+              loop fdi fdo ds es d e
+        in
         let ds = Bytes.create 65536 (* UNIX_BUFFER_SIZE in 4.0.0 *) in
         let es = Bytes.create 65536 (* UNIX_BUFFER_SIZE in 4.0.0 *) in
         let d = Jsonm.decoder ?encoding `Manual in
         let e = Jsonm.encoder ?minify `Manual in
-        Jsonm.Manual.dst e es 0 (Bytes.length es) ;
+        Jsonm.Manual.dst e es 0 (Bytes.length es);
         loop fdi fdo ds es d e
     ]}
 
@@ -421,17 +429,18 @@ end
 
     {[
       let memsel ?encoding names
-          (src : [`Channel of in_channel | `String of string]) =
+          (src : [ `Channel of in_channel | `String of string ]) =
         let rec loop acc names d =
           match Jsonm.decode d with
           | `Lexeme (`Name n) when List.mem n names -> begin
-            match Jsonm.decode d with
-            | `Lexeme (`String s) -> loop (s :: acc) names d
-            | _ -> loop acc names d
-          end
+              match Jsonm.decode d with
+              | `Lexeme (`String s) -> loop (s :: acc) names d
+              | _ -> loop acc names d
+            end
           | `Lexeme _ | `Error _ -> loop acc names d
           | `End -> List.rev acc
-          | `Await -> assert false in
+          | `Await -> assert false
+        in
         loop [] names (Jsonm.decoder ?encoding src)
     ]}
 
@@ -456,12 +465,13 @@ end
       exception Escape of ((int * int) * (int * int)) * Jsonm.error
 
       let json_of_src ?encoding
-          (src : [`Channel of in_channel | `String of string]) =
+          (src : [ `Channel of in_channel | `String of string ]) =
         let dec d =
           match Jsonm.decode d with
           | `Lexeme l -> l
           | `Error e -> raise (Escape (Jsonm.decoded_range d, e))
-          | `End | `Await -> assert false in
+          | `End | `Await -> assert false
+        in
         let rec value v k d =
           match v with
           | `Os -> obj [] k d
@@ -476,7 +486,8 @@ end
           match dec d with
           | `Oe -> k (`O (List.rev ms)) d
           | `Name n -> value (dec d) (fun v -> obj ((n, v) :: ms) k) d
-          | _ -> assert false in
+          | _ -> assert false
+        in
         let d = Jsonm.decoder ?encoding src in
         try `JSON (value (dec d) (fun v _ -> v) d)
         with Escape (r, e) -> `Error (r, e)
@@ -487,34 +498,37 @@ end
 
     {[
       let json_to_dst ~minify
-          (dst : [`Channel of out_channel | `Buffer of Buffer.t]) (json : json)
-          =
+          (dst : [ `Channel of out_channel | `Buffer of Buffer.t ])
+          (json : json) =
         let enc e l = ignore (Jsonm.encode e (`Lexeme l)) in
         let rec value v k e =
           match v with
           | `A vs -> arr vs k e
           | `O ms -> obj ms k e
-          | (`Null | `Bool _ | `Float _ | `String _) as v -> enc e v ; k e
+          | (`Null | `Bool _ | `Float _ | `String _) as v ->
+              enc e v;
+              k e
         and arr vs k e =
-          enc e `As ;
+          enc e `As;
           arr_vs vs k e
         and arr_vs vs k e =
           match vs with
           | v :: vs' -> value v (arr_vs vs' k) e
           | [] ->
-              enc e `Ae ;
+              enc e `Ae;
               k e
         and obj ms k e =
-          enc e `Os ;
+          enc e `Os;
           obj_ms ms k e
         and obj_ms ms k e =
           match ms with
           | (n, v) :: ms ->
-              enc e (`Name n) ;
+              enc e (`Name n);
               value v (obj_ms ms k) e
           | [] ->
-              enc e `Oe ;
-              k e in
+              enc e `Oe;
+              k e
+        in
         let e = Jsonm.encoder ~minify dst in
         let finish e = ignore (Jsonm.encode e `End) in
         value json finish e

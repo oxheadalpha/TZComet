@@ -2,3 +2,4 @@ version=0.24.1
 profile=default
 exp-grouping=preserve
 parse-docstrings
+sequence-blank-line=compact

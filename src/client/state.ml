@@ -10,23 +10,23 @@ module Page = struct
     | Settings -> "Settings"
     | About -> "About"
 
-  let all_in_order = [Explorer; Editor; Token_viewer; Settings; About]
+  let all_in_order = [ Explorer; Editor; Token_viewer; Settings; About ]
 end
 
 open Page
 
 module Editor_mode = struct
-  type format = [`Uri | `Hex | `Michelson | `Metadata_json]
-  type t = [`Guess | format]
+  type format = [ `Uri | `Hex | `Michelson | `Metadata_json ]
+  type t = [ `Guess | format ]
 
-  let to_string : [< t] -> string = function
+  let to_string : [< t ] -> string = function
     | `Guess -> "guess"
     | `Uri -> "uri"
     | `Hex -> "hex"
     | `Michelson -> "michelson"
     | `Metadata_json -> "metadata"
 
-  let all : t list = [`Guess; `Uri; `Hex; `Michelson; `Metadata_json]
+  let all : t list = [ `Guess; `Uri; `Hex; `Michelson; `Metadata_json ]
 
   let explain : t -> _ =
     let open Meta_html in
@@ -39,24 +39,25 @@ module Editor_mode = struct
     | `Guess -> t "Use heuristics to guess your intended format."
 end
 
-type t =
-  { page: [`Page of Page.t | `Changing_to of Page.t] Reactive.var
-  ; explorer_input: string Reactive.var
-  ; explorer_go: bool Reactive.var
-  ; explorer_went: bool Reactive.var
-  ; explorer_result: Html_types.div_content_fun Meta_html.H5.elt Async_work.t
-  ; editor_content: string Reactive.var
-  ; editor_mode: Editor_mode.t Reactive.var
-  ; editor_load: bool Reactive.var
-  ; editor_should_load: bool Reactive.var
-  ; token_address: string Reactive.var
-  ; token_id: string Reactive.var
-  ; check_micheline_indentation: bool Reactive.var
-  ; always_show_multimedia: bool Reactive.var
-  ; show_token_details: bool Reactive.var
-  ; current_network: Network.t Reactive.var }
+type t = {
+  page : [ `Page of Page.t | `Changing_to of Page.t ] Reactive.var;
+  explorer_input : string Reactive.var;
+  explorer_go : bool Reactive.var;
+  explorer_went : bool Reactive.var;
+  explorer_result : Html_types.div_content_fun Meta_html.H5.elt Async_work.t;
+  editor_content : string Reactive.var;
+  editor_mode : Editor_mode.t Reactive.var;
+  editor_load : bool Reactive.var;
+  editor_should_load : bool Reactive.var;
+  token_address : string Reactive.var;
+  token_id : string Reactive.var;
+  check_micheline_indentation : bool Reactive.var;
+  always_show_multimedia : bool Reactive.var;
+  show_token_details : bool Reactive.var;
+  current_network : Network.t Reactive.var;
+}
 
-let get (state : < gui: t ; .. > Context.t) = state#gui
+let get (state : < gui : t ; .. > Context.t) = state#gui
 let local_storage_filename = "tzcomet-editor-input"
 
 module Fragment = struct
@@ -68,36 +69,47 @@ module Fragment = struct
       ~editor_mode ~token_address ~token_id ~check_micheline_indentation
       ~editor_load ~always_show_multimedia ~show_token_details =
     let query =
-      match explorer_input with "" -> [] | more -> [("explorer-input", [more])]
+      match explorer_input with
+      | "" -> []
+      | more -> [ ("explorer-input", [ more ]) ]
     in
     let query =
       match editor_input with
       | "" -> query
-      | more -> ("editor-input", [more]) :: query in
-    let query = if not dev_mode then query else ("dev", ["true"]) :: query in
-    let query = if not explorer_go then query else ("go", ["true"]) :: query in
+      | more -> ("editor-input", [ more ]) :: query
+    in
+    let query = if not dev_mode then query else ("dev", [ "true" ]) :: query in
+    let query =
+      if not explorer_go then query else ("go", [ "true" ]) :: query
+    in
     let query =
       if not check_micheline_indentation then query
-      else ("check-micheline-indentation", ["true"]) :: query in
+      else ("check-micheline-indentation", [ "true" ]) :: query
+    in
     let query =
       match editor_mode with
       | `Guess -> query
-      | other -> ("editor-mode", [Editor_mode.to_string other]) :: query in
+      | other -> ("editor-mode", [ Editor_mode.to_string other ]) :: query
+    in
     let query =
-      if editor_load then ("load-storage", ["true"]) :: query else query in
+      if editor_load then ("load-storage", [ "true" ]) :: query else query
+    in
     let query =
       if always_show_multimedia then
-        ("always-show-multimedia", ["true"]) :: query
-      else query in
+        ("always-show-multimedia", [ "true" ]) :: query
+      else query
+    in
     let query =
-      if show_token_details then ("show-token-details", ["true"]) :: query
-      else query in
+      if show_token_details then ("show-token-details", [ "true" ]) :: query
+      else query
+    in
     let path, query =
       match (page, token_address, token_id) with
       | _, "", "" -> (page_to_path page, query)
       | Token_viewer, kt, id -> (Fmt.str "/token/%s/%s" kt id, query)
       | _, kt, id ->
-          (page_to_path page, ("token", [Fmt.str "%s/%s" kt id]) :: query) in
+          (page_to_path page, ("token", [ Fmt.str "%s/%s" kt id ]) :: query)
+    in
     Uri.make () ~path ~query
 
   let change_for_page t page = Uri.with_path t (page_to_path page)
@@ -107,11 +119,13 @@ module Fragment = struct
     let query = Uri.query uri in
     let in_query = List.Assoc.find ~equal:String.equal query in
     let true_in_query q =
-      match in_query q with Some ["true"] -> true | _ -> false in
+      match in_query q with Some [ "true" ] -> true | _ -> false
+    in
     let dev_mode = true_in_query "dev" in
     let mich_indent = true_in_query "check-micheline-indentation" in
     let explorer_input =
-      match in_query "explorer-input" with Some [one] -> one | _ -> "" in
+      match in_query "explorer-input" with Some [ one ] -> one | _ -> ""
+    in
     let editor_mode =
       Option.bind (in_query "editor-mode") ~f:(function
         | [] -> None
@@ -119,61 +133,70 @@ module Fragment = struct
             List.find Editor_mode.all ~f:(fun mode ->
                 String.equal
                   (String.lowercase (Editor_mode.to_string mode))
-                  (one |> String.lowercase) ) )
-      |> Option.value ~default:`Guess in
+                  (one |> String.lowercase)))
+      |> Option.value ~default:`Guess
+    in
     let explorer_go = true_in_query "go" in
     let editor_load = true_in_query "load-storage" in
     let always_show_multimedia = true_in_query "always-show-multimedia" in
     let show_token_details = true_in_query "show-token-details" in
     let editor_input =
-      match in_query "editor-input" with Some [one] -> one | _ -> "" in
+      match in_query "editor-input" with Some [ one ] -> one | _ -> ""
+    in
     let extra_nodes =
-      List.concat_map query ~f:(function "add-node", l -> l | _ -> []) in
+      List.concat_map query ~f:(function "add-node", l -> l | _ -> [])
+    in
     let page, (token_address, token_id) =
       let path_split =
         Uri.path uri
         |> String.chop_prefix_if_exists ~prefix:"/"
-        |> String.split ~on:'/' in
+        |> String.split ~on:'/'
+      in
       let token_in_query () =
         match in_query "token" with
-        | Some [one] -> (
-          match String.split one ~on:'/' with
-          | [k] -> (k, "0")
-          | [k; t] -> (k, t)
-          | _ -> ("", "") )
-        | _ -> ("", "") in
+        | Some [ one ] -> (
+            match String.split one ~on:'/' with
+            | [ k ] -> (k, "0")
+            | [ k; t ] -> (k, t)
+            | _ -> ("", ""))
+        | _ -> ("", "")
+      in
       match path_split with
-      | [pagename] ->
+      | [ pagename ] ->
           let page =
             List.find all_in_order ~f:(fun page ->
                 String.equal
                   (String.lowercase (Page.to_string page))
-                  (pagename |> String.lowercase) )
-            |> Option.value ~default:Explorer in
+                  (pagename |> String.lowercase))
+            |> Option.value ~default:Explorer
+          in
           (page, token_in_query ())
-      | ["token"; addr; id] -> (Token_viewer, (addr, id))
-      | _ -> (Explorer, token_in_query ()) in
-    ( System.create ~dev_mode ()
-    , `Extra_node_prefixes extra_nodes
-    , { page= Reactive.var (`Page page)
-      ; explorer_input= Reactive.var explorer_input
-      ; explorer_go= Reactive.var explorer_go
-      ; explorer_went=
+      | [ "token"; addr; id ] -> (Token_viewer, (addr, id))
+      | _ -> (Explorer, token_in_query ())
+    in
+    ( System.create ~dev_mode (),
+      `Extra_node_prefixes extra_nodes,
+      {
+        page = Reactive.var (`Page page);
+        explorer_input = Reactive.var explorer_input;
+        explorer_go = Reactive.var explorer_go;
+        explorer_went =
           (* If page is not the explorer we will ignore the command =
              assume it aready happened. *)
-          Reactive.var Poly.(page <> Page.Explorer)
-      ; explorer_result= Async_work.empty ()
-      ; editor_content= Reactive.var editor_input
-      ; editor_mode= Reactive.var editor_mode
-      ; editor_load= Reactive.var editor_load
-      ; editor_should_load=
-          Reactive.var (editor_load && String.is_empty editor_input)
-      ; token_address= Reactive.var token_address
-      ; token_id= Reactive.var token_id
-      ; check_micheline_indentation= Reactive.var mich_indent
-      ; always_show_multimedia= Reactive.var always_show_multimedia
-      ; show_token_details= Reactive.var show_token_details
-      ; current_network= Reactive.var `Mainnet } )
+          Reactive.var Poly.(page <> Page.Explorer);
+        explorer_result = Async_work.empty ();
+        editor_content = Reactive.var editor_input;
+        editor_mode = Reactive.var editor_mode;
+        editor_load = Reactive.var editor_load;
+        editor_should_load =
+          Reactive.var (editor_load && String.is_empty editor_input);
+        token_address = Reactive.var token_address;
+        token_id = Reactive.var token_id;
+        check_micheline_indentation = Reactive.var mich_indent;
+        always_show_multimedia = Reactive.var always_show_multimedia;
+        show_token_details = Reactive.var show_token_details;
+        current_network = Reactive.var `Mainnet;
+      } )
 end
 
 (* in
@@ -215,8 +238,8 @@ let load_editor_content ctxt =
 let editor_content ctxt =
   let s = get ctxt in
   if Reactive.peek s.editor_should_load then (
-    load_editor_content ctxt ;
-    Reactive.set s.editor_should_load false ) ;
+    load_editor_content ctxt;
+    Reactive.set s.editor_should_load false);
   (get ctxt).editor_content |> Reactive.Bidirectional.of_var
 
 let editor_mode ctxt = Reactive.get (get ctxt).editor_mode
@@ -266,7 +289,8 @@ let make_fragment ?(side_effects = true) ctxt =
   let dev = dev_mode ctxt in
   let page =
     Reactive.get state.page
-    |> Reactive.map ~f:(function `Page p | `Changing_to p -> p) in
+    |> Reactive.map ~f:(function `Page p | `Changing_to p -> p)
+  in
   let explorer_input = Reactive.get state.explorer_input in
   let editor_input = Reactive.get state.editor_content in
   let explorer_go = Reactive.get state.explorer_go in
@@ -279,17 +303,17 @@ let make_fragment ?(side_effects = true) ctxt =
     ** get state.show_token_details)
   |> Reactive.map
        ~f:(fun
-            ( dev_mode
-            , ( page
-              , ( explorer_input
-                , ( explorer_go
-                  , ( editor_input
-                    , ( editor_mode
-                      , ( token_address
-                        , ( token_id
-                          , ( check_micheline_indentation
-                            , ( editor_load
-                              , (always_show_multimedia, show_token_details) )
+            ( dev_mode,
+              ( page,
+                ( explorer_input,
+                  ( explorer_go,
+                    ( editor_input,
+                      ( editor_mode,
+                        ( token_address,
+                          ( token_id,
+                            ( check_micheline_indentation,
+                              ( editor_load,
+                                (always_show_multimedia, show_token_details) )
                             ) ) ) ) ) ) ) ) )
           ->
          let now =
@@ -303,25 +327,28 @@ let make_fragment ?(side_effects = true) ctxt =
          in
          if side_effects then (
            let current = Js_of_ocaml.Url.Current.get_fragment () in
-           dbgf "Updating fragment %S → %a" current Fragment.pp now ;
-           Current.set_fragment (Fragment.to_string now) ) ;
-         now )
+           dbgf "Updating fragment %S → %a" current Fragment.pp now;
+           Current.set_fragment (Fragment.to_string now));
+         now)
 
 let link_to_editor ctxt content ~text =
   let open Meta_html in
   let fragment = make_fragment ~side_effects:false ctxt in
   let href =
     Reactive.(map fragment) ~f:(fun frg ->
-        "#" ^ Fragment.(to_string (change_for_page frg Page.Editor)) ) in
+        "#" ^ Fragment.(to_string (change_for_page frg Page.Editor)))
+  in
   a
     ~a:
-      [ H5.a_href href
-      ; H5.a_onclick
+      [
+        H5.a_href href;
+        H5.a_onclick
           (Tyxml_lwd.Lwdom.attr (fun _ ->
-               Reactive.set (get ctxt).editor_should_load false ;
-               set_editor_content ctxt text ;
-               set_page ctxt (`Changing_to Page.Editor) () ;
-               false ) ) ]
+               Reactive.set (get ctxt).editor_should_load false;
+               set_editor_content ctxt text;
+               set_page ctxt (`Changing_to Page.Editor) ();
+               false));
+      ]
     content
 
 let link_to_explorer ctxt content ~search =
@@ -329,17 +356,20 @@ let link_to_explorer ctxt content ~search =
   let fragment = make_fragment ~side_effects:false ctxt in
   let href =
     Reactive.(map fragment) ~f:(fun frg ->
-        "#" ^ Fragment.(to_string (change_for_page frg Page.Explorer)) ) in
+        "#" ^ Fragment.(to_string (change_for_page frg Page.Explorer)))
+  in
   a
     ~a:
-      [ H5.a_href href
-      ; H5.a_onclick
+      [
+        H5.a_href href;
+        H5.a_onclick
           (Tyxml_lwd.Lwdom.attr (fun _ ->
-               Reactive.set (get ctxt).explorer_go true ;
-               Reactive.set (get ctxt).explorer_went false ;
-               set_explorer_input ctxt search ;
-               set_page ctxt (`Changing_to Page.Explorer) () ;
-               false ) ) ]
+               Reactive.set (get ctxt).explorer_go true;
+               Reactive.set (get ctxt).explorer_went false;
+               set_explorer_input ctxt search;
+               set_page ctxt (`Changing_to Page.Explorer) ();
+               false));
+      ]
     content
 
 let link_to_token_viewer ctxt content ~token_address ~token_id =
@@ -347,17 +377,19 @@ let link_to_token_viewer ctxt content ~token_address ~token_id =
   let fragment = make_fragment ~side_effects:false ctxt in
   let href =
     Reactive.(map fragment) ~f:(fun frg ->
-        "#" ^ Fragment.(to_string (change_for_page frg Page.Token_viewer)) )
+        "#" ^ Fragment.(to_string (change_for_page frg Page.Token_viewer)))
   in
   a
     ~a:
-      [ H5.a_href href
-      ; H5.a_onclick
+      [
+        H5.a_href href;
+        H5.a_onclick
           (Tyxml_lwd.Lwdom.attr (fun _ ->
-               Reactive.set (get ctxt).token_address token_address ;
-               Reactive.set (get ctxt).token_id token_id ;
-               set_page ctxt (`Changing_to Page.Token_viewer) () ;
-               false ) ) ]
+               Reactive.set (get ctxt).token_address token_address;
+               Reactive.set (get ctxt).token_id token_id;
+               set_page ctxt (`Changing_to Page.Token_viewer) ();
+               false));
+      ]
     content
 
 let if_explorer_should_go state f =
@@ -365,8 +397,8 @@ let if_explorer_should_go state f =
     (get state).explorer_go |> Lwd.peek
     && not ((get state).explorer_went |> Lwd.peek)
   then (
-    Lwd.set (get state).explorer_went true ;
-    f () )
+    Lwd.set (get state).explorer_went true;
+    f ())
   else ()
 
 module Examples = struct
@@ -376,12 +408,13 @@ module Examples = struct
 
   type item = string * string
 
-  type t =
-    { contracts: item list
-    ; uris: item list
-    ; metadata_blobs: item list
-    ; michelson_bytes: item list
-    ; michelson_concretes: item list }
+  type t = {
+    contracts : item list;
+    uris : item list;
+    metadata_blobs : item list;
+    michelson_bytes : item list;
+    michelson_concretes : item list;
+  }
 
   let aggl ?(dev = false) () =
     let all = ref [] in
@@ -397,14 +430,16 @@ module Examples = struct
     let hash_of_https_ok =
       (* `sha256sum data/metadata_example0.json` → Achtung, the URL
          above takes about 5 minutes to be up to date with `master` *)
-      "5fba33eccc1b310add3e66a76fe7c9cd8267b519f2f78a88b72868936a5cb28d" in
+      "5fba33eccc1b310add3e66a76fe7c9cd8267b519f2f78a88b72868936a5cb28d"
+    in
     let sha256_https_ok =
       Fmt.str "sha256://0x%s/%s" hash_of_https_ok (Uri.pct_encode https_ok)
     in
     let sha256_https_ko =
       Fmt.str "sha256://0x%s/%s"
         (String.tr hash_of_https_ok ~target:'9' ~replacement:'1')
-        (Uri.pct_encode https_ok) in
+        (Uri.pct_encode https_ok)
+    in
     dev_mode state
     |> Reactive.map ~f:(fun dev ->
            let kt1, kt1_dev, kt1_all = aggl ~dev () in
@@ -413,63 +448,65 @@ module Examples = struct
            let mby, mby_dev, mby_all = aggl ~dev () in
            let tzc, tzc_dev, tzc_all = aggl ~dev () in
            kt1 alchememist_blockchain_adventures
-             "An NFT collection by “The Alchememist” on Mainnet." ;
+             "An NFT collection by “The Alchememist” on Mainnet.";
            kt1 hicetnunc_version_2
-             "The version 2 of Hic Et Nunc's collection on Mainnet." ;
-           kt1_dev kalamint "Kalamint's NFT collection on Mainnet (invalid)." ;
+             "The version 2 of Hic Et Nunc's collection on Mainnet.";
+           kt1_dev kalamint "Kalamint's NFT collection on Mainnet (invalid).";
            kt1_dev "KT1JZFiBBt6Xzu2XEbXdBPt8Y624tN1Comet"
-             "Should not exist any where." ;
+             "Should not exist any where.";
            let one_off_chain_view =
              let kt1 = kt1_dev in
              (* BEGIN The ones made by ./please.sh deploy examples all *)
              let de0 = "KT1EkhJrwU6XcBbNnR7N34vB75Q97CXvW687" in
-             kt1 de0 "Empty contract" ;
+             kt1 de0 "Empty contract";
              let empty_metadata = "KT1GosuTFssM2k6jvVVF8m27uMKX2H5Nno3V" in
-             kt1 empty_metadata "The missing metadata one." ;
+             kt1 empty_metadata "The missing metadata one.";
              let wrong_uri = "KT1L9NrvkSFLiRyz5m4zmT5MHM7k7yf7gPXX" in
-             kt1 wrong_uri "Has a URI that points nowhere." ;
+             kt1 wrong_uri "Has a URI that points nowhere.";
              let empty_but_valid = "KT19ANJVafahVicNTEC1dsGkEPSVizkPsvWe" in
-             kt1 empty_but_valid "Empty, but valid metadata." ;
+             kt1 empty_but_valid "Empty, but valid metadata.";
              let just_version = "KT19b2ZYsm6RK1691En4tsVH2uPw4yJvcASa" in
-             kt1 just_version "Has just a version string." ;
+             kt1 just_version "Has just a version string.";
              let with_basics = "KT19MiqX1i3Lf4L58rDymzKYBCfKFMVT3u2a" in
-             kt1 with_basics "This contract has few more fields." ;
+             kt1 with_basics "This contract has few more fields.";
              let one_off_chain_view = "KT1C7nECC1BGZ163mRcvPvTi7AUvx18URMZ6" in
              kt1 one_off_chain_view
                "This contract has a one off-chain-view which is actually \
-                reused for the error-translation." ;
+                reused for the error-translation.";
              let bunch_of_views = "KT18oQxCaVcYTgjfF8Rzgr49ZMfM2fnUPZj3" in
-             kt1 bunch_of_views "This contract has a bunch of off-chain-views." ;
+             kt1 bunch_of_views "This contract has a bunch of off-chain-views.";
              let invalid_uri = "KT1T1qLqHCTdhQttfLzxYCvtfDp9v9kXUP6j" in
-             kt1 invalid_uri "Has a URI that is invalid." ;
+             kt1 invalid_uri "Has a URI that is invalid.";
              let invalid_version_field =
-               "KT1FmdGZCkH31d4vnNswLc1LVZCxocBwTnBt" in
+               "KT1FmdGZCkH31d4vnNswLc1LVZCxocBwTnBt"
+             in
              kt1 invalid_version_field
-               "Points to invalid metadata (wrong version field)." ;
+               "Points to invalid metadata (wrong version field).";
              let views_return_bytes = "KT1J8Kq8uNHY7GrPfGtTqNBEupNu9i2vJ7yc" in
              kt1 views_return_bytes
-               "This contract has bytes-returning off-chain-views." ;
+               "This contract has bytes-returning off-chain-views.";
              (* END of the generated ones. *)
-             one_off_chain_view in
-           uri https_ok "A valid HTTPS URI." ;
-           uri sha256_https_ok "A valid SHA256+HTTPS URI." ;
+             one_off_chain_view
+           in
+           uri https_ok "A valid HTTPS URI.";
+           uri sha256_https_ok "A valid SHA256+HTTPS URI.";
            uri_dev sha256_https_ko
-             "A valid SHA256+HTTPS URI but the hash is not right." ;
+             "A valid SHA256+HTTPS URI but the hash is not right.";
            uri
              (Fmt.str "tezos-storage://%s/contents" one_off_chain_view)
-             "An on-chain pointer to metadata." ;
+             "An on-chain pointer to metadata.";
            uri_dev
              (Fmt.str "tezos-storage://%s.NetXrtZMmJmZSeb/contents"
-                one_off_chain_view )
-             "An on-chain pointer to metadata with chain-id." ;
+                one_off_chain_view)
+             "An on-chain pointer to metadata with chain-id.";
            uri_dev "tezos-storage:/here"
-             "An on-chain pointer that requires a KT1 in context." ;
+             "An on-chain pointer that requires a KT1 in context.";
            uri "ipfs://QmWDcp3BpBjvu8uJYxVqb7JLfr1pcyXsL97Cfkt3y1758o"
-             "An IPFS URI to metadata JSON." ;
-           uri_dev "ipfs://ldisejdse-dlseidje" "An invalid IPFS URI." ;
-           mtb "{}" "Empty, but valid, Metadata" ;
+             "An IPFS URI to metadata JSON.";
+           uri_dev "ipfs://ldisejdse-dlseidje" "An invalid IPFS URI.";
+           mtb "{}" "Empty, but valid, Metadata";
            mtb {json|{"description": "This is just a description."}|json}
-             "Metadata with just a description." ;
+             "Metadata with just a description.";
            (* let all_mtb_from_lib =
                 let open Tezos_contract_metadata.Metadata_contents in
                 let rec go n =
@@ -479,7 +516,7 @@ module Examples = struct
                   mtb_dev
                     (Tezos_contract_metadata.Metadata_contents.to_json v)
                     (Fmt.str "Meaningless example #%d" ith) ) ; *)
-           mby "0x05030b" "The Unit value, PACKed." ;
+           mby "0x05030b" "The Unit value, PACKed.";
            mby
              "050707010000000c486\n\
               56c6c6f20576f726c64\n\
@@ -488,68 +525,80 @@ module Examples = struct
               0003626172070401000\n\
               0000474686973010000\n\
               000474686174"
-             "Michelson with a (map string string)." ;
-           mby_dev "0x05" "Empty but still Michelsonian bytes." ;
+             "Michelson with a (map string string).";
+           mby_dev "0x05" "Empty but still Michelsonian bytes.";
            (let tzself f c = Fmt.kstr (f c) "Michelson %S" c in
             List.iter ~f:(tzself tzc)
-              ["Unit"; "12"; "\"hello world\""; "(Pair 42 51)"] ;
+              [ "Unit"; "12"; "\"hello world\""; "(Pair 42 51)" ];
             List.iter ~f:(tzself tzc_dev)
-              ["Unit 12"; "\"hœlló wörld\""; "(Pair 42 51 \"meh\")"] ) ;
-           { contracts= kt1_all ()
-           ; uris= uri_all ()
-           ; metadata_blobs= mtb_all ()
-           ; michelson_bytes= mby_all ()
-           ; michelson_concretes= tzc_all () } )
+              [ "Unit 12"; "\"hœlló wörld\""; "(Pair 42 51 \"meh\")" ]);
+           {
+             contracts = kt1_all ();
+             uris = uri_all ();
+             metadata_blobs = mtb_all ();
+             michelson_bytes = mby_all ();
+             michelson_concretes = tzc_all ();
+           })
 
-  type 'weight_type candidate =
-    { weight: 'weight_type
-    ; name: string
-    ; address: string
-    ; tokens: [`Range of int * int] }
+  type 'weight_type candidate = {
+    weight : 'weight_type;
+    name : string;
+    address : string;
+    tokens : [ `Range of int * int ];
+  }
 
   let range_of_tuple (weight, name, address, min_token, max_token) =
-    {weight; name; address; tokens= `Range (min_token, max_token)}
+    { weight; name; address; tokens = `Range (min_token, max_token) }
 
   let tokens_global =
     let absolute_weights =
       (* weight, name, kt1, min-token, max-token *)
-      [ range_of_tuple
-          (100, "Alchememist", alchememist_blockchain_adventures, 0, 15)
-      ; range_of_tuple (600, "HicEtNunc", hicetnunc_version_2, 300, 564520)
-      ; range_of_tuple (200, "Kalamint", kalamint, 1, 62345)
-      ; range_of_tuple
-          (100, "OpenMinter-0", "KT1PuASz2FWF7fhdWidFpV5v9zqTVtYxexAS", 0, 4)
-      ; range_of_tuple
-          (100, "OpenMinter-1", "KT1QcxwB4QyPKfmSwjH1VRxa6kquUjeDWeEy", 0, 48)
-      ; range_of_tuple
-          (150, "OpenMinter-2", "KT1JBThDEqyqrEHimhxoUBCSnsKAqFcuHMkP", 0, 179)
-      ; range_of_tuple
-          (100, "OpenMinter-4", "KT1Wb8YcWDZeFSeq8YXjaZduXGZvEodYEBzg", 0, 23)
-      ] in
+      [
+        range_of_tuple
+          (100, "Alchememist", alchememist_blockchain_adventures, 0, 15);
+        range_of_tuple (600, "HicEtNunc", hicetnunc_version_2, 300, 564520);
+        range_of_tuple (200, "Kalamint", kalamint, 1, 62345);
+        range_of_tuple
+          (100, "OpenMinter-0", "KT1PuASz2FWF7fhdWidFpV5v9zqTVtYxexAS", 0, 4);
+        range_of_tuple
+          (100, "OpenMinter-1", "KT1QcxwB4QyPKfmSwjH1VRxa6kquUjeDWeEy", 0, 48);
+        range_of_tuple
+          (150, "OpenMinter-2", "KT1JBThDEqyqrEHimhxoUBCSnsKAqFcuHMkP", 0, 179);
+        range_of_tuple
+          (100, "OpenMinter-4", "KT1Wb8YcWDZeFSeq8YXjaZduXGZvEodYEBzg", 0, 23);
+      ]
+    in
     let total =
       List.fold absolute_weights ~init:0 ~f:(fun prev candidate ->
-          prev + candidate.weight ) in
+          prev + candidate.weight)
+    in
     List.map absolute_weights ~f:(fun candidate ->
-        {candidate with weight= Float.(of_int candidate.weight / of_int total)} )
+        {
+          candidate with
+          weight = Float.(of_int candidate.weight / of_int total);
+        })
 
   let random_token (_ : _ Context.t) =
     let chosen_one =
       List.find tokens_global ~f:(fun candidate ->
           let open Float in
-          Random.float 1. < candidate.weight )
-      |> function Some s -> s | None -> List.random_element_exn tokens_global
+          Random.float 1. < candidate.weight)
+      |> function
+      | Some s -> s
+      | None -> List.random_element_exn tokens_global
     in
-    ( chosen_one.address
-    , match chosen_one.tokens with `Range (m, x) -> Random.int_incl m x )
+    ( chosen_one.address,
+      match chosen_one.tokens with `Range (m, x) -> Random.int_incl m x )
 end
 
 module Metadata_metadata = struct
   let jpegs =
     List.map
-      [ "ipfs://QmeayPYZeicG1MJSKoVnVM54qafYcvCCZbYLZuNdg36GWF"
-      ; "ipfs://QmXmktVYyJ3AtzsDYAZCgpbL9MtPGv2U95wECaXcRL3Cqv"
-      ; "ipfs://QmYGFcSb4z3TmpR4C6tyDWFzSWFCdqzcnjkBPeSwNZTex6" ] ~f:(fun uri ->
-        (Blob.Format.jpeg, uri) )
+      [
+        "ipfs://QmeayPYZeicG1MJSKoVnVM54qafYcvCCZbYLZuNdg36GWF";
+        "ipfs://QmXmktVYyJ3AtzsDYAZCgpbL9MtPGv2U95wECaXcRL3Cqv";
+        "ipfs://QmYGFcSb4z3TmpR4C6tyDWFzSWFCdqzcnjkBPeSwNZTex6";
+      ] ~f:(fun uri -> (Blob.Format.jpeg, uri))
 
   let static_sfw_multimedia : (Blob.Format.t * string) list = jpegs
 
@@ -557,5 +606,5 @@ module Metadata_metadata = struct
     Lwt.return
       (List.find_map static_sfw_multimedia ~f:(function
         | fmt, k when String.equal k uri -> Some fmt
-        | _ -> None ) )
+        | _ -> None))
 end

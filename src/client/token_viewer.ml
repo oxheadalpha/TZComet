@@ -18,8 +18,8 @@ let go_action ctxt ~wip =
   let _ = Reactive.set copy_src_var tv_uri in
   let _logh msg = Async_work.log wip msg in
   let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
-  Async_work.reinit wip ;
-  Async_work.wip wip ;
+  Async_work.reinit wip;
+  Async_work.wip wip;
   Async_work.async_catch wip
     ~exn_to_html:(Errors_html.exception_html ctxt)
     Lwt.Infix.(
@@ -30,13 +30,15 @@ let go_action ctxt ~wip =
             raise
               (mkexn
                  Meta_html.(
-                   t "Hmmm, the token-id is not a nat anymore:" %% ct token_id) )
+                   t "Hmmm, the token-id is not a nat anymore:" %% ct token_id))
         in
         logm
           Message.(
-            t "Fetching metadata for" %% Fmt.kstr ct "%s/%s" address token_id) ;
+            t "Fetching metadata for" %% Fmt.kstr ct "%s/%s" address token_id);
         Contract_metadata.Token.token_fetch ctxt ~address ~id ~log:logm
-        >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) ;
+        >>= fun token ->
+        Async_work.ok wip token;
+        Lwt.return_unit);
   ()
 
 let retry_go_action ctxt ~wip =
@@ -167,100 +169,110 @@ let linkify_text s =
   let open Meta_html in
   let prefix_and_for_all ~prefix ~for_all s =
     String.is_prefix s ~prefix
-    && String.for_all (String.chop_prefix_exn s ~prefix) ~f:for_all in
+    && String.for_all (String.chop_prefix_exn s ~prefix) ~f:for_all
+  in
   let is_twitter_handle = function
     | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '_' | '.' -> true
-    | _ -> false in
+    | _ -> false
+  in
   let output = ref (empty ()) in
   let print c = output := !output % c in
   let is_word_sep = function
     | ' ' | '\'' | '(' | ')' | '!' | '[' | ']' | ',' | '\n' -> true
-    | _ -> false in
+    | _ -> false
+  in
   let next_sep s ~pos =
     match String.lfindi ~pos s ~f:(fun _ -> is_word_sep) with
     | Some new_pos ->
         Some (new_pos + 1, s.[new_pos], String.sub s ~pos ~len:(new_pos - pos))
-    | None -> None in
+    | None -> None
+  in
   let handle_tok = function
     | uri when String.is_prefix uri ~prefix:"https://" -> (
-      (* A URL that ends with a dot is usually a URL plus a period: *)
-      match String.chop_suffix uri ~suffix:"." with
-      | Some uri -> print (link ~target:uri (t uri) % t ".")
-      | None -> print (link ~target:uri (t uri)) )
+        (* A URL that ends with a dot is usually a URL plus a period: *)
+        match String.chop_suffix uri ~suffix:"." with
+        | Some uri -> print (link ~target:uri (t uri) % t ".")
+        | None -> print (link ~target:uri (t uri)))
     | handle
       when prefix_and_for_all ~prefix:"@" ~for_all:is_twitter_handle handle ->
         let heavy c =
-          let a = [style "font-weight: bold"] in
-          span ~a c in
+          let a = [ style "font-weight: bold" ] in
+          span ~a c
+        in
         print
-          ( heavy (t handle)
+          (heavy (t handle)
           % sup
               (let handle = String.chop_prefix_exn handle ~prefix:"@" in
-               let img_a = [style "max-height: 0.9em"] in
+               let img_a = [ style "max-height: 0.9em" ] in
                link
                  ~target:(Fmt.str "https://twitter.com/%s" handle)
                  (H5.img ~a:img_a ~src:(Lwd.pure twitter_icon)
-                    ~alt:(Lwd.pure "Twitter") () )
+                    ~alt:(Lwd.pure "Twitter") ())
                % t " "
                % link
                    ~target:(Fmt.str "https://instagram.com/%s" handle)
                    (H5.img ~a:img_a ~src:(Lwd.pure instagram_icon)
-                      ~alt:(Lwd.pure "Instagram") () ) ) )
+                      ~alt:(Lwd.pure "Instagram") ())))
     | tz_address
       when prefix_and_for_all ~prefix:"tz" ~for_all:is_twitter_handle tz_address
       ->
         print
           (link
              ~target:(Fmt.str "https://tzkt.io/%s" tz_address)
-             (bt (ellipsize_string ~ellipsis:"…" ~max_length:8 tz_address)) )
-    | tok -> print (t tok) in
+             (bt (ellipsize_string ~ellipsis:"…" ~max_length:8 tz_address)))
+    | tok -> print (t tok)
+  in
   let rec go ?(nl = false) pos =
     match next_sep ~pos s with
     | Some (npos, '\n', "") ->
-        if nl then print (br ()) ;
+        if nl then print (br ());
         go npos ~nl:false
     | Some (npos, sep, tok) ->
-        handle_tok tok ;
-        print (Fmt.kstr t "%c" sep) ;
+        handle_tok tok;
+        print (Fmt.kstr t "%c" sep);
         go npos ~nl:Char.(sep = '\n')
     | None ->
         let tok = String.sub s ~pos ~len:(String.length s - pos) in
-        handle_tok tok ; () in
-  go 0 ; !output
+        handle_tok tok;
+        ()
+  in
+  go 0;
+  !output
 
 let token_ui_max_width = "900px"
 
 let error_try_again :
-       (unit -> 'a)
-    -> string
-    -> [< Html_types.div_content_fun] Meta_html.H5.elt
-    -> [> Html_types.div] Meta_html.H5.elt =
+    (unit -> 'a) ->
+    string ->
+    [< Html_types.div_content_fun ] Meta_html.H5.elt ->
+    [> Html_types.div ] Meta_html.H5.elt =
  fun try_again_action msg e ->
   let open Meta_html in
   Bootstrap.alert ~kind:`Danger
-    ( h3 (t "Failed To Fetch The Token 😿")
+    (h3 (t "Failed To Fetch The Token 😿")
     % div e % hr ()
     % div
-        ( bt msg
+        (bt msg
         %% Bootstrap.button ~kind:`Primary (t "Try Again ♲")
-             ~action:try_again_action ) )
+             ~action:try_again_action))
 
 let show_multimedia :
-       _ Context.t
-    -> Contract_metadata.Token.t
-    -> [> Html_types.div] Meta_html.H5.elt =
- fun ctxt {main_multimedia; _} ->
+    _ Context.t ->
+    Contract_metadata.Token.t ->
+    [> Html_types.div ] Meta_html.H5.elt =
+ fun ctxt { main_multimedia; _ } ->
   let open Meta_html in
   match main_multimedia with
   | None -> Bootstrap.alert ~kind:`Warning (t "There is no multi-media.")
   | Some (Error exn) ->
       let not_caught =
         "match in main_multimedia - This error should have been caught in \
-         Contract_metadata.token_viewer!" in
-      dbgf "%S" not_caught ;
+         Contract_metadata.token_viewer!"
+      in
+      dbgf "%S" not_caught;
       Bootstrap.alert ~kind:`Danger
-        ( t "Error while getting multimedia content??"
-        %% Errors_html.exception_html ctxt exn )
+        (t "Error while getting multimedia content??"
+        %% Errors_html.exception_html ctxt exn)
   | Some (Ok (title, mm)) ->
       let open Contract_metadata.Multimedia in
       let maybe_censor f =
@@ -272,29 +284,35 @@ let show_multimedia :
             ~button:(function
               | true ->
                   Fmt.kstr t "Show %s (potentially NSFW)"
-                    ( match mm.format with
+                    (match mm.format with
                     | `Image, "svg+xml" -> "Vector Graphics"
                     | `Image, _ -> "Image"
                     | `Video, _ -> "Video"
                     | `Appx, _ -> "Embedded Web Page"
-                    | `Html, _ -> "HTML" )
-              | false -> t "Hide Multimedia" )
-            f in
+                    | `Html, _ -> "HTML")
+              | false -> t "Hide Multimedia")
+            f
+      in
       let wrap_mm c =
         div c
           ~a:
-            [ style
+            [
+              style
                 (* Can seem to limit the height and keeping the
                    images “inside”: *)
                 "max-width: 100%; /*max-height: 60vh;*/ padding: 2px; margin: \
-                 auto; width: 100%; height: 100%" ] in
+                 auto; width: 100%; height: 100%";
+            ]
+      in
       let mm_style =
         let loadingable =
           "background: transparent url(./loading.gif) no-repeat scroll center \
-           center;" in
+           center;"
+        in
         "height: 100%; width: 100%; max-height: 50vh; object-fit: contain; "
         ^ loadingable
-        (* "max-width: 100%; max-height: 100%" *) in
+        (* "max-width: 100%; max-height: 100%" *)
+      in
       maybe_censor (fun () ->
           match mm.format with
           | `Image, "svg+xml" ->
@@ -302,62 +320,73 @@ let show_multimedia :
                 (link ~target:mm.converted_uri
                    (H5.object_
                       ~a:
-                        [ H5.a_mime_type (Reactive.pure "image/svg+xml")
-                        ; H5.a_data (Reactive.pure mm.converted_uri)
-                        ; H5.a_style (Reactive.pure mm_style) ]
-                      [ H5.img ~a:[style mm_style]
+                        [
+                          H5.a_mime_type (Reactive.pure "image/svg+xml");
+                          H5.a_data (Reactive.pure mm.converted_uri);
+                          H5.a_style (Reactive.pure mm_style);
+                        ]
+                      [
+                        H5.img
+                          ~a:[ style mm_style ]
                           ~alt:
                             (Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
                           ~src:(Lwd.pure mm.converted_uri)
-                          () ] ) )
+                          ();
+                      ]))
           | `Image, _ ->
               wrap_mm
                 (link ~target:mm.converted_uri
                    (H5.img
                       ~a:
-                        [ style mm_style
-                        ; H5.a_onerror
+                        [
+                          style mm_style;
+                          H5.a_onerror
                             (Tyxml_lwd.Lwdom.attr (fun _ ->
                                  dbgf
                                    "MLN: Token_viewer.show_multimedia - Error \
                                     in `Image display - %S"
-                                   mm.converted_uri ;
-                                 false ) ) ]
+                                   mm.converted_uri;
+                                 false));
+                        ]
                       ~alt:(Fmt.kstr Lwd.pure "%s at %s" title mm.converted_uri)
                       ~src:(Lwd.pure mm.converted_uri)
-                      () ) )
+                      ()))
           | `Video, _ ->
               wrap_mm
                 (H5.video
-                   ~a:[H5.a_controls (); style mm_style]
+                   ~a:[ H5.a_controls (); style mm_style ]
                    ~src:(Lwd.pure mm.converted_uri)
-                   [] )
+                   [])
           | `Appx, _ | `Html, _ ->
               wrap_mm
                 (H5.iframe
                    ~a:
-                     [ style mm_style
-                     ; H5.a_onerror
+                     [
+                       style mm_style;
+                       H5.a_onerror
                          (Tyxml_lwd.Lwdom.attr (fun _ ->
                               let _ = Ipfs_gateways.try_next ctxt in
-                              false ) )
-                     ; H5.a_src (Lwd.pure mm.converted_uri) ]
-                   [H5.txt (Lwd.pure "This should be an iframe")] ) )
+                              false));
+                       H5.a_src (Lwd.pure mm.converted_uri);
+                     ]
+                   [ H5.txt (Lwd.pure "This should be an iframe") ]))
 
 let show_token ctxt
     Contract_metadata.Token.
-      { address
-      ; id
-      ; warnings
-      ; network
-      ; symbol
-      ; name
-      ; decimals
-      ; total_supply
-      ; metadata
-      ; special_knowledge
-      ; tzip21
-      ; _ } =
+      {
+        address;
+        id;
+        warnings;
+        network;
+        symbol;
+        name;
+        decimals;
+        total_supply;
+        metadata;
+        special_knowledge;
+        tzip21;
+        _;
+      } =
   let open Meta_html in
   let open Contract_metadata.Content.Tzip_021 in
   let warning = function
@@ -366,21 +395,24 @@ let show_token ctxt
     | `Parsing_uri (uri, err) ->
         t "Parsing URI" %% ct uri %% Tezos_html.error_trace ctxt err
     | `Getting_metadata_field m ->
-        t "Parsing metadata" %% Message_html.render ctxt m in
+        t "Parsing metadata" %% Message_html.render ctxt m
+  in
   let warnings = List.map warnings ~f:(fun (k, v) -> (k, warning v)) in
   let metaname =
     match (name, symbol, tzip21.prefers_symbol) with
     | _, Some s, Some true -> bt s
     | Some n, _, _ -> bt n
-    | None, _, _ -> Fmt.kstr ct "%s/%a" address Z.pp_print id in
+    | None, _, _ -> Fmt.kstr ct "%s/%a" address Z.pp_print id
+  in
   let or_empty o f = match o with None -> empty () | Some o -> f o in
   let metadescription = or_empty tzip21.description linkify_text in
   let creators =
     let each s = i (linkify_text s) in
     or_empty tzip21.creators (function
       | [] -> bt "Creators list is explicitly empty."
-      | [one] -> bt "Creator:" %% each one
-      | sl -> bt "Creators:" %% itemize (List.map sl ~f:each) ) in
+      | [ one ] -> bt "Creator:" %% each one
+      | sl -> bt "Creators:" %% itemize (List.map sl ~f:each))
+  in
   let tags =
     or_empty tzip21.tags (fun sl ->
         bt "Tags:"
@@ -388,7 +420,8 @@ let show_token ctxt
              (oxfordize_list sl
                 ~map:(fun t -> ct t)
                 ~sep:(fun () -> t ", ")
-                ~last_sep:(fun () -> t ", ") ) ) in
+                ~last_sep:(fun () -> t ", ")))
+  in
   let contract_info =
     let open Tezai_contract_metadata.Metadata_contents in
     let sep () = t ", " in
@@ -396,14 +429,14 @@ let show_token ctxt
     let itemo o = or_empty o item in
     bt "Contract:"
     %% item
-         ( abbreviation address
-             (ct (ellipsize_string ~ellipsis:"…" ~max_length:10 address))
+         (abbreviation address
+            (ct (ellipsize_string ~ellipsis:"…" ~max_length:10 address))
          %% t "is on"
          %% it
               (Option.value_map ~f:Network.to_string
-                 ~default:"an unknown network" network )
+                 ~default:"an unknown network" network)
          %% parens
-              ( t "Open in"
+              (t "Open in"
               %% State.link_to_explorer ctxt (t "Explorer") ~search:address
               % sep ()
               %% list
@@ -412,23 +445,27 @@ let show_token ctxt
                        ~map:(fun vend ->
                          link
                            (t (vendor_show_name vend))
-                           ~target:(kt1_url vend address) )) ) )
+                           ~target:(kt1_url vend address)))))
     %% itemo
          (let open Option in
          let target =
            first_some metadata.homepage
-             (bind metadata.source ~f:(fun s -> s.location)) in
+             (bind metadata.source ~f:(fun s -> s.location))
+         in
          let name_part =
-           first_some (map metadata.name ~f:(Fmt.str "“%s”")) target in
+           first_some (map metadata.name ~f:(Fmt.str "“%s”")) target
+         in
          let link_part =
            Option.map name_part ~f:(fun apart ->
                match target with
                | Some target -> link (bt apart) ~target
-               | None -> bt apart ) in
+               | None -> bt apart)
+         in
          let version_part =
            match metadata.version with
            | None -> empty ()
-           | Some v -> t "version" %% bt v in
+           | Some v -> t "version" %% bt v
+         in
          let authors_part =
            match metadata.authors with
            | [] -> empty ()
@@ -438,7 +475,8 @@ let show_token ctxt
                     (oxfordize_list al
                        ~map:(Tezos_html.author ~namet:bt)
                        ~sep:(fun () -> t ", ")
-                       ~last_sep:(fun () -> t ", and ") ) in
+                       ~last_sep:(fun () -> t ", and "))
+         in
          let description_part =
            or_empty metadata.description (fun s -> t ":" %% i (linkify_text s))
          in
@@ -446,56 +484,63 @@ let show_token ctxt
          match (link_part, metadata.authors) with
          | Some l, _ -> Some (l %% tail)
          | None, [] -> None
-         | None, _ -> Some (it "NOT-NAMED" %% tail)) in
+         | None, _ -> Some (it "NOT-NAMED" %% tail))
+  in
   let fungible_part =
     match decimals with
     | None | Some "0" | (exception _) -> empty ()
     | Some n ->
         div
-          ( bt "Fungible Token:"
+          (bt "Fungible Token:"
           %% Fmt.kstr it "decimals: %s" n
           % or_empty symbol (fun sym -> it ", symbol:" %% ct sym)
           % or_empty total_supply (fun z ->
                 it ", total-supply:"
-                %% Tezos_html.show_total_supply ctxt ~decimals:n z ) ) in
+                %% Tezos_html.show_total_supply ctxt ~decimals:n z))
+  in
   let wrapped_token_fetch wip =
     let _logh msg = Async_work.log wip msg in
     let logm msg = Async_work.log wip (Message_html.render ctxt msg) in
-    Async_work.wip wip ;
+    Async_work.wip wip;
     Async_work.async_catch wip
       ~exn_to_html:(Errors_html.exception_html ctxt)
       Lwt.Infix.(
         fun ~mkexn:_ () ->
           Contract_metadata.Token.token_fetch ctxt ~address ~id ~log:logm
-          >>= fun token -> Async_work.ok wip token ; Lwt.return_unit) in
+          >>= fun token ->
+          Async_work.ok wip token;
+          Lwt.return_unit)
+  in
   let main_content =
     let err_str = "Error getting multimedia content" in
     let tok_wip = Async_work.empty () in
     let _ = wrapped_token_fetch tok_wip in
-    h3 ~a:[style "text-align: center"] metaname
+    h3 ~a:[ style "text-align: center" ] metaname
     % div
-        ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
+        ~a:[ Fmt.kstr style "max-width: %s" token_ui_max_width ]
         (Async_work.render tok_wip ~f:(show_multimedia ctxt)
            ~show_error:
              (error_try_again
                 (fun () -> retry_go_action ctxt ~wip:tok_wip)
-                err_str ) )
+                err_str))
     % Bootstrap.p_lead metadescription
     % div creators % div tags
-    % ( match special_knowledge with
+    % (match special_knowledge with
       | [] -> empty ()
       | sk ->
           list
             (List.map sk ~f:(function `Hic_et_nunc n ->
                  bt "Special-Link:"
                  %% url it
-                      (Fmt.str "https://hicetnunc.art/objkt/%a" Z.pp_print n) )
-              ) )
-    % fungible_part % div contract_info in
+                      (Fmt.str "https://hicetnunc.art/objkt/%a" Z.pp_print n))))
+    % fungible_part % div contract_info
+  in
   div
     ~a:
-      [ Fmt.kstr style "padding: 1em; border: solid 3px #aaa; max-width: %s"
-          token_ui_max_width ]
+      [
+        Fmt.kstr style "padding: 1em; border: solid 3px #aaa; max-width: %s"
+          token_ui_max_width;
+      ]
     main_content
   %% Reactive.bind (State.get_show_token_details ctxt) ~f:(function
        | true ->
@@ -506,25 +551,26 @@ let show_token ctxt
              fixed_width_reactive_button_with_div_below (make ())
                ~kind:`Secondary ~width:(* Same as async_work *) "12em")
              ~button:(function
-               | true -> t "Show token details" | false -> t "Hide details" )
+               | true -> t "Show token details" | false -> t "Hide details")
              (fun () ->
                Tezos_html.show_one_token ctxt ?symbol ?name ?decimals
-                 ~tzip_021:tzip21 ~id ~warnings ) )
+                 ~tzip_021:tzip21 ~id ~warnings))
 
 let link_to_clipboard _ctxt src_id =
   let open Dom_html in
   let open Js in
-  dbgf "getting element by Id for %S" src_id ;
+  dbgf "getting element by Id for %S" src_id;
   match getElementById_opt src_id with
   | None ->
-      dbgf "getElementByIdOpt returns None for %S" src_id ;
+      dbgf "getElementByIdOpt returns None for %S" src_id;
       ()
   | Some ele ->
       let () = Unsafe.meth_call ele "select" [||] in
       let () =
         document##execCommand (Js.string "selectAll") (Js.bool true)
-          (Js.Opt.option None) in
-      Unsafe.meth_call document "execCommand" [|Unsafe.inject "copy"|]
+          (Js.Opt.option None)
+      in
+      Unsafe.meth_call document "execCommand" [| Unsafe.inject "copy" |]
 
 let render ctxt =
   let open Meta_html in
@@ -537,18 +583,23 @@ let render ctxt =
   let is_address_valid k =
     match Tezai_base58_digest.Identifier.Kt1_address.check k with
     | () -> true
-    | exception _ -> false in
+    | exception _ -> false
+  in
   let address_valid _ctxt token_address =
-    Reactive.(map (get token_address) ~f:is_address_valid) in
+    Reactive.(map (get token_address) ~f:is_address_valid)
+  in
   let is_token_id_valid i =
-    match Z.of_string i with _ -> true | exception _ -> false in
+    match Z.of_string i with _ -> true | exception _ -> false
+  in
   let token_id_valid _ctxt token_id =
-    Reactive.(map (get token_id) ~f:is_token_id_valid) in
+    Reactive.(map (get token_id) ~f:is_token_id_valid)
+  in
   let input_valid ctxt =
     Reactive.(
       map
         (address_valid ctxt token_address ** token_id_valid ctxt token_id)
-        ~f:(fun (add, tid) -> add && tid)) in
+        ~f:(fun (add, tid) -> add && tid))
+  in
   let make_help ~validity ~input content =
     Reactive.(
       bind
@@ -557,126 +608,141 @@ let render ctxt =
           | true, _ -> content %% t "👍"
           | false, "" -> content
           | false, more ->
-              content %% Bootstrap.color `Danger (ct more %% t "is wrong.") ))
+              content %% Bootstrap.color `Danger (ct more %% t "is wrong.")))
   in
   let controls_active = Async_work.busy result |> Reactive.map ~f:not in
   let form_ready_to_go =
     Reactive.(
       map
         (input_valid ctxt ** Async_work.busy result)
-        ~f:(function false, _ -> false | _, true -> false | _ -> true)) in
+        ~f:(function false, _ -> false | _, true -> false | _ -> true))
+  in
   let enter_action () =
     if
       is_token_id_valid (Reactive.peek token_id)
       && is_address_valid (Reactive.peek token_address)
       && not (Async_work.peek_busy result)
-    then go_action ctxt ~wip:result in
+    then go_action ctxt ~wip:result
+  in
   let retry_enter_action ctxt =
     let _ = Ipfs_gateways.try_next ctxt in
-    enter_action in
+    enter_action
+  in
   let _once_in_tab = enter_action () in
   let make_input ?active ?id ?placeholder ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
-      make ?enter_action [input ?active ?id ?placeholder ?help ?label bidi])
+      make ?enter_action [ input ?active ?id ?placeholder ?help ?label bidi ])
   in
   let make_check_box ?active ?id ?help ?label ?enter_action bidi =
     Bootstrap.Form.(
-      make ?enter_action [check_box ?active ?id ?help ?label bidi]) in
+      make ?enter_action [ check_box ?active ?id ?help ?label bidi ])
+  in
   let make_button c ~active action =
     let f active =
       Bootstrap.button ~kind:`Primary ~outline:true c ~disabled:(not active)
-        ~action in
-    Reactive.bind active ~f in
-  let item s c = div ~a:[style s] c in
+        ~action
+    in
+    Reactive.bind active ~f
+  in
+  let item s c = div ~a:[ style s ] c in
   let clipboard_modal ctxt modal_id =
     let copy_src = make_input ~id:copy_src_id copy_src_value_bidi in
-    let body_div = H5.(div ~a:[] [copy_src]) in
+    let body_div = H5.(div ~a:[] [ copy_src ]) in
     Bootstrap.Modal.mk_modal ~modal_id
       ~modal_title:"Copy token link to clipboard:" ~modal_body:body_div
       ~ok_text:"Copy"
       ~ok_action:(fun () -> link_to_clipboard ctxt copy_src_id)
-      () in
+      ()
+  in
   let launch_clipboard_modal_btn _ctxt modal_id =
     Bootstrap.Modal.toggle_button ~kind:`Primary ~outline:true (t "Share 📋")
-      ~modal_id in
+      ~modal_id
+  in
   let modal_id = "clipboard_modal_id" in
   let top_form =
     Browser_window.width ctxt
     |> Reactive.bind ~f:(fun bro_width ->
            div
              ~a:
-               [ Fmt.kstr style
+               [
+                 Fmt.kstr style
                    "display: flex; %s; flex-wrap: wrap; justify-content: \
                     space-between; align-items: flex-start; max-width: %s"
-                   ( match bro_width with
+                   (match bro_width with
                    | None | Some `Thin ->
                        "flex-direction: column; margin-bottom: 1em"
-                   | _ -> "flex-direction: row" )
-                   token_ui_max_width ]
-             ( item "padding-bottom: 4px"
-                 (make_button (t "Random Token 🎲") ~active:controls_active
-                    (fun () ->
-                      let addr, id = State.Examples.random_token ctxt in
-                      Reactive.set token_address addr ;
-                      Reactive.set token_id (Int.to_string id) ;
-                      enter_action () ) )
+                   | _ -> "flex-direction: row")
+                   token_ui_max_width;
+               ]
+             (item "padding-bottom: 4px"
+                (make_button (t "Random Token 🎲") ~active:controls_active
+                   (fun () ->
+                     let addr, id = State.Examples.random_token ctxt in
+                     Reactive.set token_address addr;
+                     Reactive.set token_id (Int.to_string id);
+                     enter_action ()))
              % item "min-width: 25em"
                  (make_input
                     ~placeholder:(Reactive.pure "Contract address")
                     ~enter_action token_address_bidi
                     ~help:
                       (make_help ~validity:address_valid ~input:token_address
-                         (t "A valid KT1 address on any known network.") ) )
+                         (t "A valid KT1 address on any known network.")))
              % item "max-width: 8em"
                  (make_input ~placeholder:(Reactive.pure "Token ID")
                     ~enter_action token_id_bidi
                     ~help:
                       (make_help ~validity:token_id_valid ~input:token_id
-                         (t "A natural number.") ) )
+                         (t "A natural number.")))
              % item ""
                  (make_button (t "Go 🎬") ~active:form_ready_to_go enter_action)
              % item "" (clipboard_modal ctxt modal_id)
-             % item "" (launch_clipboard_modal_btn ctxt modal_id) ) ) in
+             % item "" (launch_clipboard_modal_btn ctxt modal_id)))
+  in
   let second_form =
     let control s = small (t s) in
     div
       ~a:
-        [ Fmt.kstr style
+        [
+          Fmt.kstr style
             "display: flex; flex-direction: row; flex-wrap: nowrap; \
              justify-content: space-between; align-items: flex-start; \
              max-width: %s"
-            token_ui_max_width ]
-      ( make_button (control "⏮ Previous") ~active:form_ready_to_go (fun () ->
-            try
-              let current = Z.of_string (Reactive.peek token_id) in
-              Reactive.set token_id (Z.to_string (Z.pred current)) ;
-              enter_action ()
-            with _ -> () )
+            token_ui_max_width;
+        ]
+      (make_button (control "⏮ Previous") ~active:form_ready_to_go (fun () ->
+           try
+             let current = Z.of_string (Reactive.peek token_id) in
+             Reactive.set token_id (Z.to_string (Z.pred current));
+             enter_action ()
+           with _ -> ())
       % item ""
           (item "text-align: center"
              (make_check_box
                 (State.always_show_multimedia_bidirectional ctxt)
                 ~help:(t "Always show unknown multimedia.")
                 ~label:
-                  ( t " YOLO Mode"
+                  (t " YOLO Mode"
                   %% Reactive.bind (State.get_always_show_multimedia ctxt)
                        ~f:(function
                        | true -> t "👀"
-                       | false -> t "🤦" ) ) ) )
+                       | false -> t "🤦"))))
       % make_button (control "Next ⏭") ~active:form_ready_to_go (fun () ->
             try
               let current = Z.of_string (Reactive.peek token_id) in
-              Reactive.set token_id (Z.to_string (Z.succ current)) ;
+              Reactive.set token_id (Z.to_string (Z.succ current));
               enter_action ()
-            with _ -> () ) ) in
+            with _ -> ()))
+  in
   let gateway_err_str =
     "💡 This could be that the token does not exist, that a public Tezos node \
      is having trouble responding, or that an IPFS gateway is limiting \
-     requests ⇒" in
-  State.if_explorer_should_go ctxt enter_action ;
-  h2 (t "Token Viewer") ~a:[style "padding: 10px 0 6px 0"]
+     requests ⇒"
+  in
+  State.if_explorer_should_go ctxt enter_action;
+  h2 (t "Token Viewer") ~a:[ style "padding: 10px 0 6px 0" ]
   % top_form % second_form
   % div
-      ~a:[Fmt.kstr style "max-width: %s" token_ui_max_width]
+      ~a:[ Fmt.kstr style "max-width: %s" token_ui_max_width ]
       (Async_work.render result ~f:(show_token ctxt)
-         ~show_error:(error_try_again (retry_enter_action ctxt) gateway_err_str) )
+         ~show_error:(error_try_again (retry_enter_action ctxt) gateway_err_str))

@@ -1,6 +1,6 @@
 open! Import
 
-type t = [`Mainnet | `Oxfordnet | `Nairobinet | `Ghostnet | `Sandbox]
+type t = [ `Mainnet | `Oxfordnet | `Nairobinet | `Ghostnet | `Sandbox ]
 
 let to_string : t -> string = function
   | `Mainnet -> "Mainnet"
@@ -16,4 +16,4 @@ let better_call_dev_path : t -> string option = function
   | `Ghostnet -> Some "ghostnet"
   | `Sandbox -> None
 
-let all : t list = [`Mainnet; `Nairobinet; `Oxfordnet; `Ghostnet; `Sandbox]
+let all : t list = [ `Mainnet; `Nairobinet; `Oxfordnet; `Ghostnet; `Sandbox ]
