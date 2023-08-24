@@ -95,7 +95,7 @@ deploy_togithub () {
     mv "$dst/"* "$localpath"
     (
         cd "$localpath"
-        git add index.html main-client.js loading.gif VERSION
+        git add index.html VERSION
     )
     msg="(Staging)"
     if [ "$prod" = "true" ] ; then
