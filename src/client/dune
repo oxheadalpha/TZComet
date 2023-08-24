@@ -1,8 +1,7 @@
 (rule
  (target index.html)
  (deps
-  (:js ../client/main.bc.js)
-  )
+  (:js ../client/main.bc.js))
  (action
   (with-stdout-to
    index.html
