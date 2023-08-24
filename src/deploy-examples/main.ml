@@ -10,7 +10,7 @@ module Env = struct
     try Caml.Sys.getenv v
     with _ -> Fmt.failwith "Missing required environment variable %S" v
 
-  let tezos_client () = with_default "tezos_client_bin" "tezos-client"
+  let tezos_client () = with_default "tezos_client_bin" "octez-client"
   let funder () = or_fail "funder_account"
 end
 
@@ -148,7 +148,7 @@ module Micheline_views = struct
           ~annotations code ]
 end
 
-let all ?(dry_run = false) ?only ~logfile () =
+let all ?(dry_run = false) ?(print = true) ?only ~logfile () =
   let originated = ref [] in
   let add name description kt1 =
     originated := (name, description, kt1) :: !originated in
@@ -304,7 +304,7 @@ let all ?(dry_run = false) ?only ~logfile () =
     let code =
       [prim "DROP" []; prim "PUSH" [prim "bytes" []; michbytes value]] in
     view_with_code name code
-      ~return_type:(prim "bytes" [] ~annotations:["%returnedBytes"])
+      ~return_type:(prim "bytes" [] (* ~annotations:["%returnedBytes"] *))
       ~annotations:[("%returnedBytes", "A bytes constant.")] in
   let basics_and_views l = Ezjsonm.(basics @ [("views", list Fn.id l)]) in
   let many () =
@@ -367,8 +367,11 @@ Here is some text.
              (String.init 1000 ~f:(fun _ -> Random.char ())) ] ) ;
     () in
   many () ;
-  List.iter (List.rev !originated) ~f:(fun (n, d, k) ->
-      Fmt.pr "\nlet %s = %S in\nkt1 %s %S;\n" n k n d )
+  let all = List.rev !originated in
+  if print then
+    List.iter all ~f:(fun (n, d, k) ->
+        Fmt.pr "\nlet %s = %S in\nkt1 %s %S;\n" n k n d ) ;
+  all
 
 let () =
   let usage () = Fmt.epr "usage: %s <TODO>\n%!" Caml.Sys.argv.(0) in
@@ -376,8 +379,11 @@ let () =
   let dry_run =
     try String.equal (Caml.Sys.getenv "dryrun") "true" with _ -> false in
   match Array.to_list Caml.Sys.argv |> List.tl_exn with
-  | ["all"] -> all () ~logfile ~dry_run
-  | "only" :: these -> all () ~logfile ~dry_run ~only:these
+  | ["all"] -> Fn.ignore (all () ~logfile ~dry_run)
+  | ["list"] ->
+      let l = all () ~logfile ~dry_run:true ~print:false in
+      List.iter l ~f:(fun (n, d, _) -> Fmt.pr "- `%s`: %s\n%!" n d)
+  | "only" :: these -> Fn.ignore (all () ~logfile ~dry_run ~only:these)
   | other :: _ ->
       Fmt.epr "Unknown command: %S!\n%!" other ;
       usage () ;
