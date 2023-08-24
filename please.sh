@@ -14,7 +14,7 @@ say () {
 }
 
 
-ocamlformat_version=0.19.0
+ocamlformat_version=0.24.1
 ensure_setup () {
     if [ "$global_switch" = "true" ] || [ -d _opam ] ; then
         say 'Opam switch already there'
@@ -111,10 +111,10 @@ ensure_ocamlformats () {
     tmp=$(mktemp /tmp/XXXXX.ocamlformat)
     cat > "$tmp" <<EOF
 version=$ocamlformat_version
-profile=compact
-break-collection-expressions=fit-or-vertical
+profile=default
 exp-grouping=preserve
 parse-docstrings
+sequence-blank-line=compact
 EOF
     for dotof in $(git ls-files | grep .ocamlformat) ; do
         $command "$tmp" "$dotof" || {
