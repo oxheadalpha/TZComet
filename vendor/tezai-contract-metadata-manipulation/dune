@@ -1,0 +1,14 @@
+(library
+ (name tezai_contract_metadata_manipulation)
+ (public_name tezai-contract-metadata-manipulation)
+ (inline_tests)
+ (preprocess
+  (pps ppx_inline_test ppx_expect))
+ (libraries
+  tezos-micheline
+  tezai-contract-metadata
+  tezai-michelson
+  re
+  fmt
+  base
+  tezai-base58-digest))
