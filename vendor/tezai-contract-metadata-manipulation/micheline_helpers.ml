@@ -142,11 +142,20 @@ let build_off_chain_view_contract view ~contract_balance ~contract_address
         prim name (continue args) ~annotations
     | Seq (_, l) -> seq (continue l)
   in
+  let rec remove_annotations c =
+    let continue = List.map (fun c -> remove_annotations c) in
+    match c with
+    | (Int _ | String _ | Bytes _) as lit ->
+        Tezai_michelson.Untyped.of_micheline_node lit
+    | Prim (_, name, args, _annotations) ->
+        prim name (continue args) ~annotations:[]
+    | Seq (_, l) -> seq (continue l)
+  in
   ( `Contract
       (seq
          [
            prim "parameter" [ parameter ];
-           prim "storage" [ prim "option" [ storage ] ];
+           prim "storage" [ prim "option" [ remove_annotations storage ] ];
            prim "code"
              [
                seq
