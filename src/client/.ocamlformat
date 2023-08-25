@@ -1,5 +1,5 @@
-version=0.19.0
-profile=compact
-break-collection-expressions=fit-or-vertical
+version=0.24.1
+profile=default
 exp-grouping=preserve
 parse-docstrings
+sequence-blank-line=compact

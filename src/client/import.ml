@@ -6,8 +6,8 @@ let dbgf fmt = Fmt.(kstr (fun s -> dbg (const string s))) fmt
 let rec oxfordize_list l ~map ~sep ~last_sep =
   match l with
   | [] -> []
-  | [one] -> [map one]
-  | [one; two] -> [map one; last_sep (); map two]
+  | [ one ] -> [ map one ]
+  | [ one; two ] -> [ map one; last_sep (); map two ]
   | one :: more -> map one :: sep () :: oxfordize_list more ~map ~sep ~last_sep
 
 let ellipsize_string ?(ellipsis = " …") s ~max_length =
@@ -22,7 +22,10 @@ let bytes_summary ?(threshold = 25) ?(left = 10) ?(right = 10) bytes =
         (String.sub bytes ~pos:0 ~len:left)
         (String.sub bytes ~pos:(m - right) ~len:right)
 
-module Context = struct type 'a t = 'a constraint 'a = < .. > end
+module Context = struct
+  type 'a t = 'a constraint 'a = < .. >
+end
+
 module Reactive = Lwd_bootstrap.Reactive
 
 module Message = struct
@@ -38,9 +41,9 @@ module Message = struct
   let ct s = Inline_code s
   let code_block s = Code_block s
   let list l = List l
-  let ( % ) a b = List [a; b]
-  let ( %% ) a b = List [a; t " "; b]
-  let parens tt = list [t "("; tt; t ")"]
+  let ( % ) a b = List [ a; b ]
+  let ( %% ) a b = List [ a; t " "; b ]
+  let parens tt = list [ t "("; tt; t ")" ]
 
   let rec pp ppf =
     let open Fmt in
@@ -52,27 +55,28 @@ module Message = struct
 end
 
 module Decorate_error = struct
-  exception E of {message: Message.t; trace: exn list}
+  exception E of { message : Message.t; trace : exn list }
 
-  let raise ?(trace = []) message = raise (E {message; trace})
-  let reraise message ~f = Lwt.catch f (fun e -> raise message ~trace:[e])
+  let raise ?(trace = []) message = raise (E { message; trace })
+  let reraise message ~f = Lwt.catch f (fun e -> raise message ~trace:[ e ])
 
   let () =
     Caml.Printexc.register_printer (function
-      | E {message; _} -> Some (Fmt.str "Decorated-Error %a" Message.pp message)
-      | _ -> None )
+      | E { message; _ } ->
+          Some (Fmt.str "Decorated-Error %a" Message.pp message)
+      | _ -> None)
 end
 
 module System = struct
-  type t = {dev_mode: bool Reactive.var; http_timeout: float Reactive.var}
+  type t = { dev_mode : bool Reactive.var; http_timeout : float Reactive.var }
 
   let create ?(dev_mode = false) () =
-    {dev_mode= Reactive.var dev_mode; http_timeout= Reactive.var 5.}
+    { dev_mode = Reactive.var dev_mode; http_timeout = Reactive.var 5. }
 
-  let get (state : < system: t ; .. > Context.t) = state#system
+  let get (state : < system : t ; .. > Context.t) = state#system
 
   let set_dev_mode c v =
-    dbgf "system: setting dev_mode to %b" v ;
+    dbgf "system: setting dev_mode to %b" v;
     Reactive.set (get c).dev_mode v
 
   let dev_mode c = Reactive.get (get c).dev_mode
@@ -96,7 +100,9 @@ module System = struct
     let open Lwt.Infix in
     let timeout = http_timeout_peek ctxt in
     Lwt.pick
-      [f (); (Js_of_ocaml_lwt.Lwt_js.sleep timeout >>= fun () -> raise timeout)]
+      [
+        f (); (Js_of_ocaml_lwt.Lwt_js.sleep timeout >>= fun () -> raise timeout);
+      ]
 
   let now () = (new%js Js_of_ocaml.Js.date_now)##valueOf /. 1000.
   let time_zero = now ()
@@ -104,25 +110,26 @@ module System = struct
 end
 
 module Browser_window = struct
-  type width_state = [`Thin | `Wide]
-  type t = {width: width_state option Reactive.var}
+  type width_state = [ `Thin | `Wide ]
+  type t = { width : width_state option Reactive.var }
 
   open Js_of_ocaml
 
   let create ?(threshold = 992) () =
     let find_out () =
       let w = Dom_html.window##.innerWidth in
-      if w >= threshold then Some `Wide else Some `Thin in
+      if w >= threshold then Some `Wide else Some `Thin
+    in
     let width = Reactive.var (find_out ()) in
     Dom_html.window##.onresize :=
       Dom_html.handler (fun _ ->
           let current = Reactive.peek width in
           let new_one = find_out () in
-          if Poly.(current <> new_one) then Reactive.set width new_one ;
-          Js._true ) ;
-    {width}
+          if Poly.(current <> new_one) then Reactive.set width new_one;
+          Js._true);
+    { width }
 
-  let get (c : < window: t ; .. > Context.t) = c#window
+  let get (c : < window : t ; .. > Context.t) = c#window
   let width c = (get c).width |> Reactive.get
 end
 
@@ -130,14 +137,14 @@ module Local_storage : sig
   type t
 
   val create : unit -> t
-  val get : < storage: t ; .. > Context.t -> t
-  val available : < storage: t ; .. > Context.t -> bool
-  val read_file : < storage: t ; .. > Context.t -> string -> string option
+  val get : < storage : t ; .. > Context.t -> t
+  val available : < storage : t ; .. > Context.t -> bool
+  val read_file : < storage : t ; .. > Context.t -> string -> string option
 
   val write_file :
-    < storage: t ; .. > Context.t -> string -> content:string -> unit
+    < storage : t ; .. > Context.t -> string -> content:string -> unit
 
-  val remove_file : < storage: t ; .. > Context.t -> string -> unit
+  val remove_file : < storage : t ; .. > Context.t -> string -> unit
 end = struct
   open Js_of_ocaml
 
@@ -146,24 +153,26 @@ end = struct
   let create () : t =
     Js.Optdef.case
       Dom_html.window##.localStorage
-      (fun () -> dbgf "Local_storage: nope" ; None)
+      (fun () ->
+        dbgf "Local_storage: nope";
+        None)
       (fun x ->
-        dbgf "Local_storage: YES length: %d" x##.length ;
-        Some x )
+        dbgf "Local_storage: YES length: %d" x##.length;
+        Some x)
 
-  let get (c : < storage: t ; .. > Context.t) = c#storage
+  let get (c : < storage : t ; .. > Context.t) = c#storage
   let available c = get c |> Option.is_some
 
   let read_file ctxt path =
     get ctxt
     |> Option.bind ~f:(fun sto ->
            Js.Opt.to_option (sto##getItem (Js.string path))
-           |> Option.map ~f:Js.to_string )
+           |> Option.map ~f:Js.to_string)
 
   let write_file ctxt path ~content =
     get ctxt
     |> Option.iter ~f:(fun sto ->
-           sto##setItem (Js.string path) (Js.string content) )
+           sto##setItem (Js.string path) (Js.string content))
 
   let remove_file ctxt path =
     get ctxt |> Option.iter ~f:(fun sto -> sto##removeItem (Js.string path))
@@ -181,7 +190,8 @@ module Ezjsonm = struct
         match Tzcomet_jsonm.decode d with
         | `Lexeme l -> l
         | `Error e -> raise (Escape (Tzcomet_jsonm.decoded_range d, e))
-        | `End | `Await -> assert false in
+        | `End | `Await -> assert false
+      in
       let pp_value ppf v = Fmt.pf ppf "%s" (Ezjsonm.value_to_string v) in
       let module Stack_type = struct
         type t =
@@ -202,56 +212,61 @@ module Ezjsonm = struct
                 (list (pair ~sep:(any ":") string pp_value))
                 l
           | `In_array l -> pf ppf "(in-array %a)" (list pp_value) l
-          | #Ezjsonm.value as v -> pp_value ppf v ) in
+          | #Ezjsonm.value as v -> pp_value ppf v)
+      in
       let stack = ref [] in
       let fail_stack fmt =
         Fmt.kstr
           (fun m ->
             let (a, b), (c, d) = Tzcomet_jsonm.decoded_range d in
             Fmt.failwith "%s [%d,%d - %d,%d stack: %a]" m a b c d pp_stack
-              !stack )
-          fmt in
+              !stack)
+          fmt
+      in
       let rec go () =
-        let stack_value (v : [< Ezjsonm.value]) =
+        let stack_value (v : [< Ezjsonm.value ]) =
           match !stack with
           | `In_array l :: more -> stack := `In_array (v :: l) :: more
           | `In_object (Some n, l) :: more ->
               stack := `In_object (None, (n, v) :: l) :: more
-          | [] -> stack := [(v :> Stack_type.t)]
-          | _other -> fail_stack "wrong stack" in
+          | [] -> stack := [ (v :> Stack_type.t) ]
+          | _other -> fail_stack "wrong stack"
+        in
         let pop () =
           match !stack with
           | _ :: more -> stack := more
-          | [] -> fail_stack "cannot remove element from stack" in
-        ( match dec () with
+          | [] -> fail_stack "cannot remove element from stack"
+        in
+        (match dec () with
         | `Os -> stack := `In_object (None, []) :: !stack
         | `Oe -> (
-          match !stack with
-          | `In_object (Some _, _) :: _more -> fail_stack "name not none"
-          | `In_object (None, l) :: _more ->
-              pop () ;
-              stack_value (`O (List.rev l))
-          | _other ->
-              fail_stack "wrong stack, expecting in-object to close object" )
+            match !stack with
+            | `In_object (Some _, _) :: _more -> fail_stack "name not none"
+            | `In_object (None, l) :: _more ->
+                pop ();
+                stack_value (`O (List.rev l))
+            | _other ->
+                fail_stack "wrong stack, expecting in-object to close object")
         | `As -> stack := `In_array [] :: !stack
         | `Ae -> (
-          match !stack with
-          | `In_array l :: _more ->
-              pop () ;
-              stack_value (`A (List.rev l))
-          | _ -> fail_stack "array end not in array" )
+            match !stack with
+            | `In_array l :: _more ->
+                pop ();
+                stack_value (`A (List.rev l))
+            | _ -> fail_stack "array end not in array")
         | `Name n -> (
-          match !stack with
-          | `In_object (None, l) :: more ->
-              stack := `In_object (Some n, l) :: more
-          | _other ->
-              fail_stack "wrong stack, expecting in-object for field-name" )
-        | (`Bool _ | `Null | `Float _ | `String _) as v -> stack_value v ) ;
+            match !stack with
+            | `In_object (None, l) :: more ->
+                stack := `In_object (Some n, l) :: more
+            | _other ->
+                fail_stack "wrong stack, expecting in-object for field-name")
+        | (`Bool _ | `Null | `Float _ | `String _) as v -> stack_value v);
         match !stack with
         | `In_array _ :: _ | `In_object _ :: _ -> go ()
-        | [(#Ezjsonm.value as one)] -> one
+        | [ (#Ezjsonm.value as one) ] -> one
         | [] -> fail_stack "stack is empty"
-        | _ :: _ :: _ -> go () in
+        | _ :: _ :: _ -> go ()
+      in
       try `JSON (go ()) with Escape (r, e) -> `Error (r, e)
 
     let value_to_dst ?(minify = true) dst json =
@@ -260,24 +275,26 @@ module Ezjsonm = struct
       let rec go = function
         | [] -> ()
         | `Value ((`Bool _ | `Null | `Float _ | `String _) as v) :: more ->
-            encode v ; go more
+            encode v;
+            go more
         | `Value (`O l) :: more ->
-            encode `Os ;
+            encode `Os;
             go (`Object l :: more)
         | `Value (`A l) :: more ->
-            encode `As ;
+            encode `As;
             go (`Array l :: more)
         | `Object [] :: more ->
-            encode `Oe ;
+            encode `Oe;
             go more
         | `Object ((k, v) :: o) :: more ->
-            encode (`Name k) ;
+            encode (`Name k);
             go (`Value v :: `Object o :: more)
         | `Array [] :: more ->
-            encode `Ae ;
+            encode `Ae;
             go more
-        | `Array (v :: aa) :: more -> go (`Value v :: `Array aa :: more) in
-      go [`Value json] ;
+        | `Array (v :: aa) :: more -> go (`Value v :: `Array aa :: more)
+      in
+      go [ `Value json ];
       ignore (Tzcomet_jsonm.encode encoder `End)
   end
 
@@ -287,14 +304,14 @@ module Ezjsonm = struct
 
   let value_to_string ?minify json =
     let buf = Buffer.create 1024 in
-    value_to_buffer ?minify buf json ;
+    value_to_buffer ?minify buf json;
     Buffer.contents buf
 
   let value_from_string s =
     match json_of_src (`String s) with
     | `JSON j -> j
     | `Error (((line, col), (eline, ecol)), err) ->
-        dbgf "Error l-%d c-%d -- l-%d c-%d" line col eline ecol ;
+        dbgf "Error l-%d c-%d -- l-%d c-%d" line col eline ecol;
         Decorate_error.raise
           Message.(
             (* Adapted from
@@ -306,10 +323,11 @@ module Ezjsonm = struct
                 control_char (Uchar.to_int u)
               else
                 let b = Buffer.create 4 in
-                Uutf.Buffer.add_utf_8 b u ;
+                Uutf.Buffer.add_utf_8 b u;
                 Fmt.kstr t "“%s” (=" (Buffer.contents b)
                 %% control_char (Uchar.to_int u)
-                % t ")" in
+                % t ")"
+            in
             let err_message =
               let pp = Fmt.kstr in
               let ppf = t in
@@ -329,7 +347,7 @@ module Ezjsonm = struct
                   | `Lone_hi_surrogate p ->
                       control_char p %% t "lone high surrogate"
                   | `Not_lo_surrogate p ->
-                      control_char p %% t "not a low surrogate" )
+                      control_char p %% t "not a low surrogate")
               | `Illegal_string_uchar u ->
                   t "Illegal character in JSON string:" %% uchar u
               | `Illegal_bytes bs ->
@@ -346,7 +364,7 @@ module Ezjsonm = struct
                   | `As -> t "array"
                   | `Os -> t "object"
                   | `String -> t "string"
-                  | `Comment -> t "comment" )
+                  | `Comment -> t "comment")
               | `Expected r -> (
                   let value_sep = t "value separator" %% parens (ct ",") in
                   let tor = t "or" in
@@ -365,7 +383,8 @@ module Ezjsonm = struct
                   | `Omem true -> field_name %% tor %% object_end
                   | `Omem false -> value_sep %% tor %% object_end
                   | `Json -> t "JSON value"
-                  | `Eoi -> t "end of input" ) in
+                  | `Eoi -> t "end of input")
+            in
             t "JSON Parsing: at line" %% int ct line %% t ", column"
             %% int ct col % t ":" %% err_message % t ".")
     | exception e -> Fmt.failwith "JSON Parising error: exception %a" Exn.pp e
@@ -373,7 +392,7 @@ end
 
 module Blob = struct
   module Format = struct
-    type t = [`Image | `Video | `Appx | `Html] * string
+    type t = [ `Image | `Video | `Appx | `Html ] * string
 
     let gif = (`Image, "gif")
     let jpeg = (`Image, "jpeg")
@@ -404,10 +423,13 @@ module Blob = struct
        https://en.wikipedia.org/wiki/JPEG *)
     let open Format in
     let prefixes =
-      [ ("\255\216\255", jpeg)
-      ; ("\137\080\078\071", png)
-      ; ("GIF", gif)
-      ; ("\x00\x00\x00\x20ftypmp42", mp4) ] in
+      [
+        ("\255\216\255", jpeg);
+        ("\137\080\078\071", png);
+        ("GIF", gif);
+        ("\x00\x00\x00\x20ftypmp42", mp4);
+      ]
+    in
     List.find_map prefixes ~f:(fun (prefix, fmt) ->
-        if String.is_prefix s ~prefix then Some fmt else None )
+        if String.is_prefix s ~prefix then Some fmt else None)
 end

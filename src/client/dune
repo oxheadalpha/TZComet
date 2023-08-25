@@ -1,14 +1,12 @@
 (rule
  (target index.html)
  (deps
-  (:loading ../../data/loading.gif)
-  ;;(:js ../client/main.bc.js)
-  )
+  (:js ../client/main.bc.js))
  (action
   (with-stdout-to
    index.html
    (progn
-    (run lwd-bootstrap-generator index TZComet %{loading})))))
+    (run lwd-bootstrap-generator index --title TZComet --script %{js})))))
 
 (executable
  (name main)

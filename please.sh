@@ -14,7 +14,7 @@ say () {
 }
 
 
-ocamlformat_version=0.19.0
+ocamlformat_version=0.24.1
 ensure_setup () {
     if [ "$global_switch" = "true" ] || [ -d _opam ] ; then
         say 'Opam switch already there'
@@ -55,9 +55,7 @@ build_all () {
     dune build @check
     mkdir -p _build/website/
     dune build --profile "$dune_profile" $root_path/src/client/main.bc.js
-    cp _build/default/$root_path/src/client/main.bc.js _build/website/main-client.js
-    cp $root_path/data/loading.gif _build/website/
-    dune build $root_path/src/client/index.html
+    dune build --profile "$dune_profile" $root_path/src/client/index.html
     cp _build/default/$root_path/src/client/index.html _build/website/
     chmod 600 _build/website/*
     echo "Done: file://$PWD/_build/website/index.html"
@@ -97,7 +95,7 @@ deploy_togithub () {
     mv "$dst/"* "$localpath"
     (
         cd "$localpath"
-        git add index.html main-client.js loading.gif VERSION
+        git add index.html VERSION
     )
     msg="(Staging)"
     if [ "$prod" = "true" ] ; then
@@ -113,10 +111,10 @@ ensure_ocamlformats () {
     tmp=$(mktemp /tmp/XXXXX.ocamlformat)
     cat > "$tmp" <<EOF
 version=$ocamlformat_version
-profile=compact
-break-collection-expressions=fit-or-vertical
+profile=default
 exp-grouping=preserve
 parse-docstrings
+sequence-blank-line=compact
 EOF
     for dotof in $(git ls-files | grep .ocamlformat) ; do
         $command "$tmp" "$dotof" || {

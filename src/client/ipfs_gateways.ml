@@ -1,16 +1,21 @@
 open! Import
 
-type t = {gateways: string list Reactive.var; current_index: int Reactive.var}
+type t = {
+  gateways : string list Reactive.var;
+  current_index : int Reactive.var;
+}
 
 let default_gateways : string list =
-  [ "https://gateway.ipfs.io/ipfs/"
+  [
+    "https://gateway.ipfs.io/ipfs/"
     (* ; "https://dweb.link/ipfs/"
-       ; "https://cloudflare-ipfs.com/ipfs/" *) ]
+       ; "https://cloudflare-ipfs.com/ipfs/" *);
+  ]
 
 let create () =
-  {gateways= Reactive.var default_gateways; current_index= Reactive.var 0}
+  { gateways = Reactive.var default_gateways; current_index = Reactive.var 0 }
 
-let get (ctxt : < ipfs_gateways: t ; .. > Context.t) = ctxt#ipfs_gateways
+let get (ctxt : < ipfs_gateways : t ; .. > Context.t) = ctxt#ipfs_gateways
 let gateways t = (get t).gateways
 let current_index t = (get t).current_index
 
@@ -20,10 +25,12 @@ let get_nth the_list idx =
   let count = List.length the_list in
   let error_str =
     Printf.sprintf "Trying to use index %d on a list of gateways of size %d" idx
-      count in
+      count
+  in
   let new_gw =
     try List.nth_exn the_list idx
-    with Invalid_argument _ -> raise (Bad_gateway_index error_str) in
+    with Invalid_argument _ -> raise (Bad_gateway_index error_str)
+  in
   new_gw
 
 let current_gateway t =
@@ -38,10 +45,10 @@ let try_next ctxt =
   let idx = Reactive.peek ipfs.current_index in
   let count = List.length the_list in
   let new_idx = if phys_equal idx (count - 1) then 0 else idx + 1 in
-  Reactive.set (current_index ctxt) new_idx ;
+  Reactive.set (current_index ctxt) new_idx;
   let new_gw = get_nth the_list new_idx in
   dbgf "Ipfs_gateways.try_next - rotating IPFS gateways: %S ----> %S" old_gw
-    new_gw ;
+    new_gw;
   new_gw
 
 let add ctxt gateway =
@@ -55,6 +62,6 @@ let remove_gateway ctxt ~uri =
   if phys_equal new_len 0 then false (* tried to remove them all *)
   else
     let prev_idx = Reactive.peek ipfs.current_index in
-    if prev_idx >= new_len then Reactive.set (current_index ctxt) 0 ;
-    Reactive.set (gateways ctxt) new_list ;
+    if prev_idx >= new_len then Reactive.set (current_index ctxt) 0;
+    Reactive.set (gateways ctxt) new_list;
     true

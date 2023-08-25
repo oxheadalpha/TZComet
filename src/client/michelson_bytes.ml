@@ -9,8 +9,8 @@ let expr_encoding =
     def "michelson.v1.primitives" @@ string_enum primitives)
 
 module Hex_reimplementation = struct
-  (** We rewrite some of `hex.ml` to improve error messages. *)
   open Caml
+  (** We rewrite some of `hex.ml` to improve error messages. *)
 
   let to_char ~position x y =
     let code pos c =
@@ -25,11 +25,12 @@ module Hex_reimplementation = struct
               % ct (Char.escaped c)
               % t "”"
               %% parens
-                   ( int ct (Char.code c)
+                   (int ct (Char.code c)
                    % t ", "
-                   %% Fmt.kstr ct "0x%02x" (Char.code c) )
+                   %% Fmt.kstr ct "0x%02x" (Char.code c))
               %% t "at position" %% int ct pos
-              %% t "is not valid Hexadecimal encoding.") in
+              %% t "is not valid Hexadecimal encoding.")
+    in
     Char.chr ((code position x lsl 4) + code (position + 1) y)
 
   let to_helper ~empty_return ~create ~set (`Hex s) =
@@ -45,9 +46,11 @@ module Hex_reimplementation = struct
               t "Invalid hexadecimal string: length should be even, not"
               %% int ct n % t ".")
         else (
-          set buf (i / 2) (to_char ~position:j s.[i] s.[j]) ;
-          aux (j + 1) (j + 2) ) in
-      aux 0 1 ; buf
+          set buf (i / 2) (to_char ~position:j s.[i] s.[j]);
+          aux (j + 1) (j + 2))
+      in
+      aux 0 1;
+      buf
 
   let to_bytes hex =
     to_helper ~empty_return:Bytes.empty ~create:Bytes.create ~set:Bytes.set hex
@@ -59,19 +62,21 @@ let parse_hex_bytes bytes =
       Data_encoding.Binary.of_bytes_exn
         (* Tezos_micheline.Micheline.canonical_location_encoding *)
         expr_encoding
-        (Hex_reimplementation.to_bytes (`Hex bytes)) in
+        (Hex_reimplementation.to_bytes (`Hex bytes))
+    in
     let json =
       Data_encoding.Json.construct expr_encoding
         (* Tezos_micheline.Micheline.canonical_location_encoding *)
-        mich in
+        mich
+    in
     Ok
-      ( json
-      , let open Tezos_micheline in
+      ( json,
+        let open Tezos_micheline in
         Fmt.str "%a" Micheline_printer.print_expr
           (Micheline_printer.printable Base.Fn.id mich) )
   with e ->
     let open Tezos_error_monad.Error_monad in
-    Error [Exn e]
+    Error [ Exn e ]
 
 let encode_michelson_string s =
   Data_encoding.Binary.to_bytes_exn expr_encoding
@@ -91,14 +96,17 @@ let example () =
         Data_encoding.Binary.of_bytes_exn
           (* Tezos_micheline.Micheline.canonical_location_encoding *)
           expr_encoding
-          (Hex.to_bytes (`Hex bytes)) in
+          (Hex.to_bytes (`Hex bytes))
+      in
       let json =
         Data_encoding.Json.construct expr_encoding
           (* Tezos_micheline.Micheline.canonical_location_encoding *)
-          mich in
+          mich
+      in
       Ezjsonm.value_to_string ~minify:false json
     with
     | Data_encoding.Binary.Read_error e ->
         Fmt.str "readerror: %a" Data_encoding.Binary.pp_read_error e
-    | e -> Fmt.str "exn: %a" Exn.pp e in
+    | e -> Fmt.str "exn: %a" Exn.pp e
+  in
   to_display

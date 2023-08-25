@@ -1,0 +1,10 @@
+build:
+  image: ocaml/opam:alpine-3.15-ocaml-4.13
+  script:
+    - sudo cp /usr/bin/opam-2.1 /usr/bin/opam
+    - sudo apk update
+    - opam pin add -n tezai-base58-digest https://gitlab.com/oxheadalpha/tezai-base58-digest.git
+    - opam pin add -n tezai-michelson https://gitlab.com/oxheadalpha/tezai-michelson.git
+    - opam pin add -n tezai-contract-metadata https://gitlab.com/oxheadalpha/tezai-contract-metadata.git
+    - opam exec -- opam install --with-test --with-doc ./tezai-contract-metadata-manipulation.opam
+
