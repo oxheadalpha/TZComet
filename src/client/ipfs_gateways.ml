@@ -7,9 +7,8 @@ type t = {
 
 let default_gateways : string list =
   [
-    "https://gateway.ipfs.io/ipfs/"
-    (* ; "https://dweb.link/ipfs/"
-       ; "https://cloudflare-ipfs.com/ipfs/" *);
+    "https://ipfs.io/ipfs/";
+    "https://dweb.link/ipfs/" (*   ; "https://cloudflare-ipfs.com/ipfs/" *);
   ]
 
 let create () =
